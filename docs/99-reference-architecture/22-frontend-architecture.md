@@ -1,69 +1,51 @@
-# 22 - Frontend Architecture (Optional Module)
+# 22 - Web Frontend Architecture (Optional Module)
 
-*Version: 1.0.0*
+*Version: 2.0.0*
 *Author: Architecture Team*
 *Created: 2025-01-27*
 
 ## Changelog
 
+- 2.0.0 (2026-02-26): Narrowed scope to web frontend only; removed CLI section (CLI patterns defined in 08-python-coding-standards.md and demonstrated by root entry scripts); renamed from "Frontend Architecture" to "Web Frontend Architecture"
 - 1.0.0 (2025-01-27): Initial generic frontend architecture standard
 
 ---
 
 ## Module Status: Optional
 
-This module is **optional**. Adopt when your project includes:
-- Web frontend (React)
-- Command-line interface
+This module is **optional**. Adopt when your project includes a web frontend (React).
 
-For backend-only services or API-only projects, this module is not required.
+For backend-only services, API-only projects, or terminal-only interfaces, this module is not required.
 
-If adopting web frontend, also adopt **23-typescript-coding-standards.md**.
+If adopting, also adopt **23-typescript-coding-standards.md**.
+
+**CLI patterns** are covered by **08-python-coding-standards.md** (Click, `--verbose`/`--debug`, Rich output, `--options` not subcommands). TUI patterns are covered by **27-tui-architecture.md** (Textual).
 
 ---
 
 ## Context
 
-The core architecture mandates that clients are stateless presentation layers (P2) with no business logic (P1). This module defines how to build those thin clients for two surfaces: web browsers (React) and command lines (Python Click). It exists because even thin clients need consistent patterns for state management, API communication, and error handling — without them, each project makes different choices and the frontend becomes the least predictable part of the stack.
+The core architecture mandates that clients are stateless presentation layers (P2) with no business logic (P1). This module defines how to build the web client following those principles.
 
 The web stack centers on React with Vite, TanStack Query for server state (caching, refetching, stale-while-revalidate), and Zustand for the minimal client-side state that remains (UI preferences, modal visibility). This separation was the key design decision — server state and client state have fundamentally different lifecycle and caching semantics, and mixing them in a single store is the most common source of frontend complexity.
 
-The CLI uses Python Click because it offers explicit parameter handling, is well-documented for AI-assisted development, and integrates naturally with the Python backend ecosystem. Both clients consume the same backend API, ensuring feature parity and a single source of truth for all business logic. This module requires TypeScript coding standards (11) for web projects and follows all API conventions defined in backend architecture (03).
+This module requires TypeScript coding standards (23) and follows all API conventions defined in backend architecture (03).
 
 ---
 
-## Client Types
+## Thin Client Mandate
 
-### Supported Clients
-
-| Client | Purpose | Framework |
-|--------|---------|-----------|
-| Web | Primary user interface | React |
-| CLI | Developer and power user interface | Python Click |
-
-### Thin Client Mandate
-
-All clients adhere to the thin client principle:
+The web frontend adheres to the thin client principle:
 - No business logic
 - No data validation beyond UI feedback
 - No local data persistence (except caching)
 - All state from backend APIs
 
+The backend is the single source of truth. The web client renders what the backend tells it.
+
 ---
 
-## Web Client
-
-### Framework: React with Vite
-
-All web frontends use React with Vite as the build tool.
-
-Rationale:
-- Extensive AI training data for code assistance
-- Large component ecosystem
-- Fast development with Vite HMR
-- TypeScript support
-
-### Technology Stack
+## Technology Stack
 
 | Concern | Solution |
 |---------|----------|
@@ -79,7 +61,17 @@ Rationale:
 | Charts | Recharts (general) |
 | Icons | Lucide React |
 
-### Project Structure
+### Rationale
+
+React with Vite is chosen because:
+- Extensive AI training data for code assistance
+- Large component ecosystem
+- Fast development with Vite HMR
+- TypeScript support
+
+---
+
+## Project Structure
 
 ```
 frontend/
@@ -100,7 +92,9 @@ frontend/
 └── vite.config.ts
 ```
 
-### State Management
+---
+
+## State Management
 
 **Server state** (data from backend): TanStack Query
 - Automatic caching
@@ -118,7 +112,9 @@ frontend/
 - Components subscribe to specific slices
 - TanStack Query not used for real-time (avoids cache churn)
 
-### API Client
+---
+
+## API Client
 
 Single API client module handles:
 - Base URL configuration
@@ -129,7 +125,9 @@ Single API client module handles:
 
 Use native fetch wrapped in utility functions.
 
-### Error Handling
+---
+
+## Error Handling
 
 - Network errors: Toast notification, retry option
 - 401 errors: Redirect to login
@@ -140,107 +138,18 @@ Never display raw error messages to users. Map error codes to user-friendly mess
 
 ---
 
-## CLI Client
-
-### Framework: Python Click
-
-CLI applications use Click with Rich for output formatting.
-
-Rationale:
-- Consistent with backend Python
-- Excellent AI code assistance
-- Rich provides professional terminal output
-- Click handles argument parsing robustly
-
-### Technology Stack
-
-| Concern | Solution |
-|---------|----------|
-| Framework | Click |
-| HTTP Client | httpx (async) |
-| Output | Rich |
-| Configuration | YAML + environment variables |
-| Authentication | API key stored in config file |
-
-### Project Structure
-
-```
-cli/
-├── src/
-│   └── cli_name/
-│       ├── __init__.py
-│       ├── main.py          # Entry point
-│       ├── commands/        # Command modules
-│       ├── api/             # API client
-│       ├── config/          # Configuration
-│       └── utils/           # Utilities
-├── setup.py
-└── requirements.txt
-```
-
-### Command Structure
-
-Commands organized by domain with subcommands:
-
-```bash
-cli auth login
-cli project create
-cli project list
-cli data export --format csv
-```
-
-### Standard Options
-
-All CLIs include these standard options:
-- `--verbose` / `-v`: Enable verbose output
-- `--debug`: Enable debug mode with full stack traces
-- `--help`: Show help
-
-### Output Formatting
-
-- Success: Green text, clear confirmation
-- Error: Red text, error message, suggestion if applicable
-- Data: Tables for lists, key-value for details
-- Progress: Progress bars for long operations
-
-### Configuration
-
-Configuration stored in `~/.{cli-name}/config.yaml`:
-- API endpoint
-- API key
-- Default project
-- User preferences
-
-### Offline Behavior
-
-CLIs fail fast when offline. No offline mode. Clear error message directs user to check connection.
-
----
-
 ## Cross-Client Consistency
 
-### API Contract
+All clients (web, CLI, TUI, Telegram) consume the same backend API. No client-specific endpoints.
 
-All clients consume the same backend API. No client-specific endpoints.
+| Principle | Rule |
+|-----------|------|
+| API contract | All clients hit the same endpoints |
+| Feature parity | Core features available in all clients |
+| Authentication | API keys for backend authentication |
+| Error codes | Backend error codes mapped to client-appropriate messages |
 
-API changes tested against all clients before deployment.
-
-### Feature Parity
-
-Core features available in all clients. Client-specific features documented.
-
-| Feature | Web | CLI |
-|---------|-----|-----|
-| Full functionality | Yes | Yes |
-| Real-time updates | Yes | Limited |
-| Data visualization | Yes | Text |
-| Bulk operations | Limited | Yes |
-
-### Authentication
-
-All clients use API keys for backend authentication. API key acquisition:
-- Web: Login flow, key displayed in settings
-- CLI: Login command, key stored in config
+API changes tested against all active clients before deployment.
 
 ---
 
@@ -248,7 +157,7 @@ All clients use API keys for backend authentication. API key acquisition:
 
 ### Standard: Playwright MCP
 
-All frontend projects use Playwright for AI-assisted debugging.
+All web frontend projects use Playwright for AI-assisted debugging.
 
 Rationale:
 - CLI-native, no browser extensions required
@@ -286,18 +195,23 @@ export default defineConfig({
 
 When adopting this module:
 
-### Web Frontend
 - [ ] Set up Vite + React project
 - [ ] Configure TypeScript strict mode
 - [ ] Install Tailwind CSS and shadcn/ui
-- [ ] Set up TanStack Query
+- [ ] Set up TanStack Query for server state
+- [ ] Set up Zustand for client state
 - [ ] Create API client module
-- [ ] Configure error boundaries
+- [ ] Configure error boundaries (react-error-boundary)
 - [ ] Set up Playwright for testing
+- [ ] Configure Pino for structured browser logging
+- [ ] Set up WebSocket → Zustand for real-time data
 
-### CLI
-- [ ] Set up Click project structure
-- [ ] Implement standard options (--verbose, --debug)
-- [ ] Create API client with httpx
-- [ ] Implement configuration management
-- [ ] Set up Rich for output formatting
+---
+
+## Related Documentation
+
+- [23-typescript-coding-standards.md](23-typescript-coding-standards.md) — TypeScript coding standards (required)
+- [03-backend-architecture.md](03-backend-architecture.md) — API conventions consumed by the frontend
+- [09-error-codes.md](09-error-codes.md) — Error code registry for client-side mapping
+- [01-core-principles.md](01-core-principles.md) — Thin client mandate (P1, P2)
+- [27-tui-architecture.md](27-tui-architecture.md) — Terminal UI alternative (Textual + Textual Web)
