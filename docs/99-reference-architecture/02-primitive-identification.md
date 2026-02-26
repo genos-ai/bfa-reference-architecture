@@ -24,7 +24,7 @@ The problem is complexity explosion. When a system has one core data type (an Or
 
 This decision must be made explicitly and early. Systems that skip this step don't avoid having a primitive — they end up with several unofficial ones, each created by a different developer solving a different problem. By the time the inconsistency is visible, it is embedded across the codebase and expensive to unify.
 
-This document forces the choice upfront: identify the single fundamental data type that flows through the entire system, give it a UUID, a lifecycle with clear states, and timestamps. Every module, every API, every storage layer is then designed around this type. The constraint feels restrictive initially, but it radically simplifies everything downstream — from API design (03) to module boundaries (04) to database schemas (05) to agentic task tracking (25).
+This document forces the choice upfront: identify the single fundamental data type that flows through the entire system, give it a UUID, a lifecycle with clear states, and timestamps. Every module, every API, every storage layer is then designed around this type. The constraint feels restrictive initially, but it radically simplifies everything downstream — from API design (03) to module boundaries (04) to database schemas (20).
 
 ---
 

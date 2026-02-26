@@ -1,4 +1,4 @@
-# 20 - Telegram Integration
+# 25 - Telegram Integration
 
 > Reference documentation for integrating Telegram bots using aiogram v3 with FastAPI.
 
@@ -771,10 +771,10 @@ success_count = sum(1 for r in results if r.success)
 
 ## Related Documentation
 
-- [Telegram Client Integration](23-telegram-client-integration.md) - Client API (MTProto) for channel scraping and history
-- [Background Tasks](19-background-tasks.md) - Taskiq integration
-- [Observability](12-observability.md) - Logging and monitoring
-- [Authentication](09-authentication.md) - Security patterns
+- [Telegram Client Integration](26-telegram-client-integration.md) - Client API (MTProto) for channel scraping and history
+- [Background Tasks](14-background-tasks.md) - Taskiq integration
+- [Observability](10-observability.md) - Logging and monitoring
+- [Authentication](05-authentication.md) - Security patterns
 - [Research Reference](../04-external-references/telegram.md) - Original research document
 
 ---

@@ -1,4 +1,4 @@
-# 16 - Testing Standards
+# 11 - Testing Standards
 
 *Version: 1.0.0*
 *Author: Architecture Team*
@@ -696,7 +696,7 @@ modules/frontend/src/
             └── UserProfile.test.tsx
 ```
 
-See **11-typescript-coding-standards.md** for frontend testing standards.
+See **23-typescript-coding-standards.md** for frontend testing standards.
 
 ---
 

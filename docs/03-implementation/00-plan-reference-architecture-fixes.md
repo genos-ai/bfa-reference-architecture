@@ -145,8 +145,8 @@ modules/
 |------|--------|
 | `03-backend-architecture.md` | Replace project structure section with chosen option |
 | `04-module-structure.md` | Align directory layout and add example showing how HTTP endpoints call module APIs |
-| `15-project-template.md` | Update complete project structure to match |
-| `10-python-coding-standards.md` | Update project structure section to match |
+| `13-project-template.md` | Update complete project structure to match |
+| `08-python-coding-standards.md` | Update project structure section to match |
 
 ---
 
@@ -181,7 +181,7 @@ Align both documents:
 | File | Change |
 |------|--------|
 | `04-module-structure.md` | Clarify that event naming = `event_type` field, add Redis stream naming |
-| `06-event-architecture.md` | Align channel naming section, add explicit distinction between stream name and event_type |
+| `21-event-architecture.md` | Align channel naming section, add explicit distinction between stream name and event_type |
 
 ---
 
@@ -218,7 +218,7 @@ handles hundreds of concurrent connections via asyncio. **Use the table below, n
 
 | File | Change |
 |------|--------|
-| `22-deployment-azure.md` | Rewrite Worker Configuration section |
+| `16-deployment-azure.md` | Rewrite Worker Configuration section |
 
 ---
 
@@ -247,7 +247,7 @@ async def human_delay(
 
 | File | Change |
 |------|--------|
-| `23-telegram-client-integration.md` | Fix function definition and all call sites |
+| `26-telegram-client-integration.md` | Fix function definition and all call sites |
 
 ---
 
@@ -288,9 +288,9 @@ Precedence: Environment variables > .env file > YAML defaults
 | File | Change |
 |------|--------|
 | `03-backend-architecture.md` | Add full Configuration Loading section with mechanism, code examples, and precedence |
-| `10-python-coding-standards.md` | Reference doc 03's config section instead of redefining; keep coding patterns only |
-| `15-project-template.md` | Add annotation to config/ directory explaining loading mechanism |
-| `19-background-tasks.md` | Reference doc 03's config section for broker configuration |
+| `08-python-coding-standards.md` | Reference doc 03's config section instead of redefining; keep coding patterns only |
+| `13-project-template.md` | Add annotation to config/ directory explaining loading mechanism |
+| `14-background-tasks.md` | Reference doc 03's config section for broker configuration |
 
 ---
 
@@ -362,7 +362,7 @@ Implications:
 | File | Change |
 |------|--------|
 | `01-core-principles.md` | Rewrite P3 to clarify "single write source" vs "single database server" |
-| `05-data-layer.md` | Add note in Context section explaining how multiple technologies don't violate P3 |
+| `20-data-layer.md` | Add note in Context section explaining how multiple technologies don't violate P3 |
 
 ---
 
@@ -406,7 +406,7 @@ This reinforces the guiding principle: clients just send a token; the backend ha
 
 | File | Change |
 |------|--------|
-| `09-authentication.md` | Add "Authorization Flow" section with complete code example |
+| `05-authentication.md` | Add "Authorization Flow" section with complete code example |
 | `03-backend-architecture.md` | Reference doc 09's authorization flow in the service layer section |
 
 ---
@@ -433,8 +433,8 @@ Add a "Rate Limiting Implementation" section to doc 17 (Security Standards), sin
 
 | File | Change |
 |------|--------|
-| `17-security-standards.md` | Add "Rate Limiting Implementation" section with algorithm, storage, and code |
-| `09-authentication.md` | Keep the limit values, add reference to doc 17 for implementation |
+| `06-security-standards.md` | Add "Rate Limiting Implementation" section with algorithm, storage, and code |
+| `05-authentication.md` | Keep the limit values, add reference to doc 17 for implementation |
 
 ---
 
@@ -505,7 +505,7 @@ For each redundant section, replace the duplicated content with a brief summary 
 ```markdown
 ### Error Response Format
 
-All API errors follow the standard envelope defined in **14-error-codes.md**. See that
+All API errors follow the standard envelope defined in **09-error-codes.md**. See that
 document for the complete specification, error categories, and client handling guide.
 ```
 
@@ -514,8 +514,8 @@ document for the complete specification, error categories, and client handling g
 | File | Change |
 |------|--------|
 | `03-backend-architecture.md` | Replace error response section with reference to 14 |
-| `07-frontend-architecture.md` | Replace CLI standards with reference to 10 |
-| `15-project-template.md` | Replace test structure with reference to 16 |
+| `22-frontend-architecture.md` | Replace CLI standards with reference to 10 |
+| `13-project-template.md` | Replace test structure with reference to 16 |
 | `00-overview.md` | Trim philosophy paragraph, reference 01 |
 
 ---
@@ -543,8 +543,8 @@ Full-text search all 25 documents for:
 
 | File | Change |
 |------|--------|
-| `22-deployment-azure.md` | Fix all remaining "14-Deployment" → "21-Deployment" references |
-| `22-deployment-azure.md` | Fix WebSocket ping reference — either add 30s ping to doc 06, or change doc 22 to reference the correct source |
+| `16-deployment-azure.md` | Fix all remaining "14-Deployment" → "21-Deployment" references |
+| `16-deployment-azure.md` | Fix WebSocket ping reference — either add 30s ping to doc 06, or change doc 22 to reference the correct source |
 | All documents | Verify all cross-references (automated grep) |
 
 ---
@@ -579,9 +579,9 @@ Add concrete thresholds:
 | File | Change |
 |------|--------|
 | `01-core-principles.md` | Define "critical paths" in D3 |
-| `05-data-layer.md` | Add size thresholds for datasets, Git LFS |
-| `06-event-architecture.md` | Add events/second threshold for Redis Streams |
-| `16-testing-standards.md` | Reference doc 01's definition of critical paths |
+| `20-data-layer.md` | Add size thresholds for datasets, Git LFS |
+| `21-event-architecture.md` | Add events/second threshold for Redis Streams |
+| `11-testing-standards.md` | Reference doc 01's definition of critical paths |
 
 ---
 
@@ -614,7 +614,7 @@ async def queue_message_for_processing(message_data: dict) -> None:
     """Queue a scraped message for backend processing via Redis.
 
     Implementation: Publishes to the Redis stream defined in
-    06-event-architecture.md. The backend module consumes
+    21-event-architecture.md. The backend module consumes
     these events and processes them through the service layer.
     """
     await redis.xadd("telegram:messages-scraped", message_data)
@@ -624,8 +624,8 @@ async def queue_message_for_processing(message_data: dict) -> None:
 
 | File | Change |
 |------|--------|
-| `20-telegram-bot-integration.md` | Add stubs for `setup_webhook`, `get_webhook_router`, `get_notification_service` |
-| `23-telegram-client-integration.md` | Add stubs for `queue_message_for_processing`, `get_cached_channel_data`; fix `NotificationService` reference |
+| `25-telegram-bot-integration.md` | Add stubs for `setup_webhook`, `get_webhook_router`, `get_notification_service` |
+| `26-telegram-client-integration.md` | Add stubs for `queue_message_for_processing`, `get_cached_channel_data`; fix `NotificationService` reference |
 
 ---
 
@@ -670,7 +670,7 @@ logic across every client type (web, CLI, Telegram, AI agent).
 | File | Change |
 |------|--------|
 | `01-core-principles.md` | Add "Business Logic Boundary" under P1 with the above lists |
-| `07-frontend-architecture.md` | Reference doc 01's boundary definition in the thin client section |
+| `22-frontend-architecture.md` | Reference doc 01's boundary definition in the thin client section |
 
 ---
 
@@ -730,17 +730,17 @@ This should be done *after* skeleton code exists.
 | `02-primitive-identification.md` | Add "Integration with Other Standards" section with wiring example | 2 |
 | `03-backend-architecture.md` | Rewrite project structure, add config loading, reference 14 for errors, reference 09 for auth | 1, 2, 4 |
 | `04-module-structure.md` | Align directory layout, add HTTP→module wiring example, align event naming | 1 |
-| `05-data-layer.md` | Add P3 clarification note, add size thresholds | 2, 4 |
-| `06-event-architecture.md` | Align channel naming, add threshold for "moderate scale" | 1, 4 |
-| `07-frontend-architecture.md` | Reference 10 for CLI standards, reference 01 for business logic boundary | 4 |
-| `09-authentication.md` | Add authorization flow section with code example | 2 |
-| `10-python-coding-standards.md` | Update project structure, reference 03 for config | 1, 2 |
-| `15-project-template.md` | Update project structure, reference 16 for test structure | 1, 4 |
-| `16-testing-standards.md` | Reference 01 for "critical paths" definition | 4 |
-| `17-security-standards.md` | Add rate limiting implementation section | 3 |
-| `20-telegram-bot-integration.md` | Add missing function stubs | 4 |
-| `22-deployment-azure.md` | Fix worker count, fix stale references (14→21, WebSocket ping) | 3, 4 |
-| `23-telegram-client-integration.md` | Fix human_delay signature, add missing function stubs | 3, 4 |
+| `20-data-layer.md` | Add P3 clarification note, add size thresholds | 2, 4 |
+| `21-event-architecture.md` | Align channel naming, add threshold for "moderate scale" | 1, 4 |
+| `22-frontend-architecture.md` | Reference 10 for CLI standards, reference 01 for business logic boundary | 4 |
+| `05-authentication.md` | Add authorization flow section with code example | 2 |
+| `08-python-coding-standards.md` | Update project structure, reference 03 for config | 1, 2 |
+| `13-project-template.md` | Update project structure, reference 16 for test structure | 1, 4 |
+| `11-testing-standards.md` | Reference 01 for "critical paths" definition | 4 |
+| `06-security-standards.md` | Add rate limiting implementation section | 3 |
+| `25-telegram-bot-integration.md` | Add missing function stubs | 4 |
+| `16-deployment-azure.md` | Fix worker count, fix stale references (14→21, WebSocket ping) | 3, 4 |
+| `26-telegram-client-integration.md` | Fix human_delay signature, add missing function stubs | 3, 4 |
 
 **Documents with no changes needed**: 08, 11, 12, 13, 14, 18, 19, 21, 25
 

@@ -316,15 +316,11 @@ LIMIT 50;
 - Sort order must be deterministic
 - Cursor encodes position, not page number
 
-### Interactive and Streaming Operations
-
-The request/response patterns above apply to stateless CRUD operations — the majority of API endpoints. For interactive operations involving conversations, agent streaming, multi-step plans, or approval gates, see `31-event-session-architecture.md`. That module introduces a session-and-event model where the coordinator returns `AsyncIterator[Event]` instead of a response object, and channels subscribe to session event streams. The service layer defined in this document remains the single source of business logic — the session model layers on top, it does not replace anything here.
-
 ---
 
 ## Background Tasks
 
-For background task processing and scheduled jobs, see [19-background-tasks.md](19-background-tasks.md).
+For background task processing and scheduled jobs, see [14-background-tasks.md](14-background-tasks.md).
 
 Summary:
 - **Standard**: Taskiq with Redis

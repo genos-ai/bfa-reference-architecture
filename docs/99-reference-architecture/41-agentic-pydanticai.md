@@ -1,4 +1,4 @@
-# 26 - Agentic AI: PydanticAI Implementation (Optional Module)
+# 41 - Agentic AI: PydanticAI Implementation (Optional Module)
 
 *Version: 2.1.0*
 *Author: Architecture Team*
@@ -6,7 +6,7 @@
 
 ## Changelog
 
-- 2.1.0 (2026-02-24): Added channel/session_type/tool_access_level to CoordinatorRequest, added WebSocket entry point example with run_stream(), added gateway-mediated channel adapter note referencing 29-multi-channel-gateway.md
+- 2.1.0 (2026-02-24): Added channel/session_type/tool_access_level to CoordinatorRequest, added WebSocket entry point example with run_stream(), added gateway-mediated channel adapter note referencing 44-multi-channel-gateway.md
 - 2.0.0 (2026-02-19): Rewrote with PydanticAI-native patterns — coordinator as PydanticAI Agent, agent-as-tool delegation with cost propagation, UsageLimits for budget enforcement, decorator-based middleware, merged entry points/HITL/database models from research docs, removed LangGraph, fixed all hardcoded values and datetime issues
 - 1.1.0 (2026-02-18): Added concept-to-implementation mapping, data model mapping, reconciled SQL schema with AgentTask primitive
 - 1.0.0 (2026-02-18): Initial PydanticAI implementation guide
@@ -15,11 +15,11 @@
 
 ## Module Status: Optional
 
-This module is the **implementation companion** to **[25-agentic-architecture.md](25-agentic-architecture.md)**, which defines the conceptual architecture (phases, principles, orchestration patterns, primitive). This document specifies how those concepts are realized using PydanticAI.
+This module is the **implementation companion** to **[40-agentic-architecture.md](40-agentic-architecture.md)**, which defines the conceptual architecture (phases, principles, orchestration patterns, primitive). This document specifies how those concepts are realized using PydanticAI.
 
-**Do not adopt this module without first reading 25-agentic-architecture.md.**
+**Do not adopt this module without first reading 40-agentic-architecture.md.**
 
-**Dependencies**: 25-agentic-architecture.md, 08-llm-integration.md, 06-event-architecture.md.
+**Dependencies**: 40-agentic-architecture.md, 24-llm-integration.md, 21-event-architecture.md.
 
 ---
 
@@ -343,7 +343,7 @@ Logic belongs in `modules/backend/services/` if it operates on domain data witho
 
 ### Vertical Agents (Domain Specialists)
 
-A vertical agent is a PydanticAI `Agent` instance scoped to a single domain. It maps to the "Specialist" tier in 25-agentic-architecture.md. Each vertical agent owns its system prompt, tool set, output schema, and capability declaration.
+A vertical agent is a PydanticAI `Agent` instance scoped to a single domain. It maps to the "Specialist" tier in 40-agentic-architecture.md. Each vertical agent owns its system prompt, tool set, output schema, and capability declaration.
 
 One file per vertical agent. One vertical agent per domain.
 
@@ -568,13 +568,13 @@ Four complementary layers prevent runaway delegation:
 
 The coordinator exposes a single async function: `handle(request: CoordinatorRequest) -> CoordinatorResponse`. All entry points construct a `CoordinatorRequest` and call it.
 
-`CoordinatorRequest` carries gateway context from **[29-multi-channel-gateway.md](29-multi-channel-gateway.md)**:
+`CoordinatorRequest` carries gateway context from **[44-multi-channel-gateway.md](44-multi-channel-gateway.md)**:
 
 - `channel` — originating channel (`telegram`, `slack`, `websocket`, `cli`, `tui`, `api`)
 - `session_type` — `direct` or `group` (controls session isolation)
 - `tool_access_level` — `full`, `sandbox`, or `readonly` (coordinator filters available tools before execution)
 
-When requests arrive through channel adapters (doc 29), the gateway has already enforced security (allowlist, rate limiting, input validation), resolved the session, and set these fields. Direct API callers set them explicitly.
+When requests arrive through channel adapters (doc 44), the gateway has already enforced security (allowlist, rate limiting, input validation), resolved the session, and set these fields. Direct API callers set them explicitly.
 
 **FastAPI:**
 
@@ -704,11 +704,11 @@ async def websocket_agent_endpoint(websocket: WebSocket, session_id: str) -> Non
         pass
 ```
 
-This is the primary transport for the TUI (**[28-tui-architecture.md](28-tui-architecture.md)**) and the real-time web frontend. Token-by-token streaming via `run_stream()` gives the user immediate feedback as the agent reasons.
+This is the primary transport for the TUI (**[45-tui-architecture.md](45-tui-architecture.md)**) and the real-time web frontend. Token-by-token streaming via `run_stream()` gives the user immediate feedback as the agent reasons.
 
 **Channel adapters (gateway-mediated):**
 
-When requests arrive through the multi-channel gateway (**[29-multi-channel-gateway.md](29-multi-channel-gateway.md)**), the gateway constructs the `CoordinatorRequest` after enforcing security, resolving the session, and setting `channel`, `session_type`, and `tool_access_level`. Individual channel adapters (Telegram, Slack, Discord) do not call `handle()` directly — they go through the gateway's router, which adds the gateway context and delivers the response back through the originating channel.
+When requests arrive through the multi-channel gateway (**[44-multi-channel-gateway.md](44-multi-channel-gateway.md)**), the gateway constructs the `CoordinatorRequest` after enforcing security, resolving the session, and setting `channel`, `session_type`, and `tool_access_level`. Individual channel adapters (Telegram, Slack, Discord) do not call `handle()` directly — they go through the gateway's router, which adds the gateway context and delivers the response back through the originating channel.
 
 ---
 
@@ -1184,9 +1184,9 @@ Set `enabled: false` in any agent YAML to disable it without code deployment. Th
 
 ---
 
-## Session-Aware Agent Invocation (Doc 31)
+## Session-Aware Agent Invocation (Doc 46)
 
-When the project adopts `31-event-session-architecture.md`, agent invocation changes from direct `run()` calls to coordinator-mediated streaming.
+When the project adopts `46-event-session-architecture.md`, agent invocation changes from direct `run()` calls to coordinator-mediated streaming.
 
 ### Primary Path: `run_stream()` via Coordinator
 
@@ -1242,7 +1242,7 @@ class AgentDeps:
 
 Tools that need session context access it through `ctx.deps.session`. Tools that don't need it are unaffected — `session` defaults to `None`.
 
-See `31-event-session-architecture.md`, Section 3 (Streaming Coordinator) for the complete `handle()` implementation and agent routing.
+See `46-event-session-architecture.md`, Section 3 (Streaming Coordinator) for the complete `handle()` implementation and agent routing.
 
 ---
 
@@ -1382,7 +1382,7 @@ All downstream log calls automatically include these fields.
 | Tool | `agent.tool.call` | tool_name, agent_name |
 | Tool | `agent.tool.result` | tool_name, duration_ms, success |
 
-Agent logs are written to `logs/system.jsonl` with `source="agents"` per **12-observability.md**.
+Agent logs are written to `logs/system.jsonl` with `source="agents"` per **10-observability.md**.
 
 ---
 
@@ -1607,10 +1607,10 @@ No coordinator changes needed. The registry auto-discovers the new agent by scan
 ## Phase-by-Phase Implementation Checklist
 
 ### Prerequisites
-- [ ] 08-llm-integration.md adopted
-- [ ] 06-event-architecture.md adopted
+- [ ] 24-llm-integration.md adopted
+- [ ] 21-event-architecture.md adopted
 - [ ] PydanticAI installed (`pip install pydantic-ai`)
-- [ ] 25-agentic-architecture.md reviewed (conceptual foundation)
+- [ ] 40-agentic-architecture.md reviewed (conceptual foundation)
 
 ### Phase 1: Execute
 - [ ] Create `modules/agents/` directory structure
@@ -1658,14 +1658,14 @@ No coordinator changes needed. The registry auto-discovers the new agent by scan
 
 ## Related Documentation
 
-- [25-agentic-architecture.md](25-agentic-architecture.md) — **Conceptual architecture** (phases, principles, patterns, primitive)
-- [29-multi-channel-gateway.md](29-multi-channel-gateway.md) — Multi-channel delivery, session management, channel adapters, WebSocket real-time push
+- [40-agentic-architecture.md](40-agentic-architecture.md) — **Conceptual architecture** (phases, principles, patterns, primitive)
+- [44-multi-channel-gateway.md](44-multi-channel-gateway.md) — Multi-channel delivery, session management, channel adapters, WebSocket real-time push
 - [Why PydanticAI is the right agent framework](../../98-research/08-Why%20PydanticAI%20is%20the%20right%20agent%20framework%20for%20your%20FastAPI%20stack.md) — Framework selection rationale
 - [Multi-agent systems on FastAPI](../../98-research/03-Multi-agent%20systems%20on%20FastAPI-%20a%20prescriptive%20reference%20architecture.md) — PydanticAI pattern reference
-- [08-llm-integration.md](08-llm-integration.md) — LLM provider interface, cost tracking, prompt management
-- [06-event-architecture.md](06-event-architecture.md) — Redis Streams for agent events
-- [19-background-tasks.md](19-background-tasks.md) — Taskiq for scheduled agent work
-- [12-observability.md](12-observability.md) — Logging standards
-- [09-authentication.md](09-authentication.md) — RBAC for agent API access
+- [24-llm-integration.md](24-llm-integration.md) — LLM provider interface, cost tracking, prompt management
+- [21-event-architecture.md](21-event-architecture.md) — Redis Streams for agent events
+- [14-background-tasks.md](14-background-tasks.md) — Taskiq for scheduled agent work
+- [10-observability.md](10-observability.md) — Logging standards
+- [05-authentication.md](05-authentication.md) — RBAC for agent API access
 - [04-module-structure.md](04-module-structure.md) — Module boundaries and communication
-- [31-event-session-architecture.md](31-event-session-architecture.md) — Session-aware agent invocation, streaming coordinator, event-driven interaction model
+- [46-event-session-architecture.md](46-event-session-architecture.md) — Session-aware agent invocation, streaming coordinator, event-driven interaction model

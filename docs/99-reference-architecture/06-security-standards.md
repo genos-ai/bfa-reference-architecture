@@ -1,4 +1,4 @@
-# 17 - Security Standards
+# 06 - Security Standards
 
 *Version: 1.0.0*
 *Author: Architecture Team*
@@ -12,7 +12,7 @@
 
 ## Purpose
 
-This document defines security standards for application development. It complements 09-authentication.md (which covers authentication and authorization) and 18-data-protection.md (which covers privacy and PII handling).
+This document defines security standards for application development. It complements 05-authentication.md (which covers authentication and authorization) and 07-data-protection.md (which covers privacy and PII handling).
 
 Security is not optional. Every requirement in this document applies to all projects.
 
@@ -32,16 +32,16 @@ Approved cryptographic algorithms, rate limiting thresholds, security headers, a
 
 | OWASP Risk | Where Addressed |
 |------------|-----------------|
-| Broken Access Control | 09-authentication.md (Authorization) |
+| Broken Access Control | 05-authentication.md (Authorization) |
 | Security Misconfiguration | This document (Configuration Security) |
 | Software Supply Chain Failures | This document (Supply Chain Security) |
 | Cryptographic Failures | This document (Cryptographic Standards) |
 | Injection | This document (Input Handling) |
 | Insecure Design | This document (Secure Design Principles) |
-| Authentication Failures | 09-authentication.md |
+| Authentication Failures | 05-authentication.md |
 | Software or Data Integrity Failures | This document (Integrity Verification) |
-| Security Logging and Alerting Failures | 12-observability.md, 09-authentication.md (Audit Logging) |
-| Mishandling of Exceptional Conditions | 14-error-codes.md, This document (Error Handling) |
+| Security Logging and Alerting Failures | 10-observability.md, 05-authentication.md (Audit Logging) |
+| Mishandling of Exceptional Conditions | 09-error-codes.md, This document (Error Handling) |
 
 ---
 
@@ -636,7 +636,7 @@ This document provides technical security controls. For specific compliance fram
 | Framework | Additional Requirements |
 |-----------|------------------------|
 | SOC 2 | Access reviews, change management, vendor management |
-| GDPR | See 18-data-protection.md |
+| GDPR | See 07-data-protection.md |
 | HIPAA | PHI handling, BAAs, additional audit requirements |
 | PCI DSS | Cardholder data isolation, quarterly scans |
 

@@ -1,4 +1,4 @@
-# 05 - Data Layer (Optional Module)
+# 20 - Data Layer (Optional Module)
 
 *Version: 1.1.0*
 *Author: Architecture Team*
@@ -199,7 +199,7 @@ Storage: `data/` directory in project root.
 
 Access pattern: Direct file I/O or DuckDB for queries.
 
-See **15-project-template.md** for directory structure details.
+See **13-project-template.md** for directory structure details.
 
 ---
 

@@ -1,4 +1,4 @@
-# 23 - Telegram Client Integration (Optional Module)
+# 26 - Telegram Client Integration (Optional Module)
 
 *Version: 1.0.0*
 *Author: Architecture Team*
@@ -19,15 +19,15 @@ This module is **optional**. Adopt when your project needs:
 - Agentic AI with autonomous Telegram access
 - Data collection from public channels
 
-For standard bot interactions (user commands, notifications, interactive UI), use **20-telegram-bot-integration.md** (Bot API) instead.
+For standard bot interactions (user commands, notifications, interactive UI), use **25-telegram-bot-integration.md** (Bot API) instead.
 
-This module is often adopted **alongside** 20-telegram-bot-integration.md in a hybrid architecture.
+This module is often adopted **alongside** 25-telegram-bot-integration.md in a hybrid architecture.
 
 ---
 
 ## Context
 
-The Bot API (20-telegram-bot-integration) is designed for bots that respond to users — it cannot access channel message history, scrape public channels, search messages, or join channels programmatically. When a project needs any of these data acquisition capabilities, it must use Telegram's Client API (MTProto protocol), which operates as a user account rather than a bot.
+The Bot API (25-telegram-bot-integration) is designed for bots that respond to users — it cannot access channel message history, scrape public channels, search messages, or join channels programmatically. When a project needs any of these data acquisition capabilities, it must use Telegram's Client API (MTProto protocol), which operates as a user account rather than a bot.
 
 This module exists because Client API integration carries significant risks that must be managed carefully. Unlike the Bot API (which is designed for automation), the Client API was designed for human users. Telegram actively detects and restricts automated usage, and misuse can result in account bans. The module defines rate limiting patterns, human-like delay strategies, session management, and connection recovery specifically to mitigate these risks.
 
@@ -349,7 +349,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     client = None
 
-    # Start Bot API (from 20-telegram-bot-integration.md)
+    # Start Bot API (from 25-telegram-bot-integration.md)
     # ... bot setup ...
 
     # Start Client API monitoring (if configured)
@@ -845,7 +845,7 @@ When adopting this module:
 
 ## Related Documentation
 
-- [20-telegram-bot-integration.md](20-telegram-bot-integration.md) - Bot API integration (aiogram)
-- [06-event-architecture.md](06-event-architecture.md) - Message queue patterns
-- [08-llm-integration.md](08-llm-integration.md) - LLM integration patterns
-- [12-observability.md](12-observability.md) - Logging standards
+- [25-telegram-bot-integration.md](25-telegram-bot-integration.md) - Bot API integration (aiogram)
+- [21-event-architecture.md](21-event-architecture.md) - Message queue patterns
+- [24-llm-integration.md](24-llm-integration.md) - LLM integration patterns
+- [10-observability.md](10-observability.md) - Logging standards

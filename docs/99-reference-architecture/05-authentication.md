@@ -1,4 +1,4 @@
-# 09 - Authentication and Authorization
+# 05 - Authentication and Authorization
 
 *Version: 1.1.0*
 *Author: Architecture Team*
@@ -6,7 +6,7 @@
 
 ## Changelog
 
-- 1.1.0 (2026-02-11): Refocused on authentication/authorization; security standards moved to 17-security-standards.md, data protection to 18-data-protection.md
+- 1.1.0 (2026-02-11): Refocused on authentication/authorization; security standards moved to 06-security-standards.md, data protection to 07-data-protection.md
 - 1.0.0 (2025-01-27): Initial generic authentication and security standard
 
 ---

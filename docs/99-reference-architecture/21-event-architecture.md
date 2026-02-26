@@ -1,4 +1,4 @@
-# 06 - Event Architecture (Optional Module)
+# 21 - Event Architecture (Optional Module)
 
 *Version: 1.0.0*
 *Author: Architecture Team*
@@ -26,7 +26,7 @@ For simple request-response applications, this module is not required.
 
 Synchronous request-response works for most interactions, but some operations shouldn't block the caller: sending notifications after an order is placed, updating search indexes after content changes, broadcasting state changes to multiple consumers, or triggering background workflows. This module exists for projects that need to decouple producers from consumers.
 
-Redis Streams was chosen as the default because it provides reliable message delivery with consumer groups, is already present in most deployments (for caching and task queues via 19-background-tasks), and handles thousands of events per second — sufficient for the vast majority of projects. The upgrade path to NATS JetStream or Apache Kafka is defined but deferred until measurable scale requirements demand it.
+Redis Streams was chosen as the default because it provides reliable message delivery with consumer groups, is already present in most deployments (for caching and task queues via 14-background-tasks), and handles thousands of events per second — sufficient for the vast majority of projects. The upgrade path to NATS JetStream or Apache Kafka is defined but deferred until measurable scale requirements demand it.
 
 The key architectural pattern is the transactional outbox: when an event must reliably accompany a database write (e.g., "order placed" after inserting the order), both are written in the same database transaction, and a relay process then publishes the event. This eliminates the dual-write problem where the database write succeeds but the event publish fails, leaving the system in an inconsistent state. This module provides the communication backbone for inter-module events (04), real-time client updates (07), and is a required dependency for the agentic architecture (25).
 
@@ -382,24 +382,3 @@ When adopting this module:
 - [ ] Create audit event table
 - [ ] Define auditable operations
 - [ ] Set up retention policy
-
----
-
-## Session Events (Extended by Doc 31)
-
-When the project adopts `31-event-session-architecture.md`, the event system defined in this document becomes the transport layer for session events. Session events are a superset of the module events defined above — they follow the same envelope format, naming conventions, and Redis pub/sub transport, but add:
-
-- **Session-scoped channels**: Events are published to `session:{session_id}` channels in addition to module-level channels. Channel adapters (Telegram, TUI, WebSocket) subscribe to session channels.
-- **Typed event classes**: Doc 31 defines `SessionEvent` as the base class with 15+ typed subclasses (`UserMessageEvent`, `AgentThinkingEvent`, `AgentToolCallEvent`, `AgentResponseChunkEvent`, `ApprovalRequestedEvent`, `PlanCreatedEvent`, `CostUpdateEvent`, etc.). All extend the event envelope defined in this document.
-- **Event deserialization registry**: A type-discriminated registry maps `event_type` strings to Pydantic event classes for safe deserialization from Redis.
-- **Dual transport**: Redis pub/sub for real-time delivery (same as this document); Temporal event history for durable replay in Tier 4 long-running workflows.
-
-The module-level event patterns in this document remain unchanged for non-session inter-module communication (e.g., `users.user.created`, `orders.order.completed`). Session events are for interactive operations only.
-
-See `31-event-session-architecture.md`, Section 2 (Event Bus) for the complete event type hierarchy, deserialization registry, and transport configuration.
-
----
-
-## Related Documentation
-
-- [31-event-session-architecture.md](31-event-session-architecture.md) — Session-scoped events, typed event classes, streaming coordinator

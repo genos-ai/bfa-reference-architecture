@@ -1,4 +1,4 @@
-# 27 - Agent-First Infrastructure (Optional Module)
+# 42 - Agent-First Infrastructure (Optional Module)
 
 *Version: 1.1.0*
 *Author: Architecture Team*
@@ -6,7 +6,7 @@
 
 ## Changelog
 
-- 1.1.0 (2026-02-24): Added Secure by Default principle (startup invariants, fail-closed enforcement), DM pairing protocol for messaging channels, channel-level rate limiting; references 29-multi-channel-gateway.md
+- 1.1.0 (2026-02-24): Added Secure by Default principle (startup invariants, fail-closed enforcement), DM pairing protocol for messaging channels, channel-level rate limiting; references 44-multi-channel-gateway.md
 - 1.0.0 (2026-02-20): Initial agent-first infrastructure standard — MCP server integration, A2A protocol, agent identity, intent APIs, agent-discoverable endpoints, observability, testing, security
 
 ---
@@ -19,9 +19,9 @@ This module is **optional**. Adopt when your project:
 - Needs agent-grade identity beyond API keys and JWT (delegation chains, workload identity)
 - Wants to make its API surface agent-discoverable via standard protocols
 
-**Dependencies**: This module requires **03-backend-architecture.md** (FastAPI app where MCP is mounted) and **09-authentication.md** (extended with agent identity layers).
+**Dependencies**: This module requires **03-backend-architecture.md** (FastAPI app where MCP is mounted) and **05-authentication.md** (extended with agent identity layers).
 
-**Relationship to 25/26**: This module is independent of 25-agentic-architecture.md and 26-agentic-pydanticai.md. Those documents define how to build and run internal agents. This document defines how external agents discover, authenticate with, and consume your platform — and how your agents interoperate with agents you don't control. Adopt 25+26 for internal agent orchestration. Adopt this module for external agent interoperability. Adopt both for a full agent-native platform.
+**Relationship to 40/41**: This module is independent of 40-agentic-architecture.md and 41-agentic-pydanticai.md. Those documents define how to build and run internal agents. This document defines how external agents discover, authenticate with, and consume your platform — and how your agents interoperate with agents you don't control. Adopt 40+41 for internal agent orchestration. Adopt this module for external agent interoperability. Adopt both for a full agent-native platform.
 
 ---
 
@@ -102,7 +102,7 @@ async def get_note(note_id: str) -> str:
         return f"Title: {note.title}\nContent: {note.content or '(empty)'}"
 ```
 
-**Tools are thin adapters.** They call service methods. No business logic in MCP tool functions — the same rule as API endpoint handlers and PydanticAI tool functions (26-agentic-pydanticai.md).
+**Tools are thin adapters.** They call service methods. No business logic in MCP tool functions — the same rule as API endpoint handlers and PydanticAI tool functions (41-agentic-pydanticai.md).
 
 ### Structured Output via Pydantic
 
@@ -186,7 +186,7 @@ The MCP authorization specification classifies MCP servers as **OAuth 2.0 Resour
 - Strict token audience validation
 - MCP servers **must not** pass client tokens through to upstream APIs (prevents confused deputy attacks)
 
-Extend the existing JWT authentication from **09-authentication.md** with MCP-specific audience validation:
+Extend the existing JWT authentication from **05-authentication.md** with MCP-specific audience validation:
 
 ```python
 from modules.backend.core.security import decode_token
@@ -275,7 +275,7 @@ async def agent_card() -> dict:
 
 A2A tasks progress through **9 states**: `submitted → working → completed` for simple flows, with `input-required` and `auth-required` interrupt states for human-in-the-loop patterns. Terminal states (`completed`, `failed`, `canceled`, `rejected`) are immutable — critical for audit compliance.
 
-This aligns with the AgentTask states in **25-agentic-architecture.md** if both modules are adopted.
+This aligns with the AgentTask states in **40-agentic-architecture.md** if both modules are adopted.
 
 ### A2A Server Implementation
 
@@ -401,11 +401,11 @@ POST /api/v1/plans/bulk-archive
 }
 ```
 
-The agent inspects the plan, then confirms or abandons. This is the API equivalent of the HITL approval gates in **25-agentic-architecture.md**.
+The agent inspects the plan, then confirms or abandons. This is the API equivalent of the HITL approval gates in **40-agentic-architecture.md**.
 
 ### Structured Errors with Recovery Hints
 
-Standard HTTP errors are opaque to agents. Extend the existing `ErrorResponse` from **14-error-codes.md** with agent-consumable recovery fields:
+Standard HTTP errors are opaque to agents. Extend the existing `ErrorResponse` from **09-error-codes.md** with agent-consumable recovery fields:
 
 ```python
 class AgentErrorDetail(BaseModel):
@@ -442,7 +442,7 @@ The `suggestions` field provides valid alternatives. The `retry_strategy` tells 
 
 ## Agent Identity Architecture
 
-The existing authentication stack (**09-authentication.md**) covers human-era patterns: API keys, JWT, sessions. Agent identity requires three additional layers for autonomous, delegating, non-deterministic actors.
+The existing authentication stack (**05-authentication.md**) covers human-era patterns: API keys, JWT, sessions. Agent identity requires three additional layers for autonomous, delegating, non-deterministic actors.
 
 ### Layer 1: Workload Identity (SPIFFE/SPIRE)
 
@@ -510,7 +510,7 @@ Use when: an agent performs actions on behalf of a specific user and the audit t
 
 | Scenario | Layers Needed |
 |----------|---------------|
-| Single-service, no delegation | Existing JWT from 09-authentication.md is sufficient |
+| Single-service, no delegation | Existing JWT from 05-authentication.md is sufficient |
 | Multi-service agents in Kubernetes | Add Layer 1 (SPIFFE/SPIRE) |
 | Agent delegation chains | Add Layer 2 (Biscuit) |
 | Agent acting on behalf of users | Add Layer 3 (OAuth 2.1 Token Exchange) |
@@ -580,7 +580,7 @@ Evaluate gateway introduction as traffic and security requirements grow. Do not 
 
 ### OpenTelemetry GenAI Semantic Conventions
 
-The **OpenTelemetry GenAI Semantic Conventions** (v1.37+, stable) provide standardized trace attributes for agent operations. These extend the existing structlog setup from **12-observability.md**.
+The **OpenTelemetry GenAI Semantic Conventions** (v1.37+, stable) provide standardized trace attributes for agent operations. These extend the existing structlog setup from **10-observability.md**.
 
 ```python
 from opentelemetry import trace
@@ -625,7 +625,7 @@ AI agents move **16x more data** than human users (Obsidian Security, 2025). Beh
 
 ### Log Source
 
-Agent infrastructure logs are written to `logs/system.jsonl` with `source="agents"` per **12-observability.md**.
+Agent infrastructure logs are written to `logs/system.jsonl` with `source="agents"` per **10-observability.md**.
 
 ---
 
@@ -735,7 +735,7 @@ These checks are implemented as a startup validation function called during Fast
 
 ### DM Pairing for Messaging Channels
 
-When the platform is exposed through messaging channels (Telegram, Slack, Discord, WhatsApp) via **[29-multi-channel-gateway.md](29-multi-channel-gateway.md)**, unknown senders must be authenticated before their messages reach the agent coordinator. Three policies are available, configured per channel in `config/settings/gateway.yaml`:
+When the platform is exposed through messaging channels (Telegram, Slack, Discord, WhatsApp) via **[44-multi-channel-gateway.md](44-multi-channel-gateway.md)**, unknown senders must be authenticated before their messages reach the agent coordinator. Three policies are available, configured per channel in `config/settings/gateway.yaml`:
 
 | Policy | Behavior | When to Use |
 |--------|----------|-------------|
@@ -755,7 +755,7 @@ The pairing protocol:
 
 This pattern originates from messaging platform security practices and prevents the class of vulnerabilities where a public-facing bot processes messages from any sender — enabling prompt injection, resource exhaustion, and unauthorized access to agent capabilities.
 
-For the full gateway security implementation, see **[29-multi-channel-gateway.md](29-multi-channel-gateway.md)**.
+For the full gateway security implementation, see **[44-multi-channel-gateway.md](44-multi-channel-gateway.md)**.
 
 ### Channel-Level Rate Limiting
 
@@ -776,7 +776,7 @@ rate_limiting:
     messages_per_hour: 1000
 ```
 
-Rate limiting is enforced at the gateway level (**[29-multi-channel-gateway.md](29-multi-channel-gateway.md)**) using Redis for distributed state. When a limit is exceeded, the gateway responds with a channel-appropriate cooldown message and does not forward the message to the agent coordinator. Rate-limited messages do not consume agent budget.
+Rate limiting is enforced at the gateway level (**[44-multi-channel-gateway.md](44-multi-channel-gateway.md)**) using Redis for distributed state. When a limit is exceeded, the gateway responds with a channel-appropriate cooldown message and does not forward the message to the agent coordinator. Rate-limited messages do not consume agent budget.
 
 This is distinct from MCP/A2A rate limiting (token-based cost budgets) — channel rate limiting is message-count-based because messaging channel abuse is volumetric, not cost-based.
 
@@ -957,12 +957,12 @@ security_schemes:
 
 ## Related Documentation
 
-- [25-agentic-architecture.md](25-agentic-architecture.md) — Internal agent orchestration (conceptual)
-- [26-agentic-pydanticai.md](26-agentic-pydanticai.md) — Internal agent implementation (PydanticAI)
-- [29-multi-channel-gateway.md](29-multi-channel-gateway.md) — Multi-channel delivery, DM pairing, channel rate limiting, session management
+- [40-agentic-architecture.md](40-agentic-architecture.md) — Internal agent orchestration (conceptual)
+- [41-agentic-pydanticai.md](41-agentic-pydanticai.md) — Internal agent implementation (PydanticAI)
+- [44-multi-channel-gateway.md](44-multi-channel-gateway.md) — Multi-channel delivery, DM pairing, channel rate limiting, session management
 - [03-backend-architecture.md](03-backend-architecture.md) — FastAPI application where MCP/A2A is mounted
-- [09-authentication.md](09-authentication.md) — Base authentication (extended by agent identity layers)
-- [12-observability.md](12-observability.md) — Logging standards (extended by OTel GenAI conventions)
-- [14-error-codes.md](14-error-codes.md) — Error code registry (extended by recovery hints)
-- [08-llm-integration.md](08-llm-integration.md) — LLM provider interface
-- [17-security-standards.md](17-security-standards.md) — Application security standards
+- [05-authentication.md](05-authentication.md) — Base authentication (extended by agent identity layers)
+- [10-observability.md](10-observability.md) — Logging standards (extended by OTel GenAI conventions)
+- [09-error-codes.md](09-error-codes.md) — Error code registry (extended by recovery hints)
+- [24-llm-integration.md](24-llm-integration.md) — LLM provider interface
+- [06-security-standards.md](06-security-standards.md) — Application security standards

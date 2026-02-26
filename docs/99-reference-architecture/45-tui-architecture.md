@@ -1,4 +1,4 @@
-# 28 - TUI Architecture (Optional Module)
+# 45 - TUI Architecture (Optional Module)
 
 *Version: 1.0.0*
 *Author: Architecture Team*
@@ -19,9 +19,9 @@ This module is **optional**. Adopt when your project needs:
 - A power user interface that works over SSH and in low-bandwidth environments
 - A browser-accessible terminal UI without building a separate React frontend
 
-**Dependencies**: This module requires **07-frontend-architecture.md** (thin client principles) and benefits from **25-agentic-architecture.md** + **26-agentic-pydanticai.md** for agent integration patterns.
+**Dependencies**: This module requires **22-frontend-architecture.md** (thin client principles) and benefits from **40-agentic-architecture.md** + **41-agentic-pydanticai.md** for agent integration patterns.
 
-For command-based, one-shot operations (automation, scripting, CI/CD), use the CLI (Click) defined in 07-frontend-architecture.md. Adopt this module when the user needs a persistent, interactive session with real-time feedback.
+For command-based, one-shot operations (automation, scripting, CI/CD), use the CLI (Click) defined in 22-frontend-architecture.md. Adopt this module when the user needs a persistent, interactive session with real-time feedback.
 
 ---
 
@@ -31,7 +31,7 @@ The existing architecture defines two terminal-facing client types: the CLI (Cli
 
 A TUI fills this gap. It is a persistent, interactive terminal application that stays open for the duration of a working session. It is keyboard-first, works over SSH, renders at 60 FPS, and — critically — the same codebase can be served in a browser via Textual Web with zero code changes.
 
-For an AI-first platform where the primary user lives in the terminal, the TUI becomes the primary interface. The React web frontend (07-frontend-architecture.md) becomes optional — reserved for non-technical users or public-facing surfaces. The CLI remains essential for automation and scripting, but it is no longer the interactive human interface.
+For an AI-first platform where the primary user lives in the terminal, the TUI becomes the primary interface. The React web frontend (22-frontend-architecture.md) becomes optional — reserved for non-technical users or public-facing surfaces. The CLI remains essential for automation and scripting, but it is no longer the interactive human interface.
 
 ### How TUI differs from CLI
 
@@ -141,11 +141,11 @@ The TUI maintains two connections to the backend:
 1. **REST (httpx)** — for request-response operations: submit tasks, approve/reject, query history, view costs, browse registry
 2. **WebSocket** — for real-time streaming: agent reasoning steps, tool call results, cost updates, approval requests, plan progress
 
-The WebSocket subscribes to events relevant to the current session. When the user switches tabs, subscriptions update. When the TUI disconnects, it reconnects with exponential backoff per **06-event-architecture.md**.
+The WebSocket subscribes to events relevant to the current session. When the user switches tabs, subscriptions update. When the TUI disconnects, it reconnects with exponential backoff per **21-event-architecture.md**.
 
 ### X-Frontend-ID
 
-The TUI sends `X-Frontend-ID: tui` with every request per **12-observability.md**. This enables:
+The TUI sends `X-Frontend-ID: tui` with every request per **10-observability.md**. This enables:
 - Log filtering by source (`logs/system.jsonl` with `source="tui"`)
 - Per-frontend metrics in dashboards
 - Debugging TUI-specific issues
@@ -492,7 +492,7 @@ Textual Web serves the identical application in the browser. No code changes, no
 
 ### WebSocket Subscriptions
 
-The TUI subscribes to agent events per **06-event-architecture.md**:
+The TUI subscribes to agent events per **21-event-architecture.md**:
 
 | Event | TUI Behavior |
 |-------|-------------|
@@ -629,7 +629,7 @@ For platforms where the primary user is a developer/operator who lives in the te
 | **Optional** | React Web | Full visual UI for non-technical users (if ever needed) |
 | **Optional** | Telegram | Mobile notifications, quick approvals on the go |
 
-The React frontend (07-frontend-architecture.md) becomes optional. Textual Web covers the browser case with zero additional code. Build React only when you need a polished public-facing UI for users who are not comfortable in a terminal.
+The React frontend (22-frontend-architecture.md) becomes optional. Textual Web covers the browser case with zero additional code. Build React only when you need a polished public-facing UI for users who are not comfortable in a terminal.
 
 ---
 
@@ -646,7 +646,7 @@ When adopting this module:
 - [ ] Implement approval panel overlay
 - [ ] Implement plan monitor panel
 - [ ] Configure `X-Frontend-ID: tui` on all API calls
-- [ ] Add `tui` to log source list in `12-observability.md`
+- [ ] Add `tui` to log source list in `10-observability.md`
 - [ ] Create TUI configuration in `config/settings/tui.yaml`
 - [ ] Add CLI entry point (`--action tui`)
 - [ ] Write panel unit tests with Textual pilot API
@@ -657,10 +657,10 @@ When adopting this module:
 
 ## Related Documentation
 
-- [07-frontend-architecture.md](07-frontend-architecture.md) — Thin client principles, CLI (Click), Web (React)
-- [25-agentic-architecture.md](25-agentic-architecture.md) — Agent concepts, human-in-the-loop, cost tracking, reasoning chains
-- [26-agentic-pydanticai.md](26-agentic-pydanticai.md) — PydanticAI implementation, API endpoints, event types
-- [06-event-architecture.md](06-event-architecture.md) — WebSocket patterns, event types
-- [12-observability.md](12-observability.md) — X-Frontend-ID, log sources
+- [22-frontend-architecture.md](22-frontend-architecture.md) — Thin client principles, CLI (Click), Web (React)
+- [40-agentic-architecture.md](40-agentic-architecture.md) — Agent concepts, human-in-the-loop, cost tracking, reasoning chains
+- [41-agentic-pydanticai.md](41-agentic-pydanticai.md) — PydanticAI implementation, API endpoints, event types
+- [21-event-architecture.md](21-event-architecture.md) — WebSocket patterns, event types
+- [10-observability.md](10-observability.md) — X-Frontend-ID, log sources
 - [01-core-principles.md](01-core-principles.md) — Thin client mandate (P1, P2)
-- [31-event-session-architecture.md](31-event-session-architecture.md) — When adopted, the TUI becomes an event subscriber. Agent thinking, tool calls, and response chunks arrive as typed events on the session bus. The TUI renders these in dedicated panels (thinking panel, tool call panel, response panel) rather than polling for updates.
+- [46-event-session-architecture.md](46-event-session-architecture.md) — When adopted, the TUI becomes an event subscriber. Agent thinking, tool calls, and response chunks arrive as typed events on the session bus. The TUI renders these in dedicated panels (thinking panel, tool call panel, response panel) rather than polling for updates.

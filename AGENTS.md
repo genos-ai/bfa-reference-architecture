@@ -120,16 +120,23 @@ Full standards in `docs/99-reference-architecture/`:
 
 | Doc | Topic |
 |-----|-------|
+| **Core (01-16)** | |
 | 01 | Core Principles |
 | 03 | Backend Architecture |
-| 10 | Python Coding Standards |
-| 12 | Observability |
-| 14 | Error Codes |
-| 16 | Testing Standards |
-| 19 | Background Tasks |
-| 25 | Agentic AI Architecture (conceptual) |
-| 26 | Agentic AI PydanticAI Implementation |
-| 27 | Agent-First Infrastructure (MCP, A2A, agent identity) |
-| 29 | Multi-Channel Gateway (channel adapters, sessions, WebSocket, security) |
-| 30 | AI-First Interface Design (adapter registry, self-describing APIs, service factory) |
-| 31 | Event-Driven Session Architecture (session model, event bus, streaming coordinator, plan management, memory, approval gates, cost tracking) |
+| 05 | Authentication |
+| 06 | Security Standards |
+| 08 | Python Coding Standards |
+| 09 | Error Codes |
+| 10 | Observability |
+| 11 | Testing Standards |
+| 14 | Background Tasks |
+| **Optional Platform (20-26)** | |
+| 21 | Event Architecture |
+| 24 | LLM Integration |
+| **AI-First Platform (40-46)** | |
+| 40 | Agentic AI Architecture (conceptual) |
+| 41 | Agentic AI PydanticAI Implementation |
+| 42 | Agent-First Infrastructure (MCP, A2A, agent identity) |
+| 43 | AI-First Interface Design (adapter registry, self-describing APIs, service factory) |
+| 44 | Multi-Channel Gateway (channel adapters, sessions, WebSocket, security) |
+| 46 | Event-Driven Session Architecture (session model, event bus, streaming coordinator, plan management, memory, approval gates, cost tracking) |

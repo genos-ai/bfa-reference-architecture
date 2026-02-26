@@ -1,4 +1,4 @@
-# 15 - Project Template
+# 13 - Project Template
 
 *Version: 1.1.0*
 *Author: Architecture Team*
@@ -62,31 +62,42 @@ The key decision is that this structure applies from day one, even for small pro
 │   │   └── README.md               # Plans, checklists, progress tracking
 │   └── 04-reference/
 │       ├── README.md
-│       └── architecture-standards/ # Architecture standards (18 files)
+│       └── architecture-standards/ # Architecture standards (31 files)
 │           ├── 00-overview.md
+│           ├── # --- Core Foundation (01-09) ---
 │           ├── 01-core-principles.md
 │           ├── 02-primitive-identification.md
 │           ├── 03-backend-architecture.md
 │           ├── 04-module-structure.md
-│           ├── 05-data-layer.md
-│           ├── 06-event-architecture.md
-│           ├── 07-frontend-architecture.md
-│           ├── 08-llm-integration.md
-│           ├── 09-authentication.md
-│           ├── 10-python-coding-standards.md
-│           ├── 11-typescript-coding-standards.md
-│           ├── 12-observability.md
-│           ├── 13-development-workflow.md
-│           ├── 14-error-codes.md
-│           ├── 15-project-template.md
-│           ├── 16-testing-standards.md
-│           ├── 17-security-standards.md
-│           ├── 18-data-protection.md
-│           ├── 19-background-tasks.md
-│           ├── 20-telegram-bot-integration.md
-│           ├── 21-deployment-bare-metal.md
-│           ├── 22-deployment-azure.md
-│           └── 23-telegram-client-integration.md
+│           ├── 05-authentication.md
+│           ├── 06-security-standards.md
+│           ├── 07-data-protection.md
+│           ├── 08-python-coding-standards.md
+│           ├── 09-error-codes.md
+│           ├── # --- Core Operations (10-16) ---
+│           ├── 10-observability.md
+│           ├── 11-testing-standards.md
+│           ├── 12-development-workflow.md
+│           ├── 13-project-template.md
+│           ├── 14-background-tasks.md
+│           ├── 15-deployment-bare-metal.md
+│           ├── 16-deployment-azure.md
+│           ├── # --- Optional Platform (20-26) ---
+│           ├── 20-data-layer.md
+│           ├── 21-event-architecture.md
+│           ├── 22-frontend-architecture.md
+│           ├── 23-typescript-coding-standards.md
+│           ├── 24-llm-integration.md
+│           ├── 25-telegram-bot-integration.md
+│           ├── 26-telegram-client-integration.md
+│           ├── # --- AI-First Platform (40-46) ---
+│           ├── 40-agentic-architecture.md
+│           ├── 41-agentic-pydanticai.md
+│           ├── 42-agent-first-infrastructure.md
+│           ├── 43-ai-first-interface-design.md
+│           ├── 44-multi-channel-gateway.md
+│           ├── 45-tui-architecture.md
+│           └── 46-event-session-architecture.md
 │
 ├── modules/
 │   ├── backend/
@@ -348,7 +359,7 @@ React frontend with Vite.
 
 Tests use a hybrid structure: test type at top level, source structure within.
 
-See **16-testing-standards.md** for complete testing guidance.
+See **11-testing-standards.md** for complete testing guidance.
 
 | Path | Purpose |
 |------|---------|

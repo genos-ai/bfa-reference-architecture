@@ -1,4 +1,4 @@
-# 29 - Multi-Channel Gateway (Optional Module)
+# 44 - Multi-Channel Gateway (Optional Module)
 
 *Version: 1.0.0*
 *Author: Architecture Team*
@@ -19,23 +19,23 @@ This module is **optional**. Adopt when your project:
 - Wants centralized security enforcement (rate limiting, DM pairing, input validation) across all channels
 - Requires an always-on daemon that maintains persistent connections to messaging platforms
 
-**Dependencies**: This module requires **03-backend-architecture.md** (FastAPI application), **20-telegram-bot-integration.md** (reference channel adapter), and benefits from **25-agentic-architecture.md** + **26-agentic-pydanticai.md** for agent routing.
+**Dependencies**: This module requires **03-backend-architecture.md** (FastAPI application), **25-telegram-bot-integration.md** (reference channel adapter), and benefits from **40-agentic-architecture.md** + **41-agentic-pydanticai.md** for agent routing.
 
 **Relationship to other modules**: This module sits between external channels and the backend. It does not replace any existing module — it provides the routing layer that connects them:
 
 | Module | Role | Unchanged |
 |--------|------|-----------|
-| **20-telegram-bot-integration.md** | First channel adapter (Telegram) | ✅ Becomes a channel adapter under this module's interface |
-| **28-tui-architecture.md** | TUI client | ✅ Connects via WebSocket defined here |
-| **07-frontend-architecture.md** | React web frontend | ✅ Connects via REST + WebSocket defined here |
-| **25/26** | Agent orchestration | ✅ Gateway routes messages to the coordinator |
+| **25-telegram-bot-integration.md** | First channel adapter (Telegram) | ✅ Becomes a channel adapter under this module's interface |
+| **45-tui-architecture.md** | TUI client | ✅ Connects via WebSocket defined here |
+| **22-frontend-architecture.md** | React web frontend | ✅ Connects via REST + WebSocket defined here |
+| **40/41** | Agent orchestration | ✅ Gateway routes messages to the coordinator |
 | **27** | External agent interop (MCP/A2A) | ✅ Independent — agents consuming your platform, not messaging channels |
 
 ---
 
 ## Context
 
-The existing architecture defines several client types — React web frontend (07), CLI (07), Telegram bot (20), TUI (28) — each connecting to the FastAPI backend independently. Each has its own connection model, authentication mechanism, and message format. There is no shared session layer across these clients, no centralized security enforcement point, and no mechanism for the backend to push events to clients that are not actively polling.
+The existing architecture defines several client types — React web frontend (22), CLI (22), Telegram bot (20), TUI (28) — each connecting to the FastAPI backend independently. Each has its own connection model, authentication mechanism, and message format. There is no shared session layer across these clients, no centralized security enforcement point, and no mechanism for the backend to push events to clients that are not actively polling.
 
 This works for a traditional BFF where each client is a distinct application with its own user base. It does not work for a **personal AI assistant** where the user expects to start a conversation on Telegram, continue it on the TUI, and receive a push notification on the web dashboard when a long-running agent task completes. Nor does it work for a multi-channel bot that must enforce the same rate limits, authentication policies, and input validation regardless of which channel a message arrives through.
 
@@ -94,7 +94,7 @@ The gateway is not a separate process. It is a set of components within the exis
     │              Message Router                             │
     │                                                        │
     │  - Chat commands intercepted (/status, /new, /usage)   │
-    │  - Agent requests → Coordinator (doc 26)               │
+    │  - Agent requests → Coordinator (doc 41)               │
     │  - Responses routed back through originating channel   │
     │  - Cross-channel push for connected WebSocket clients  │
     └──────────────────────┬─────────────────────────────────┘
@@ -104,7 +104,7 @@ The gateway is not a separate process. It is a set of components within the exis
               ▼            ▼            ▼
     ┌──────────────┐ ┌──────────┐ ┌──────────────┐
     │ Coordinator  │ │  REST    │ │  Background  │
-    │ (doc 26)     │ │  API     │ │  Tasks       │
+    │ (doc 41)     │ │  API     │ │  Tasks       │
     │ handle()     │ │          │ │  (Taskiq)    │
     └──────────────┘ └──────────┘ └──────────────┘
 ```
@@ -117,7 +117,7 @@ The gateway is not a separate process. It is a set of components within the exis
 3. Security layer validates: allowlist, rate limit, input validation
 4. Session manager resolves or creates session
 5. Router checks for chat commands (intercept) or forwards to coordinator
-6. Coordinator processes via agent runtime (doc 26)
+6. Coordinator processes via agent runtime (doc 41)
 7. Response returned to router
 
 **Outbound** (agent response delivered to user):
@@ -317,7 +317,7 @@ class GatewaySession:
 | `sandbox` | Agent can use domain tools (database, API calls) but not system tools | Default for DM sessions |
 | `readonly` | Agent can only use read-only tools (search, query) | Default for group sessions |
 
-Tool access is configured per session in `config/settings/gateway.yaml` and enforced by the session manager before the coordinator receives the request. The coordinator's `CoordinatorRequest` (doc 26) carries the session's `tool_access_level`, and the tool registry filters available tools accordingly.
+Tool access is configured per session in `config/settings/gateway.yaml` and enforced by the session manager before the coordinator receives the request. The coordinator's `CoordinatorRequest` (doc 41) carries the session's `tool_access_level`, and the tool registry filters available tools accordingly.
 
 ### Cross-Channel Session Binding
 
@@ -346,7 +346,7 @@ Active sessions live in Redis for fast lookup. When a session becomes inactive (
 
 ### WebSocket Endpoint
 
-The FastAPI application exposes a WebSocket endpoint for real-time bidirectional communication. This serves the TUI (doc 28), the React frontend (07), and any other client that needs server-pushed events.
+The FastAPI application exposes a WebSocket endpoint for real-time bidirectional communication. This serves the TUI (doc 45), the React frontend (22), and any other client that needs server-pushed events.
 
 ```python
 from fastapi import WebSocket, WebSocketDisconnect
@@ -415,7 +415,7 @@ Connection state is stored in Redis, enabling multiple FastAPI worker processes 
 
 ### Event Types
 
-Events pushed through WebSocket follow the event schema from **06-event-architecture.md** with gateway-specific additions:
+Events pushed through WebSocket follow the event schema from **21-event-architecture.md** with gateway-specific additions:
 
 | Event | Payload | When |
 |-------|---------|------|
@@ -437,7 +437,7 @@ Events pushed through WebSocket follow the event schema from **06-event-architec
 WebSocket connections must be authenticated before receiving events. Authentication happens during the connection handshake:
 
 1. Client includes a token in the WebSocket URL query parameter or first message
-2. Server validates the token using the existing JWT infrastructure (09-authentication.md)
+2. Server validates the token using the existing JWT infrastructure (05-authentication.md)
 3. If invalid, server closes the connection with code 4001
 4. If valid, server registers the connection and begins streaming events
 
@@ -543,9 +543,9 @@ Commands are recognized by the `/` prefix. The router strips the command and dis
 
 Non-command messages are forwarded to the agent coordinator:
 
-1. Router constructs a `CoordinatorRequest` (doc 26) from the `ChannelMessage`
+1. Router constructs a `CoordinatorRequest` (doc 41) from the `ChannelMessage`
 2. `session_id`, `user_id`, `entry_point`, and `tool_access_level` are populated from the session
-3. Router calls `handle(request)` (doc 26)
+3. Router calls `handle(request)` (doc 41)
 4. Response is wrapped in an `AgentResponse` and delivered through the channel adapter
 
 ### Response Delivery
@@ -989,13 +989,13 @@ async def test_telegram_message_to_agent_response(
 
 ---
 
-## Event-Driven Channel Adapters (Doc 31)
+## Event-Driven Channel Adapters (Doc 46)
 
-When the project adopts `31-event-session-architecture.md`, channel adapters become event subscribers rather than direct service callers.
+When the project adopts `46-event-session-architecture.md`, channel adapters become event subscribers rather than direct service callers.
 
 ### Architectural Shift
 
-| Concern | Without Doc 31 | With Doc 31 |
+| Concern | Without Doc 46 | With Doc 46 |
 |---------|---------------|-------------|
 | Session state | Per-channel tracking | Centralized `SessionService` — channels bind to sessions via `session.bind_channel()` |
 | Message handling | Channel calls service layer directly | Channel publishes `UserMessageEvent` → coordinator handles → channel subscribes to response events |
@@ -1055,23 +1055,23 @@ Existing channel adapters can be migrated incrementally:
 2. Route new features through events, keep existing features on direct calls
 3. Once all features use events, remove direct service calls
 
-The existing per-channel session tracking in doc 29 remains valid for projects that do not adopt doc 31.
+The existing per-channel session tracking in doc 44 remains valid for projects that do not adopt doc 46.
 
-See `31-event-session-architecture.md`, Section 3 (Streaming Coordinator — Channel Adapters) for the complete adapter implementations.
+See `46-event-session-architecture.md`, Section 3 (Streaming Coordinator — Channel Adapters) for the complete adapter implementations.
 
 ---
 
 ## Related Documentation
 
 - [03-backend-architecture.md](03-backend-architecture.md) — FastAPI application where WebSocket endpoint is mounted
-- [20-telegram-bot-integration.md](20-telegram-bot-integration.md) — Telegram module (first channel adapter)
-- [25-agentic-architecture.md](25-agentic-architecture.md) — Agent orchestration, session concepts, cost tracking
-- [26-agentic-pydanticai.md](26-agentic-pydanticai.md) — Coordinator `handle()`, entry points, streaming
-- [27-agent-first-infrastructure.md](27-agent-first-infrastructure.md) — MCP/A2A (external agent interop, independent of messaging channels)
-- [28-tui-architecture.md](28-tui-architecture.md) — TUI client (connects via WebSocket defined here)
-- [07-frontend-architecture.md](07-frontend-architecture.md) — React web frontend, CLI
-- [06-event-architecture.md](06-event-architecture.md) — Event types, WebSocket patterns
-- [09-authentication.md](09-authentication.md) — JWT authentication (extended for WebSocket)
-- [12-observability.md](12-observability.md) — Source-based logging, X-Frontend-ID
+- [25-telegram-bot-integration.md](25-telegram-bot-integration.md) — Telegram module (first channel adapter)
+- [40-agentic-architecture.md](40-agentic-architecture.md) — Agent orchestration, session concepts, cost tracking
+- [41-agentic-pydanticai.md](41-agentic-pydanticai.md) — Coordinator `handle()`, entry points, streaming
+- [42-agent-first-infrastructure.md](42-agent-first-infrastructure.md) — MCP/A2A (external agent interop, independent of messaging channels)
+- [45-tui-architecture.md](45-tui-architecture.md) — TUI client (connects via WebSocket defined here)
+- [22-frontend-architecture.md](22-frontend-architecture.md) — React web frontend, CLI
+- [21-event-architecture.md](21-event-architecture.md) — Event types, WebSocket patterns
+- [05-authentication.md](05-authentication.md) — JWT authentication (extended for WebSocket)
+- [10-observability.md](10-observability.md) — Source-based logging, X-Frontend-ID
 - [98-research/07-Personal AI assistant architecture](../98-research/07-Personal%20AI%20assistant%20architecture-%20lessons%20from%20OpenClaw%20for%20agent-first%20platforms.md) — Analysis that motivated this module
-- [31-event-session-architecture.md](31-event-session-architecture.md) — Channels as event subscribers, session-channel binding, unified session state
+- [46-event-session-architecture.md](46-event-session-architecture.md) — Channels as event subscribers, session-channel binding, unified session state

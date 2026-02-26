@@ -1,4 +1,4 @@
-# 18 - Data Protection
+# 07 - Data Protection
 
 *Version: 1.0.0*
 *Author: Architecture Team*
@@ -12,7 +12,7 @@
 
 ## Purpose
 
-This document defines standards for handling personal data, ensuring privacy compliance, and protecting sensitive information. It complements 09-authentication.md (access control) and 17-security-standards.md (technical security controls).
+This document defines standards for handling personal data, ensuring privacy compliance, and protecting sensitive information. It complements 05-authentication.md (access control) and 06-security-standards.md (technical security controls).
 
 These standards apply to any system that collects, processes, or stores personal data.
 
@@ -710,7 +710,7 @@ For every new feature handling personal data:
 | **GDPR** | Consent, data subject rights, DPAs, breach notification | This document |
 | **CCPA/CPRA** | Right to know, delete, opt-out of sale | This document |
 | **HIPAA** | PHI safeguards, BAAs, access controls | Additional controls required |
-| **PCI DSS** | Cardholder data protection | 17-security-standards.md + additional |
-| **SOC 2** | Security, availability, confidentiality | 17-security-standards.md + policies |
+| **PCI DSS** | Cardholder data protection | 06-security-standards.md + additional |
+| **SOC 2** | Security, availability, confidentiality | 06-security-standards.md + policies |
 
 For specific compliance requirements, consult legal and compliance teams.

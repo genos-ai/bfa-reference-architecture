@@ -1,4 +1,4 @@
-# 10 - Python Coding Standards
+# 08 - Python Coding Standards
 
 *Version: 1.0.0*
 *Author: Architecture Team*
@@ -462,7 +462,7 @@ def utc_now() -> datetime:
 
 ## Testing Standards
 
-See **16-testing-standards.md** for comprehensive testing guidance including:
+See **11-testing-standards.md** for comprehensive testing guidance including:
 
 - Test directory structure (hybrid approach)
 - Test types (unit, integration, e2e)

@@ -1,4 +1,4 @@
-# 12 - Observability
+# 10 - Observability
 
 *Version: 2.0.0*
 *Author: Architecture Team*

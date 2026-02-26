@@ -1,4 +1,4 @@
-# 07 - Frontend Architecture (Optional Module)
+# 22 - Frontend Architecture (Optional Module)
 
 *Version: 1.0.0*
 *Author: Architecture Team*
@@ -18,7 +18,7 @@ This module is **optional**. Adopt when your project includes:
 
 For backend-only services or API-only projects, this module is not required.
 
-If adopting web frontend, also adopt **11-typescript-coding-standards.md**.
+If adopting web frontend, also adopt **23-typescript-coding-standards.md**.
 
 ---
 

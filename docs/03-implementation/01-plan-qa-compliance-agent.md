@@ -32,7 +32,7 @@
 | 21 | Write agent integration tests with TestModel | `test_code_qa.py` | Done |
 | 22 | Run full test suite — 332 passed, zero failures | All test files | Done |
 | 23 | Restructure to directory-per-agent pattern (`{category}/{name}/agent.py`) | All agent files | Done |
-| 24 | Update reference architecture doc 26 with naming + directory conventions | `docs/99-reference-architecture/26-agentic-pydanticai.md` | Done |
+| 24 | Update reference architecture doc 26 with naming + directory conventions | `docs/99-reference-architecture/41-agentic-pydanticai.md` | Done |
 
 ---
 
@@ -44,7 +44,7 @@ This plan added a **QA compliance agent** (`code.qa.agent`) — a vertical agent
 
 ### Agent Naming Convention
 
-Established during this implementation per **26-agentic-pydanticai.md** "Agent Naming Convention". All agents use the `{category}.{name}.agent` format with directory-per-agent structure:
+Established during this implementation per **41-agentic-pydanticai.md** "Agent Naming Convention". All agents use the `{category}.{name}.agent` format with directory-per-agent structure:
 
 | Agent Identity | Config Path | Code Path |
 |---------------|-------------|-----------|
@@ -155,7 +155,7 @@ QaAuditResult (structured output with fix status per violation)
 |------|--------|
 | `modules/backend/agents/coordinator/coordinator.py` | Recursive `**/agent.yaml` glob, registry-driven dispatch, both agents registered |
 | `chat.py` | Docstring references updated to `system.health.agent` |
-| `docs/99-reference-architecture/26-agentic-pydanticai.md` | Added "Agent Naming Convention" section, updated module structure, file naming, config examples, walkthrough |
+| `docs/99-reference-architecture/41-agentic-pydanticai.md` | Added "Agent Naming Convention" section, updated module structure, file naming, config examples, walkthrough |
 
 ---
 

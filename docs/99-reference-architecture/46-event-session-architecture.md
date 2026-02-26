@@ -1,4 +1,4 @@
-# 31 — Event-Driven Session Architecture (Optional Module)
+# 46 — Event-Driven Session Architecture (Optional Module)
 
 *Version: 1.0.0*
 *Author: Architecture Team*
@@ -19,9 +19,9 @@ This module is **optional**. Adopt when your project:
 - Operates long-running autonomous tasks spanning hours, days, or weeks
 - Serves multiple channels (Telegram, TUI, WebSocket, CLI) from the same backend
 
-**Dependencies**: This module requires **03-backend-architecture.md** (service layer), **06-event-architecture.md** (event primitives), **25-agentic-architecture.md** (agent concepts), and **26-agentic-pydanticai.md** (PydanticAI implementation).
+**Dependencies**: This module requires **03-backend-architecture.md** (service layer), **21-event-architecture.md** (event primitives), **40-agentic-architecture.md** (agent concepts), and **41-agentic-pydanticai.md** (PydanticAI implementation).
 
-**Relationship to existing docs**: This module does not replace docs 03, 25, 26, 27, 29, or 30. It layers a session and event model on top of them. Stateless CRUD endpoints (doc 03) continue to work unchanged. Channel adapters (doc 29) become event subscribers. Agent tools (doc 26) become event producers. The service layer remains the single source of business logic. Discovery endpoints (doc 30) remain stateless GET requests.
+**Relationship to existing docs**: This module does not replace docs 03, 40, 41, 42, 44, or 43. It layers a session and event model on top of them. Stateless CRUD endpoints (doc 03) continue to work unchanged. Channel adapters (doc 44) become event subscribers. Agent tools (doc 41) become event producers. The service layer remains the single source of business logic. Discovery endpoints (doc 43) remain stateless GET requests.
 
 ---
 
@@ -45,7 +45,7 @@ This model treats AI agents and humans as peers on the same event bus. There is 
 
 **A4: The coordinator is infrastructure, not intelligence.** The coordinator routes messages to agents, enforces cost budgets, manages approval gates, and yields events. It does not have a personality, make domain decisions, or call LLMs. It is a state machine with well-defined transitions.
 
-**A5: Agents are configured functions, not class hierarchies.** Each agent is a `pydantic_ai.Agent()` instance with tools registered as `@agent.tool` decorators. Agents call service-layer methods through those tools. No agent contains business logic — the same rule as API endpoint handlers (doc 03) and MCP tool functions (doc 27).
+**A5: Agents are configured functions, not class hierarchies.** Each agent is a `pydantic_ai.Agent()` instance with tools registered as `@agent.tool` decorators. Agents call service-layer methods through those tools. No agent contains business logic — the same rule as API endpoint handlers (doc 03) and MCP tool functions (doc 42).
 
 ---
 
@@ -264,7 +264,7 @@ modules/backend/api/v1/endpoints/sessions.py # NEW — REST endpoints for sessio
 
 ### Event Types
 
-Every action within a session produces a typed event. Events follow the naming convention from doc 06 (`{domain}.{entity}.{action}`) extended with agent lifecycle events.
+Every action within a session produces a typed event. Events follow the naming convention from doc 21 (`{domain}.{entity}.{action}`) extended with agent lifecycle events.
 
 ```python
 # modules/backend/events/types.py
@@ -529,7 +529,7 @@ __all__ = [
 
 ### Anti-Patterns
 
-- Do not use the event bus for inter-module communication that doesn't involve sessions. Module-to-module events (doc 06) continue to use Taskiq/Redis directly.
+- Do not use the event bus for inter-module communication that doesn't involve sessions. Module-to-module events (doc 21) continue to use Taskiq/Redis directly.
 - Do not persist every event to PostgreSQL. The event bus is ephemeral (Redis Pub/Sub). Only events that matter for history or audit are persisted (see Section 5 memory architecture). If you need durable events, use Temporal.
 - Do not put business logic in event handlers. Event subscribers render or forward events — they do not make domain decisions.
 
@@ -1501,22 +1501,22 @@ temporal:
 ## Out of Scope
 
 - Stateless CRUD endpoints (covered by 03-backend-architecture.md — unchanged)
-- Agent definitions and tool registration (covered by 26-agentic-pydanticai.md)
-- MCP server setup and A2A protocol (covered by 27-agent-first-infrastructure.md)
-- TUI panel layout and rendering (covered by 28-tui-architecture.md)
-- Channel adapter registration and gateway security (covered by 29-multi-channel-gateway.md)
-- Service factory and adapter patterns (covered by 30-ai-first-interface-design.md)
-- Frontend architecture (covered by 07-frontend-architecture.md)
+- Agent definitions and tool registration (covered by 41-agentic-pydanticai.md)
+- MCP server setup and A2A protocol (covered by 42-agent-first-infrastructure.md)
+- TUI panel layout and rendering (covered by 45-tui-architecture.md)
+- Channel adapter registration and gateway security (covered by 44-multi-channel-gateway.md)
+- Service factory and adapter patterns (covered by 43-ai-first-interface-design.md)
+- Frontend architecture (covered by 22-frontend-architecture.md)
 
 ---
 
 ## Related Documentation
 
 - [03-backend-architecture.md](03-backend-architecture.md) — Service layer, repository pattern (unchanged by this module)
-- [06-event-architecture.md](06-event-architecture.md) — Event primitives (extended with session events)
-- [25-agentic-architecture.md](25-agentic-architecture.md) — Agent concepts, orchestration patterns
-- [26-agentic-pydanticai.md](26-agentic-pydanticai.md) — PydanticAI agent implementation
-- [27-agent-first-infrastructure.md](27-agent-first-infrastructure.md) — MCP, A2A, agent identity
-- [28-tui-architecture.md](28-tui-architecture.md) — TUI rendering (becomes event consumer)
-- [29-multi-channel-gateway.md](29-multi-channel-gateway.md) — Channel adapters (become event subscribers)
-- [30-ai-first-interface-design.md](30-ai-first-interface-design.md) — Service factory, discovery endpoints
+- [21-event-architecture.md](21-event-architecture.md) — Event primitives (extended with session events)
+- [40-agentic-architecture.md](40-agentic-architecture.md) — Agent concepts, orchestration patterns
+- [41-agentic-pydanticai.md](41-agentic-pydanticai.md) — PydanticAI agent implementation
+- [42-agent-first-infrastructure.md](42-agent-first-infrastructure.md) — MCP, A2A, agent identity
+- [45-tui-architecture.md](45-tui-architecture.md) — TUI rendering (becomes event consumer)
+- [44-multi-channel-gateway.md](44-multi-channel-gateway.md) — Channel adapters (become event subscribers)
+- [43-ai-first-interface-design.md](43-ai-first-interface-design.md) — Service factory, discovery endpoints

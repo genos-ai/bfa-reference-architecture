@@ -1,4 +1,4 @@
-# 22 - Deployment: Azure
+# 16 - Deployment: Azure
 
 *Version: 1.0.0*
 *Author: Architecture Team*
@@ -126,7 +126,7 @@ resource "azurerm_linux_web_app" "backend" {
 }
 ```
 
-WebSocket connections on App Service have a **240-minute idle timeout**. The application must implement heartbeat/keepalive per 06-event-architecture.md (30-second ping interval) to prevent premature disconnection.
+WebSocket connections on App Service have a **240-minute idle timeout**. The application must implement heartbeat/keepalive per 21-event-architecture.md (30-second ping interval) to prevent premature disconnection.
 
 ### Deployment Slots
 

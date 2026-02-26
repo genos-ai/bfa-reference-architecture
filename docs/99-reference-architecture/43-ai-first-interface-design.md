@@ -1,4 +1,4 @@
-# 30 - AI-First Interface Design (Optional Module)
+# 43 - AI-First Interface Design (Optional Module)
 
 *Version: 1.0.0*
 *Author: Architecture Team*
@@ -10,7 +10,7 @@
 
 Extend the existing BFF architecture so that AI agents (Cursor, Claude Code, external orchestrators) are first-class consumers alongside CLI, TUI, and web clients. The service layer defined in `03-backend-architecture.md` already enforces business logic centralization — this module adds the interface adapters, discovery endpoints, content negotiation, and structured error extensions that make those services consumable by machines without duplicating code. All client types — human and AI — call the same service methods through thin adapters.
 
-**Dependencies**: `03-backend-architecture.md` (service layer), `04-module-structure.md` (module boundaries), `14-error-codes.md` (error registry), `27-agent-first-infrastructure.md` (MCP, A2A, agent identity). Composes with `25-agentic-architecture.md` and `26-agentic-pydanticai.md` for internal agents, and `29-multi-channel-gateway.md` for channel delivery.
+**Dependencies**: `03-backend-architecture.md` (service layer), `04-module-structure.md` (module boundaries), `09-error-codes.md` (error registry), `42-agent-first-infrastructure.md` (MCP, A2A, agent identity). Composes with `40-agentic-architecture.md` and `41-agentic-pydanticai.md` for internal agents, and `44-multi-channel-gateway.md` for channel delivery.
 
 ---
 
@@ -90,9 +90,9 @@ async def create_note(data: NoteCreate, db: DbSession) -> ApiResponse[NoteRespon
     return ApiResponse(success=True, data=note)
 ```
 
-### Adapter 2: MCP Tool (doc 27)
+### Adapter 2: MCP Tool (doc 42)
 
-Already defined in `27-agent-first-infrastructure.md`. The MCP tool function is a thin adapter:
+Already defined in `42-agent-first-infrastructure.md`. The MCP tool function is a thin adapter:
 
 ```python
 # modules/mcp/notes.py
@@ -112,7 +112,7 @@ async def create_note(title: str, content: str | None = None) -> dict:
         return note.model_dump(mode="json")
 ```
 
-### Adapter 3: PydanticAI Agent Tool (doc 26)
+### Adapter 3: PydanticAI Agent Tool (doc 41)
 
 The PydanticAI tool function registered on an agent is a thin adapter:
 
@@ -275,7 +275,7 @@ tags_metadata = [
 
 ### Discovery Endpoints
 
-Implement the three discovery layers from `27-agent-first-infrastructure.md`:
+Implement the three discovery layers from `42-agent-first-infrastructure.md`:
 
 | Endpoint | Purpose | Consumer | Implementation |
 |----------|---------|----------|---------------|
@@ -283,7 +283,7 @@ Implement the three discovery layers from `27-agent-first-infrastructure.md`:
 | `/openapi.json` | Machine-readable API spec | AI agents, SDK generators | FastAPI built-in |
 | `/llms.txt` | Curated AI-readable overview | LLM agents (Cursor, Claude Code) | New endpoint |
 | `/llms-full.txt` | Complete API docs as plain text | LLM agents needing full detail | Build-time generated |
-| `/.well-known/agent.json` | A2A Agent Card | External agents (A2A protocol) | New endpoint (doc 27) |
+| `/.well-known/agent.json` | A2A Agent Card | External agents (A2A protocol) | New endpoint (doc 42) |
 | `AGENTS.md` | Coding agent instructions | Cursor, Claude Code, Copilot | Existing file (enhance) |
 
 ### `/llms.txt` Implementation
@@ -875,9 +875,9 @@ async def create_note(ctx: RunContext[AgentDeps], title: str, content: str | Non
 
 FastAPI endpoints continue to use dependency injection (`Depends(DbSession)`) per existing patterns. The factory is for adapters outside the FastAPI request lifecycle.
 
-### Session-Aware Factory (Doc 31)
+### Session-Aware Factory (Doc 46)
 
-When the project adopts `31-event-session-architecture.md`, the service factory can optionally accept a session context:
+When the project adopts `46-event-session-architecture.md`, the service factory can optionally accept a session context:
 
 ```python
 @asynccontextmanager
@@ -891,7 +891,7 @@ async def get_note_service(session: Session | None = None) -> AsyncGenerator[Not
 
 The `session` parameter is optional. Non-session callers (CLI, background tasks) pass `None` and the factory behaves identically to the base pattern. Session-aware callers (coordinator, channel adapters) pass the active session for cost tracking and audit trail integration.
 
-See `31-event-session-architecture.md`, Section 1 (Session Model — SessionService) for the `Session` entity and lifecycle management.
+See `46-event-session-architecture.md`, Section 1 (Session Model — SessionService) for the `Session` entity and lifecycle management.
 
 ### Files Involved
 
@@ -925,8 +925,8 @@ modules/
 │   ├── services/                     # UNCHANGED — single source of truth
 │   ├── agents/                       # MODIFY — use service factory
 │   └── main.py                       # MODIFY — mount discovery router
-├── mcp/                              # EXISTS (doc 27) — use service factory
-├── a2a/                              # EXISTS (doc 27) — use service factory
+├── mcp/                              # EXISTS (doc 42) — use service factory
+├── a2a/                              # EXISTS (doc 42) — use service factory
 ├── cli/
 │   ├── __init__.py                   # NEW — CLI module
 │   └── output.py                     # NEW — shared output formatting
@@ -1031,15 +1031,15 @@ async def test_create_note_parity(adapter, note_data):
 
 ## Related Documentation
 
-- [31-event-session-architecture.md](31-event-session-architecture.md) — Session context for service factory, event-driven interaction model
+- [46-event-session-architecture.md](46-event-session-architecture.md) — Session context for service factory, event-driven interaction model
 
 ---
 
 ## Out of Scope
 
-- Internal agent orchestration (covered by `25-agentic-architecture.md` and `26-agentic-pydanticai.md`)
-- MCP server setup and A2A protocol integration (covered by `27-agent-first-infrastructure.md`)
-- Human-in-the-loop approval flows within agent workflows (covered by `25-agentic-architecture.md` — durable execution section)
-- Multi-channel gateway and session management (covered by `29-multi-channel-gateway.md`)
-- Frontend architecture (covered by `07-frontend-architecture.md`)
-- TUI architecture (covered by `28-tui-architecture.md`)
+- Internal agent orchestration (covered by `40-agentic-architecture.md` and `41-agentic-pydanticai.md`)
+- MCP server setup and A2A protocol integration (covered by `42-agent-first-infrastructure.md`)
+- Human-in-the-loop approval flows within agent workflows (covered by `40-agentic-architecture.md` — durable execution section)
+- Multi-channel gateway and session management (covered by `44-multi-channel-gateway.md`)
+- Frontend architecture (covered by `22-frontend-architecture.md`)
+- TUI architecture (covered by `45-tui-architecture.md`)

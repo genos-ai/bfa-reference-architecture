@@ -1,4 +1,4 @@
-# 13 - Development Workflow
+# 12 - Development Workflow
 
 *Version: 1.0.0*
 *Author: Architecture Team*
@@ -138,7 +138,7 @@ CI/CD secrets stored in GitHub repository secrets:
 
 ## Testing
 
-See **16-testing-standards.md** for comprehensive testing guidance.
+See **11-testing-standards.md** for comprehensive testing guidance.
 
 ### Quick Reference
 

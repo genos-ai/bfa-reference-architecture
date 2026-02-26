@@ -1,4 +1,4 @@
-# 11 - TypeScript Coding Standards (Optional Module)
+# 23 - TypeScript Coding Standards (Optional Module)
 
 *Version: 1.0.0*
 *Author: Architecture Team*
@@ -14,13 +14,13 @@
 
 This module is **optional**. Adopt when your project includes a React web frontend.
 
-This module is a dependency of **07-frontend-architecture.md** for web projects.
+This module is a dependency of **22-frontend-architecture.md** for web projects.
 
 ---
 
 ## Context
 
-When the architecture includes a React web frontend (07-frontend-architecture), TypeScript coding standards become mandatory. This module exists because React's flexibility means two developers will structure the same application completely differently without shared conventions — different state management approaches, different component patterns, different file organization.
+When the architecture includes a React web frontend (22-frontend-architecture), TypeScript coding standards become mandatory. This module exists because React's flexibility means two developers will structure the same application completely differently without shared conventions — different state management approaches, different component patterns, different file organization.
 
 The key design decision is strict separation of state concerns: TanStack Query owns server state (API responses, caching, refetching), Zustand owns client state (UI preferences, ephemeral UI data), and react-hook-form owns form state (validation, dirty tracking). Mixing these in a single store or using the wrong tool for each creates the complexity that makes React applications hard to maintain.
 

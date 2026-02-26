@@ -1,4 +1,4 @@
-# 25 - Agentic AI Architecture (Optional Module)
+# 40 - Agentic AI Architecture (Optional Module)
 
 *Version: 2.1.0*
 *Author: Architecture Team*
@@ -6,8 +6,8 @@
 
 ## Changelog
 
-- 2.1.0 (2026-02-24): Added channel adapters to architecture diagram, added channel/session_type/tool_access_level to AgentTask primitive, updated orchestrator responsibilities to reference gateway (29-multi-channel-gateway.md)
-- 2.0.0 (2026-02-18): Split into conceptual architecture (this document) and implementation guide (26-agentic-pydanticai.md); this document is now framework-agnostic
+- 2.1.0 (2026-02-24): Added channel adapters to architecture diagram, added channel/session_type/tool_access_level to AgentTask primitive, updated orchestrator responsibilities to reference gateway (44-multi-channel-gateway.md)
+- 2.0.0 (2026-02-18): Split into conceptual architecture (this document) and implementation guide (41-agentic-pydanticai.md); this document is now framework-agnostic
 - 1.2.0 (2026-02-18): Expanded to 5 phases (Execute, Plan, Remember, Learn, Autonomy); added orchestrator evolution diagrams, tiered delegation pattern (Thinker/Specialist/Worker), agent-as-tool mechanism
 - 1.1.0 (2026-02-18): Added orchestration patterns section (Options A-D) with rationale for hybrid approach
 - 1.0.0 (2026-02-18): Initial agentic AI architecture standard
@@ -22,11 +22,11 @@ This module is **optional**. Adopt when your project:
 - Needs orchestrated collaboration between multiple AI agents
 - Requires persistent agent memory across sessions
 
-**Dependencies**: This module requires **08-llm-integration.md** and **06-event-architecture.md**. It builds on top of their standards rather than replacing them.
+**Dependencies**: This module requires **24-llm-integration.md** and **21-event-architecture.md**. It builds on top of their standards rather than replacing them.
 
-For simple LLM integrations (single-call summarization, classification, extraction), use 08-llm-integration.md alone. Adopt this module when agents need to reason, plan, use tools, and maintain state.
+For simple LLM integrations (single-call summarization, classification, extraction), use 24-llm-integration.md alone. Adopt this module when agents need to reason, plan, use tools, and maintain state.
 
-**This document is the conceptual architecture** — framework-agnostic principles, patterns, phases, and data models that remain valid regardless of which agent framework is used. For the concrete implementation using PydanticAI, see **[26-agentic-pydanticai.md](26-agentic-pydanticai.md)**.
+**This document is the conceptual architecture** — framework-agnostic principles, patterns, phases, and data models that remain valid regardless of which agent framework is used. For the concrete implementation using PydanticAI, see **[41-agentic-pydanticai.md](41-agentic-pydanticai.md)**.
 
 ---
 
@@ -492,7 +492,7 @@ Primitive: AgentTask
 | parent_task_id  | UUID     | For subtask hierarchies (nullable)                   |
 | created_by      | UUID     | User who initiated (or system for scheduled)         |
 | channel         | string   | Originating channel (telegram, slack, websocket, cli, tui, api) |
-| session_type    | Enum     | Session type: direct or group (see 29-multi-channel-gateway.md) |
+| session_type    | Enum     | Session type: direct or group (see 44-multi-channel-gateway.md) |
 | tool_access_level | Enum   | Allowed tool scope: full, sandbox, or readonly (enforced before execution) |
 | model_used      | string   | Exact model identifier for the primary LLM call      |
 | prompt_version  | string   | System prompt version used                           |
@@ -591,7 +591,7 @@ Primitive: AgentTask
 │  └─────┬──────┘ └────┬─────┘ └────┬─────┘ └──────┬───────┘  │
 │        │              │            │              │           │
 │        │    ┌─────────┴────────────┴──────────────┘           │
-│        │    │  Channel Adapters (29-multi-channel-gateway.md) │
+│        │    │  Channel Adapters (44-multi-channel-gateway.md) │
 │        │    │  Security → Session → Router                    │
 │        │    └──────────────────┬───────────────────           │
 │        │                      │                               │
@@ -656,14 +656,14 @@ Agent definitions include: name, description, model configuration, system prompt
 
 The registry is read-only at runtime. Agent definitions change through config file updates and application restart. Agents can be disabled via feature flag (`enabled: false`) without code deployment.
 
-For concrete agent definition YAML schema and registry implementation, see **[26-agentic-pydanticai.md](26-agentic-pydanticai.md)**.
+For concrete agent definition YAML schema and registry implementation, see **[41-agentic-pydanticai.md](41-agentic-pydanticai.md)**.
 
 ### 2. Orchestrator (Coordinator)
 
 The orchestrator is the entry point for all agent work. Every request flows through it.
 
 **Responsibilities:**
-- Receive user requests from any entry point (API, CLI, Telegram, Slack, WebSocket, scheduled task). When requests arrive through channel adapters (**[29-multi-channel-gateway.md](29-multi-channel-gateway.md)**), the gateway has already enforced security, resolved the session, and set the `tool_access_level` before the orchestrator sees the request.
+- Receive user requests from any entry point (API, CLI, Telegram, Slack, WebSocket, scheduled task). When requests arrive through channel adapters (**[44-multi-channel-gateway.md](44-multi-channel-gateway.md)**), the gateway has already enforced security, resolved the session, and set the `tool_access_level` before the orchestrator sees the request.
 - Route to the appropriate agent using hybrid routing (deterministic rules first, LLM classification fallback)
 - Compose horizontal middleware (guardrails, memory, cost tracking, output validation) around agents
 - Enforce `tool_access_level` from the session — filter the agent's available tools based on the session's access level (`full`, `sandbox`, `readonly`) before execution
@@ -686,7 +686,7 @@ The orchestrator is the entry point for all agent work. Every request flows thro
 
 **Phase 2 behavior:** Plan creation. The orchestrator delegates to a Planner Agent to create a multi-step plan, then manages step sequencing and context passing between steps.
 
-For concrete coordinator implementation, see **[26-agentic-pydanticai.md](26-agentic-pydanticai.md)**.
+For concrete coordinator implementation, see **[41-agentic-pydanticai.md](41-agentic-pydanticai.md)**.
 
 ### 3. Tool Registry
 
@@ -698,11 +698,11 @@ Tools have: name, description, parameter schema (JSON Schema), return schema, pe
 
 **Tool execution is always logged** as an AgentTask record (type=tool_call) with full input, output, and timing.
 
-For concrete tool definition YAML schema and registry implementation, see **[26-agentic-pydanticai.md](26-agentic-pydanticai.md)**.
+For concrete tool definition YAML schema and registry implementation, see **[41-agentic-pydanticai.md](41-agentic-pydanticai.md)**.
 
 ### 4. LLM Provider Layer
 
-The provider layer is defined in **08-llm-integration.md** and provides the `LLMProvider` interface, `LLMResponse`, `ToolDefinition`, `ToolCall`, and `TokenUsage` types. See that document for the full interface definition, fallback model configuration, and provider comparison.
+The provider layer is defined in **24-llm-integration.md** and provides the `LLMProvider` interface, `LLMResponse`, `ToolDefinition`, `ToolCall`, and `TokenUsage` types. See that document for the full interface definition, fallback model configuration, and provider comparison.
 
 The agents module uses the provider layer through this interface. It does not interact with provider-specific APIs directly.
 
@@ -813,7 +813,7 @@ The child AgentTask records its own cost. The parent AgentTask's accumulated cos
 | Speed is critical | Quality of result matters more than speed |
 | Examples: file_reader, calculator, database_query | Examples: web_search, code_analysis, document_summary |
 
-For concrete implementation of agent-as-tool delegation, see **[26-agentic-pydanticai.md](26-agentic-pydanticai.md)**.
+For concrete implementation of agent-as-tool delegation, see **[41-agentic-pydanticai.md](41-agentic-pydanticai.md)**.
 
 ---
 
@@ -821,7 +821,7 @@ For concrete implementation of agent-as-tool delegation, see **[26-agentic-pydan
 
 The agent module lives under `modules/agents/`, separate from `modules/backend/`, following the module boundaries defined in **04-module-structure.md**. It contains the orchestrator, agent definitions, tool definitions, execution engine, and memory components.
 
-For the concrete directory layout, configuration files, YAML schemas, database models, API endpoints, and testing patterns, see **[26-agentic-pydanticai.md](26-agentic-pydanticai.md)**.
+For the concrete directory layout, configuration files, YAML schemas, database models, API endpoints, and testing patterns, see **[41-agentic-pydanticai.md](41-agentic-pydanticai.md)**.
 
 ---
 
@@ -878,7 +878,7 @@ Step 3 executes with accumulated context
 Final report returned to user
 ```
 
-**Shared context:** Each step's output is added to a shared context object (JSON). Subsequent steps receive the accumulated context. The execution engine manages context size — if accumulated context exceeds the model's window, it applies the priority rules from 08-llm-integration.md (current step input > recent results > older results).
+**Shared context:** Each step's output is added to a shared context object (JSON). Subsequent steps receive the accumulated context. The execution engine manages context size — if accumulated context exceeds the model's window, it applies the priority rules from 24-llm-integration.md (current step input > recent results > older results).
 
 **Step dependencies:** Steps can declare dependencies. The orchestrator runs independent steps in parallel and waits for dependencies before starting dependent steps.
 
@@ -911,7 +911,7 @@ This is where the system approaches Option C behavior — not by removing the or
 | Tool execution failure | Agent receives error, decides whether to retry or report failure |
 | All retries exhausted | Task marked `failed`, escalation to human if configured |
 
-For the concrete DAG-based implementation with PostgreSQL schema, ready-task queries, and plan revision patterns, see `31-event-session-architecture.md`, Section 4.
+For the concrete DAG-based implementation with PostgreSQL schema, ready-task queries, and plan revision patterns, see `46-event-session-architecture.md`, Section 4.
 
 ---
 
@@ -954,7 +954,7 @@ The kill switch halts execution immediately:
 - Event published: `agents.execution.cancelled`
 - Audit log entry created with who cancelled and why
 
-For the concrete unified responder pattern with Temporal Signals, escalation chains, and durable approval workflows, see `31-event-session-architecture.md`, Section 6.
+For the concrete unified responder pattern with Temporal Signals, escalation chains, and durable approval workflows, see `46-event-session-architecture.md`, Section 6.
 
 ---
 
@@ -1004,7 +1004,7 @@ Timeouts use `asyncio.timeout()` per **03-backend-architecture.md**. When a time
 
 ## Cost Management
 
-This extends the cost tracking from **08-llm-integration.md** with agent-specific aggregation.
+This extends the cost tracking from **24-llm-integration.md** with agent-specific aggregation.
 
 ### What Gets Tracked
 
@@ -1036,13 +1036,13 @@ Configure alerts:
 - Warning at 80% of system budget
 - Hard stop at 100% of system budget
 
-Alerts fire as events via **06-event-architecture.md** and can trigger notifications.
+Alerts fire as events via **21-event-architecture.md** and can trigger notifications.
 
 ---
 
 ## Observability
 
-This extends **12-observability.md** with agent-specific logging.
+This extends **10-observability.md** with agent-specific logging.
 
 ### What Gets Logged
 
@@ -1065,7 +1065,7 @@ Every agent execution produces structured log entries:
 
 ### Log Source
 
-Agent logs are written to `logs/system.jsonl` with `source="agents"` per 12-observability.md.
+Agent logs are written to `logs/system.jsonl` with `source="agents"` per 10-observability.md.
 
 ### Reasoning Chain Storage
 
@@ -1137,7 +1137,7 @@ Agents actively use their accumulated expertise to propose approaches. This is *
 - Orchestrator tracks per-agent performance metrics and adjusts trust levels
 - Intelligent agents choose which worker agents to delegate to based on past outcomes
 
-For the concrete three-tier memory architecture (episodic, semantic, procedural) with anchored rolling summaries and context window assembly, see `31-event-session-architecture.md`, Section 5.
+For the concrete three-tier memory architecture (episodic, semantic, procedural) with anchored rolling summaries and context window assembly, see `46-event-session-architecture.md`, Section 5.
 
 ---
 
@@ -1177,12 +1177,12 @@ Agent testing requires deterministic results without calling real LLMs. The test
 
 - **Unit tests** — test individual agents in isolation with mocked LLM responses
 - **Integration tests** — test orchestrator routing with real agent logic but mocked LLM
-- **Evaluation tests** — test prompt quality against evaluation datasets (per 08-llm-integration.md)
+- **Evaluation tests** — test prompt quality against evaluation datasets (per 24-llm-integration.md)
 - **CI guardrails** — prevent accidental LLM calls in test environments
 
 All LLM calls must be mockable. No test should require a real provider API key to pass. Cost tracking should still function in mock mode (with mock costs).
 
-For concrete testing patterns, test fixtures, and CI configuration, see **[26-agentic-pydanticai.md](26-agentic-pydanticai.md)**.
+For concrete testing patterns, test fixtures, and CI configuration, see **[41-agentic-pydanticai.md](41-agentic-pydanticai.md)**.
 
 ---
 
@@ -1201,7 +1201,7 @@ The agent module exposes REST endpoints for:
 
 All endpoints follow the API design standards in **03-backend-architecture.md** (versioned under `/api/v1/`, consistent response envelope, cursor pagination for lists).
 
-For concrete endpoint definitions, request/response schemas, and examples, see **[26-agentic-pydanticai.md](26-agentic-pydanticai.md)**.
+For concrete endpoint definitions, request/response schemas, and examples, see **[41-agentic-pydanticai.md](41-agentic-pydanticai.md)**.
 
 ---
 
@@ -1306,7 +1306,7 @@ Per **04-module-structure.md**, the agents module:
 
 ### Event Integration
 
-Per **06-event-architecture.md**, the agents module publishes:
+Per **21-event-architecture.md**, the agents module publishes:
 
 | Event | When |
 |-------|------|
@@ -1323,7 +1323,7 @@ Other modules subscribe to these events. For example, the Telegram module could 
 
 ### Background Task Integration
 
-Per **19-background-tasks.md**, agent execution can be triggered by:
+Per **14-background-tasks.md**, agent execution can be triggered by:
 - API request (synchronous start, async execution)
 - Scheduled task (Taskiq cron triggers orchestrator with predefined input)
 - Event subscription (another module's event triggers agent work)
@@ -1337,9 +1337,9 @@ Long-running agent plans execute as background tasks via Taskiq. The API returns
 When adopting this module:
 
 ### Prerequisites
-- [ ] 08-llm-integration.md adopted (LLM provider, cost tracking, prompt management)
-- [ ] 06-event-architecture.md adopted (Redis Streams for events)
-- [ ] 26-agentic-pydanticai.md reviewed for implementation details
+- [ ] 24-llm-integration.md adopted (LLM provider, cost tracking, prompt management)
+- [ ] 21-event-architecture.md adopted (Redis Streams for events)
+- [ ] 41-agentic-pydanticai.md reviewed for implementation details
 
 ### Conceptual Decisions (before implementation)
 - [ ] Declare AgentTask as project primitive per 02-primitive-identification.md
@@ -1351,19 +1351,19 @@ When adopting this module:
 - [ ] Decide notification channel for human-needed events
 
 ### Implementation
-Follow the phase-by-phase implementation checklist in **[26-agentic-pydanticai.md](26-agentic-pydanticai.md)**.
+Follow the phase-by-phase implementation checklist in **[41-agentic-pydanticai.md](41-agentic-pydanticai.md)**.
 
 ---
 
 ## Related Documentation
 
-- [26-agentic-pydanticai.md](26-agentic-pydanticai.md) — **Implementation guide** using PydanticAI (module structure, code patterns, testing, configuration)
-- [29-multi-channel-gateway.md](29-multi-channel-gateway.md) — Multi-channel delivery, session management, channel adapters, real-time push
+- [41-agentic-pydanticai.md](41-agentic-pydanticai.md) — **Implementation guide** using PydanticAI (module structure, code patterns, testing, configuration)
+- [44-multi-channel-gateway.md](44-multi-channel-gateway.md) — Multi-channel delivery, session management, channel adapters, real-time push
 - [02-primitive-identification.md](02-primitive-identification.md) — Primitive definition process
-- [08-llm-integration.md](08-llm-integration.md) — LLM provider, prompts, cost management
-- [06-event-architecture.md](06-event-architecture.md) — Event bus for agent events
-- [19-background-tasks.md](19-background-tasks.md) — Taskiq for scheduled agent work
-- [12-observability.md](12-observability.md) — Logging standards
-- [09-authentication.md](09-authentication.md) — RBAC for agent API access
+- [24-llm-integration.md](24-llm-integration.md) — LLM provider, prompts, cost management
+- [21-event-architecture.md](21-event-architecture.md) — Event bus for agent events
+- [14-background-tasks.md](14-background-tasks.md) — Taskiq for scheduled agent work
+- [10-observability.md](10-observability.md) — Logging standards
+- [05-authentication.md](05-authentication.md) — RBAC for agent API access
 - [04-module-structure.md](04-module-structure.md) — Module boundaries and communication
-- [31-event-session-architecture.md](31-event-session-architecture.md) — Concrete implementation of session model, plan management (mutable DAGs with dependency tracking), memory architecture (episodic/semantic/procedural with anchored rolling summaries), and approval gates (unified responder pattern with Temporal Signals). Read this for implementation; read doc 25 for concepts.
+- [46-event-session-architecture.md](46-event-session-architecture.md) — Concrete implementation of session model, plan management (mutable DAGs with dependency tracking), memory architecture (episodic/semantic/procedural with anchored rolling summaries), and approval gates (unified responder pattern with Temporal Signals). Read this for implementation; read doc 40 for concepts.

@@ -1,4 +1,4 @@
-# 08 - LLM Integration (Optional Module)
+# 24 - LLM Integration (Optional Module)
 
 *Version: 2.0.0*
 *Author: Architecture Team*
@@ -6,7 +6,7 @@
 
 ## Changelog
 
-- 2.0.0 (2026-02-18): Added tool/function calling, LLM provider interface, model version tracking, fallback model configuration, expanded provider guidance, updated cost tracking fields, added agent prompt paths; replaced multi-agent stub with reference to 25-agentic-architecture.md
+- 2.0.0 (2026-02-18): Added tool/function calling, LLM provider interface, model version tracking, fallback model configuration, expanded provider guidance, updated cost tracking fields, added agent prompt paths; replaced multi-agent stub with reference to 40-agentic-architecture.md
 - 1.0.0 (2025-01-27): Initial generic LLM integration standard
 
 ---
@@ -21,7 +21,7 @@ This module is **optional**. Adopt when your project:
 
 For applications without AI features, this module is not required.
 
-For **agentic AI systems** (autonomous agents, orchestration, tool use, persistent memory), also adopt **25-agentic-architecture.md** which builds on this module.
+For **agentic AI systems** (autonomous agents, orchestration, tool use, persistent memory), also adopt **40-agentic-architecture.md** which builds on this module.
 
 ---
 
@@ -175,7 +175,7 @@ model = "claude-sonnet-4-20250514"
 response.model = "claude-sonnet-4-20250514"  # Exact version from API response
 ```
 
-This is stored on every record that involves an LLM call (cost tracking table, agent task records if using 25-agentic-architecture.md). It enables:
+This is stored on every record that involves an LLM call (cost tracking table, agent task records if using 40-agentic-architecture.md). It enables:
 - Debugging behavior changes ("it worked last week — what model version was that?")
 - Reproducibility analysis
 - Model drift detection in evaluation runs
@@ -325,7 +325,7 @@ config/
     │   ├── summarization.yaml
     │   ├── classification.yaml
     │   └── extraction.yaml
-    ├── agents/                         # Agent system prompts (used by 25-agentic-architecture.md)
+    ├── agents/                         # Agent system prompts (used by 40-agentic-architecture.md)
     │   ├── orchestrator.yaml
     │   ├── general_assistant.yaml
     │   └── code_reviewer.yaml
@@ -498,7 +498,7 @@ When all retries and fallback models are exhausted:
 - Operations requiring LLM fail with clear error
 - No silent degradation that produces incorrect results
 - Queue non-urgent requests for later processing if appropriate
-- If using agentic architecture (25-agentic-architecture.md), the agent task is marked `failed` with partial results preserved
+- If using agentic architecture (40-agentic-architecture.md), the agent task is marked `failed` with partial results preserved
 
 ### Rate Limiting
 
@@ -561,8 +561,8 @@ Test environments use smallest viable models. Advanced models only used in produ
 
 For autonomous AI agents — systems where LLMs reason, plan, use tools, collaborate, and maintain memory — see:
 
-- **[25-agentic-architecture.md](25-agentic-architecture.md)** — Conceptual architecture (framework-agnostic): phases, principles, orchestration patterns, AgentTask primitive, safety model
-- **[26-agentic-pydanticai.md](26-agentic-pydanticai.md)** — Implementation guide (PydanticAI-specific): coordinator, agents, middleware, database schema, testing patterns, configuration
+- **[40-agentic-architecture.md](40-agentic-architecture.md)** — Conceptual architecture (framework-agnostic): phases, principles, orchestration patterns, AgentTask primitive, safety model
+- **[41-agentic-pydanticai.md](41-agentic-pydanticai.md)** — Implementation guide (PydanticAI-specific): coordinator, agents, middleware, database schema, testing patterns, configuration
 
 This module (08) provides the LLM provider layer, prompt management, cost tracking, and error handling that the agentic architecture depends on. Adopt all three when building agent systems.
 
@@ -587,19 +587,19 @@ When adopting this module:
 
 ### For Agentic Systems
 
-If also adopting **25-agentic-architecture.md**:
+If also adopting **40-agentic-architecture.md**:
 - [ ] Ensure provider interface supports tool definitions and tool call responses
 - [ ] Ensure model version tracking returns exact model from provider response
 - [ ] Ensure cost tracking includes duration_ms and fallback_used fields
 - [ ] Add agent prompt directory (`config/prompts/agents/`)
-- [ ] Follow the Phase 1 checklist in 26-agentic-pydanticai.md
+- [ ] Follow the Phase 1 checklist in 41-agentic-pydanticai.md
 
 ---
 
 ## Related Documentation
 
-- [25-agentic-architecture.md](25-agentic-architecture.md) — Agentic AI conceptual architecture (phases, principles, patterns)
-- [26-agentic-pydanticai.md](26-agentic-pydanticai.md) — Agentic AI implementation using PydanticAI
-- [06-event-architecture.md](06-event-architecture.md) — Event bus for async processing
-- [12-observability.md](12-observability.md) — Logging and monitoring standards
-- [19-background-tasks.md](19-background-tasks.md) — Background task processing
+- [40-agentic-architecture.md](40-agentic-architecture.md) — Agentic AI conceptual architecture (phases, principles, patterns)
+- [41-agentic-pydanticai.md](41-agentic-pydanticai.md) — Agentic AI implementation using PydanticAI
+- [21-event-architecture.md](21-event-architecture.md) — Event bus for async processing
+- [10-observability.md](10-observability.md) — Logging and monitoring standards
+- [14-background-tasks.md](14-background-tasks.md) — Background task processing

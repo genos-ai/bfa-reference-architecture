@@ -1,4 +1,4 @@
-# 21 - Deployment: Bare Metal
+# 15 - Deployment: Bare Metal
 
 *Version: 1.0.0*
 *Author: Architecture Team*
