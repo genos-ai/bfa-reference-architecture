@@ -10,7 +10,10 @@
 #   keywords          - Keywords for rule-based routing (list of strings)
 #   tools             - Shared tool names (list of dotted strings, domain.action)
 #   max_input_length  - Maximum input character count (integer)
+#   max_budget_usd    - Maximum cost per invocation in USD (decimal)
 #   file_size_limit   - Maximum Python file line count (integer)
+#   execution         - Execution mode (object)
+#     mode            - Execution environment (string: local | container)
 #   scope             - Filesystem access control (object)
 #     read            - Paths the agent can read (list of strings)
 #     write           - Paths the agent can write (list of strings)
@@ -30,7 +33,11 @@ description: "Audits the codebase for compliance violations and fixes them"
 enabled: true
 model: anthropic:claude-haiku-4-5-20251001
 max_input_length: 2000
+max_budget_usd: 0.50
 file_size_limit: 1000
+
+execution:
+  mode: local
 keywords:
   - compliance
   - qa

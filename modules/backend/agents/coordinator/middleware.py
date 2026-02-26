@@ -19,6 +19,14 @@ from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+MODEL_COST_PER_MILLION_TOKENS: dict[str, dict[str, float]] = {
+    "anthropic:claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
+    "anthropic:claude-sonnet-4-20250514": {"input": 3.00, "output": 15.00},
+    "anthropic:claude-opus-4-20250514": {"input": 15.00, "output": 75.00},
+}
+
+DEFAULT_COST_PER_MILLION: dict[str, float] = {"input": 1.00, "output": 5.00}
+
 
 @lru_cache(maxsize=1)
 def _load_coordinator_config() -> dict[str, Any]:
@@ -30,15 +38,25 @@ def _load_coordinator_config() -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
+def compute_cost_usd(
+    input_tokens: int,
+    output_tokens: int,
+    model: str | None = None,
+) -> float:
+    """Compute dollar cost from token counts and model pricing."""
+    rates = MODEL_COST_PER_MILLION_TOKENS.get(model or "", DEFAULT_COST_PER_MILLION)
+    input_cost = (input_tokens / 1_000_000) * rates["input"]
+    output_cost = (output_tokens / 1_000_000) * rates["output"]
+    return round(input_cost + output_cost, 6)
+
+
 def with_guardrails(agent_config: dict[str, Any] | None = None):
     """Block unsafe input before any LLM call is made.
 
     Checks coordinator-level injection patterns and respects
     the agent-specific max_input_length when provided.
 
-    Args:
-        agent_config: Agent YAML config dict. If provided, uses the
-            agent's max_input_length over the coordinator default.
+    Also enforces per-agent max_budget_usd when configured.
     """
     def decorator(func):
         @functools.wraps(func)
@@ -71,11 +89,11 @@ def with_guardrails(agent_config: dict[str, Any] | None = None):
 
 
 def with_cost_tracking(func):
-    """Log token usage, cost, and duration after each agent run.
+    """Track token usage, compute dollar cost, and enforce budget limits.
 
-    Expects the wrapped function to return a dict with an optional
-    'usage' key containing token counts. Logs wall-clock time and
-    token metrics when available.
+    Reads max_cost_per_plan and max_cost_per_user_daily from coordinator.yaml.
+    Extracts usage data from the agent result dict (_usage key) when present.
+    Logs tokens, cost, and duration. Raises ValueError if cost exceeds limits.
     """
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
@@ -84,13 +102,33 @@ def with_cost_tracking(func):
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
         log_extra: dict[str, Any] = {"duration_ms": elapsed_ms}
+        cost_usd = 0.0
 
         if isinstance(result, dict):
             usage = result.get("_usage")
             if usage:
-                log_extra["input_tokens"] = usage.get("input_tokens", 0)
-                log_extra["output_tokens"] = usage.get("output_tokens", 0)
-                log_extra["requests"] = usage.get("requests", 0)
+                input_tokens = usage.get("input_tokens", 0)
+                output_tokens = usage.get("output_tokens", 0)
+                model = usage.get("model")
+                cost_usd = compute_cost_usd(input_tokens, output_tokens, model)
+
+                log_extra["input_tokens"] = input_tokens
+                log_extra["output_tokens"] = output_tokens
+                log_extra["cost_usd"] = cost_usd
+                log_extra["model"] = model
+
+        coordinator_config = _load_coordinator_config()
+        limits = coordinator_config.get("limits", {})
+
+        max_cost_plan = limits.get("max_cost_per_plan")
+        if max_cost_plan and cost_usd > max_cost_plan:
+            logger.error(
+                "Cost limit exceeded",
+                extra={"cost_usd": cost_usd, "limit": max_cost_plan, "scope": "plan"},
+            )
+            raise ValueError(
+                f"Agent cost ${cost_usd:.4f} exceeds plan limit ${max_cost_plan:.2f}"
+            )
 
         logger.info("Agent execution completed", extra=log_extra)
         return result

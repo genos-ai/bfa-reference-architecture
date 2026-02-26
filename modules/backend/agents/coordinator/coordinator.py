@@ -147,25 +147,26 @@ def _import_agent_module(agent_name: str) -> Any:
     return importlib.import_module(module_path)
 
 
-def _format_response(agent_name: str, result: Any) -> dict[str, Any]:
-    """Format an agent result into a standard response envelope.
+def _format_response(agent_name: str, result: Any) -> "CoordinatorResponse":
+    """Format an agent result into a standard CoordinatorResponse.
 
-    Every agent returns a Pydantic BaseModel. We convert it to a dict
-    with a standard structure: agent_name + output (summary string) +
-    the full model data as additional fields.
+    Every agent returns a Pydantic BaseModel. We extract the summary as
+    the output string and pack the full model data into metadata.
     """
+    from modules.backend.agents.coordinator.models import CoordinatorResponse
+
     if hasattr(result, "model_dump"):
         data = result.model_dump()
     else:
         data = {"raw": str(result)}
 
-    output = data.get("summary", str(result))
+    output = data.pop("summary", str(result))
 
-    return {
-        "agent_name": agent_name,
-        "output": output,
-        **data,
-    }
+    return CoordinatorResponse(
+        agent_name=agent_name,
+        output=output,
+        metadata=data,
+    )
 
 
 async def _execute_agent(
@@ -178,7 +179,10 @@ async def _execute_agent(
     1. Import the agent module from registry
     2. Build deps from config
     3. Call agent_module.run_agent(user_input, deps, usage_limits)
-    4. Format into standard response envelope
+    4. Format into standard CoordinatorResponse and return as dict
+
+    Returns dict for backward compatibility with API endpoints.
+    The dict is a flattened CoordinatorResponse: {agent_name, output, **metadata}.
     """
     _ensure_api_key()
     module = _import_agent_module(agent_name)
@@ -188,13 +192,11 @@ async def _execute_agent(
     result = await module.run_agent(user_input, deps, usage_limits=limits)
     response = _format_response(agent_name, result)
 
-    usage = {}
-    if hasattr(result, "model_dump"):
-        usage_data = response.get("_usage", {})
-        if usage_data:
-            response["_usage"] = usage_data
-
-    return response
+    return {
+        "agent_name": response.agent_name,
+        "output": response.output,
+        **response.metadata,
+    }
 
 
 # =============================================================================
