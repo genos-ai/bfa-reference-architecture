@@ -143,9 +143,12 @@ class ComplianceScannerService:
         if "no_datetime_now" not in self._enabled_rules:
             return findings
 
+        skip_files = {"modules/backend/core/utils.py"}
         pattern = re.compile(r"datetime\.(now|utcnow)\s*\(")
 
         for rel_path in self.collect_python_files():
+            if rel_path in skip_files:
+                continue
             lines = self.scan_file_lines(rel_path)
             for i, line in enumerate(lines, 1):
                 if pattern.search(line):

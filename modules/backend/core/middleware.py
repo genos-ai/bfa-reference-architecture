@@ -6,12 +6,11 @@ Middleware for request tracking, timing, source identification, and context prop
 
 import uuid
 
-import structlog
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 
-from modules.backend.core.logging import VALID_SOURCES, get_logger
+from modules.backend.core.logging import VALID_SOURCES, bind_context, clear_context, get_logger
 from modules.backend.core.utils import utc_now
 
 logger = get_logger(__name__)
@@ -69,7 +68,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         request.state.source = raw_source
         request.state.start_time = start_time
 
-        structlog.contextvars.clear_contextvars()
+        clear_context()
         context: dict = {
             "request_id": request_id,
             "method": request.method,
@@ -77,7 +76,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         }
         if raw_source is not None:
             context["source"] = raw_source
-        structlog.contextvars.bind_contextvars(**context)
+        bind_context(**context)
 
         logger.debug(
             "Request started",
@@ -119,4 +118,4 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             raise
 
         finally:
-            structlog.contextvars.clear_contextvars()
+            clear_context()

@@ -5,6 +5,7 @@ Shared utility functions used across the backend.
 All modules should import utilities from this module.
 """
 
+import time
 from datetime import datetime, timezone
 
 
@@ -20,5 +21,5 @@ def utc_now() -> datetime:
         Current UTC time with tzinfo stripped
     """
     return datetime.fromtimestamp(
-        __import__('time').time(), tz=timezone.utc
+        time.time(), tz=timezone.utc
     ).replace(tzinfo=None)
