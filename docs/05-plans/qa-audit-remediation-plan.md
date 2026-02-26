@@ -38,7 +38,7 @@
 
 3. **Finding #4** ✅ DONE — Added 22 repository tests to `tests/unit/backend/repositories/test_note_repository.py`. No mocks — uses real in-memory SQLite via conftest `db_session` fixture. Covers full CRUD (create, read, update, delete, exists, count) plus note-specific methods (get_all_active, get_archived, archive, unarchive, search_by_title, count_active).
 
-4. **[PATTERN-01] Finding #2** — Audit all 15 unit test files using `unittest.mock`. For each, determine whether the mocked functionality can be replaced with real execution. Tests that require external infrastructure (database, Redis, Anthropic API) should be moved to `tests/integration/` or `tests/e2e/`. Tests that mock purely for isolation where real code can run should have mocks removed. This is a large-scope refactoring effort and should be done file-by-file after all other findings are resolved.
+4. **[PATTERN-01] Finding #2** — DEFERRED. Systemic rewrite of 15 test files to remove mocks. This is a separate effort requiring file-by-file analysis — each test must be evaluated for whether it can run against real infrastructure (in-memory SQLite, real config loading) or must move to `tests/integration/`. All other findings (#1, #3, #4) are resolved. This item is tracked separately.
 
 ---
 
