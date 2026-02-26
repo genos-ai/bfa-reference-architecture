@@ -20,13 +20,12 @@ import sys
 from pathlib import Path
 
 import click
-import structlog
 
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from modules.backend.core.config import get_server_base_url, validate_project_root
-from modules.backend.core.logging import get_logger, setup_logging
+from modules.backend.core.logging import bind_context, get_logger, setup_logging
 
 
 async def send_message(base_url: str, timeout: float, message: str, agent: str | None, raw: bool, verbose: bool) -> int:
@@ -330,7 +329,7 @@ def main(message: str | None, agent: str | None, list_agents: bool, ping: bool, 
     else:
         setup_logging(level="WARNING", format_type="console")
 
-    structlog.contextvars.bind_contextvars(source="cli")
+    bind_context(source="cli")
 
     if not message and not ping and not list_agents:
         click.echo("Error: provide --message, --ping, or --list-agents.", err=True)

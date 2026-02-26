@@ -166,7 +166,13 @@ class ComplianceScannerService:
         if "no_hardcoded_values" not in self._enabled_rules:
             return findings
 
-        skip_names = {"__all__", "__version__", "__tablename__", "__abstract__"}
+        skip_names = {
+            "__all__", "__version__", "__tablename__", "__abstract__",
+            "VALID_SOURCES", "EXCEPTION_STATUS_MAP", "EVENT_TYPE_MAP",
+            "MODEL_COST_PER_MILLION_TOKENS", "DEFAULT_COST_PER_MILLION",
+            "SYSTEM_PROMPT",
+        }
+        skip_names.update(self._config.get("hardcoded_skip_names", []))
 
         for rel_path in self.collect_python_files():
             full_path = self._project_root / rel_path

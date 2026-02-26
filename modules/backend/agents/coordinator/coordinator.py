@@ -42,17 +42,20 @@ from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-_api_key_set = False
-
-
 def _ensure_api_key() -> None:
-    """Set the ANTHROPIC_API_KEY once at coordinator level."""
-    global _api_key_set
-    if _api_key_set:
+    """Propagate ANTHROPIC_API_KEY from .env settings to os.environ.
+
+    PydanticAI's Anthropic provider reads the API key from the
+    ANTHROPIC_API_KEY environment variable at Agent construction time.
+    This is a framework constraint — PydanticAI does not accept the
+    key via constructor injection. We bridge it once from our centralized
+    settings (.env → pydantic Settings → os.environ). setdefault()
+    ensures an externally-set env var is never overwritten.
+    """
+    if os.environ.get("ANTHROPIC_API_KEY"):
         return
     settings = get_settings()
-    os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic_api_key)
-    _api_key_set = True
+    os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
 
 
 # =============================================================================
@@ -301,8 +304,8 @@ async def handle_direct_stream(
         yield {"type": "complete", "result": result}
 
 
-def _route(user_input: str) -> str:
-    """Route user input to an agent name. Used by the API streaming endpoint."""
+def route(user_input: str) -> str:
+    """Route user input to an agent name. Public — used by API streaming endpoint."""
     from modules.backend.agents.coordinator.models import CoordinatorRequest
 
     registry = get_registry()

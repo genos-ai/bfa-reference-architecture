@@ -21,15 +21,14 @@ import sys
 from pathlib import Path
 
 import click
-import structlog
 
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from modules.backend.core.config import validate_project_root
-from modules.backend.core.logging import get_logger, setup_logging
+from modules.backend.core.logging import bind_context, get_logger, setup_logging
 
-LONG_RUNNING_SERVICES = {"server", "worker", "scheduler", "telegram-poll"}
+LONG_RUNNING_SERVICES = frozenset({"server", "worker", "scheduler", "telegram-poll"})
 
 
 def _find_process_on_port(port: int) -> list[int]:
@@ -197,7 +196,7 @@ def main(
 
     setup_logging(level=log_level, format_type="console")
 
-    structlog.contextvars.bind_contextvars(source="cli")
+    bind_context(source="cli")
 
     logger = get_logger(__name__)
 

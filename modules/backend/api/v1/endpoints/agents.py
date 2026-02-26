@@ -26,7 +26,6 @@ class ChatRequest(BaseModel):
     message: str = Field(
         ...,
         min_length=1,
-        max_length=1000,
         description="User message to send to the agent",
     )
     agent: str | None = Field(
@@ -96,8 +95,8 @@ async def agent_chat_stream(data: ChatRequest) -> StreamingResponse:
 
     agent_name = data.agent
     if not agent_name:
-        from modules.backend.agents.coordinator.coordinator import _route
-        agent_name = _route(data.message)
+        from modules.backend.agents.coordinator.coordinator import route
+        agent_name = route(data.message)
 
     async def generate():
         async for event in handle_direct_stream(agent_name, data.message, data.conversation_id):

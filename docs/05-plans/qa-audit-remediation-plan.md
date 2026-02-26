@@ -4,23 +4,17 @@
 - **Date:** 2026-02-26
 - **Codebase Root:** `/Users/herman.young/development/bfa_reference_architecture`
 - **Entry Points Scanned:** `cli.py`, `chat.py`, `tui.py`
-- **Total Files Reviewed:** 146 Python files + 11 config files + 3 other (pytest.ini, requirements.txt, .project_root)
-- **Total Findings:** CRITICAL: 1 | HIGH: 9 | MEDIUM: 8 | LOW: 4
+- **Total Files Reviewed:** 155 (145 Python, 6 YAML configs, `.env`, `.gitignore`, `AGENTS.md`, `README.md`)
+- **Total Findings:** CRITICAL: 2 | HIGH: 8 | MEDIUM: 4 | LOW: 0
 
 ---
 
 ## Systemic Patterns
 > Root causes that drive multiple findings below. Read before executing any fix.
 
-- **[PATTERN-01]** **Decentralized YAML loading for agent configs.** Three files under `modules/backend/agents/coordinator/` each import `yaml` directly and implement their own YAML loading from `config/agents/`, bypassing the centralized `load_yaml_config()` in `core/config.py`. The centralized function only supports `config/settings/`. Agent config dicts are used raw with no Pydantic schema validation (unlike settings YAML which use strict schemas with `extra="forbid"`). Invalid keys, wrong types, or missing fields surface as runtime KeyErrors instead of startup failures. Drives findings #3, #4, #5.
+- **[PATTERN-01]** `scripts/dead_code_detector.py` was written entirely outside the project's coding standards. It uses `argparse` instead of Click, `import logging` instead of centralized logging, `datetime.now()` instead of `utc_now()`, positional CLI arguments, bare `except:` clauses, `print()` statements, hardcoded values, and an incorrect `sys.path` that points to `scripts/` instead of the project root. This single file drives findings #1–#9 and #12–#13. The fix is a full rewrite to conform to the same standards that `scripts/compliance_checker.py` already follows.
 
-- **[PATTERN-02]** **Pervasive mock-based unit testing.** 15 test files import `unittest.mock`. The unit `conftest.py` provides mock fixtures for database sessions, Redis, settings, app config, HTTP client, and logger. Individual test modules use `MagicMock`, `AsyncMock`, and `patch()` to replace repositories, sessions, and core dependencies. Tests verify mock interaction contracts rather than exercising real code paths against the real platform. Drives findings #11, #12.
-
-- **[PATTERN-03]** **Global mutable singletons without lifecycle management.** 8+ modules use module-level `_variables` as lazy singletons: `database.py` (_engine, _async_session_factory), `bot.py` (_bot, _dispatcher), `gateway/registry.py` (_adapters, _initialized), `rate_limiter.py` (_rate_limiter), `main.py` (_app), `qa/agent.py` (_agent, _conversations), `health/agent.py` (_agent). None have reset mechanisms, thread-safety guarantees, or cleanup hooks. Drives findings #8, #9.
-
-- **[PATTERN-04]** **`scripts/` directory ignores project standards.** `dead_code_detector.py` uses `import logging` (4 instances), `logging.basicConfig()`, `argparse` with a positional argument, `datetime.now()`, bare `except:` clauses, and `os.path` for existence checks. It does not use `.project_root`, centralized config, or centralized logging. Drives finding #20.
-
-- **[PATTERN-05]** **Hardcoded constants in module source.** Several modules define constants or dataclass defaults representing configurable values that should be in YAML. Drives findings #6, #7, #10.
+- **[PATTERN-02]** Every unit test file (15 files) uses `unittest.mock` (`MagicMock`, `AsyncMock`, `patch`) to mock internal dependencies. The QA ruleset requires tests to exercise real code against the real platform, targeting public interfaces (black-box). This affects the entire `tests/unit/` tree. Drives finding #11.
 
 ---
 
@@ -28,28 +22,21 @@
 
 | # | Criticality | File(s) | Line(s) | Rule Violated | Current Behaviour | Expected Behaviour | Pattern Ref |
 |---|-------------|---------|---------|---------------|-------------------|-------------------|-------------|
-| 1 | CRITICAL | `modules/backend/gateway/security/startup_checks.py` | L77-L93 | Fail fast / no silent security gaps | `_check_secret_strength()` validates `jwt_secret` and `api_key_salt` lengths but ignores `webhook_secret_min_length` (defined as 16 in `security.yaml`). Current `TELEGRAM_WEBHOOK_SECRET=1234567890` (10 chars) passes startup checks. | `_check_secret_strength()` must also validate `telegram_webhook_secret` against `secrets_validation.webhook_secret_min_length`. Application must refuse to start if any configured minimum is not met. | — |
-| 2 | HIGH | `modules/backend/agents/coordinator/coordinator.py` | L54 | No hardcoded dependencies / centralized secrets | `os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic_api_key)` modifies global process environment at runtime. Bypasses centralized secret management; creates implicit coupling between coordinator and PydanticAI's env-var configuration mechanism. | Pass secrets through a typed configuration object or constructor injection into PydanticAI, not via mutable global env vars. | — |
-| 3 | HIGH | `modules/backend/agents/coordinator/middleware.py` | L21-L26 | Centralized config loading / no ad-hoc YAML | `_load_coordinator_config()` loads `config/agents/coordinator.yaml` via raw `yaml.safe_load()` with no schema validation. Invalid or missing keys cause KeyError at runtime. | Extend centralized config system to support agent configs with Pydantic schemas (or add a parallel `load_agent_config()` with validation). | PATTERN-01 |
-| 4 | HIGH | `modules/backend/agents/coordinator/middleware.py` | L112 | Fail fast / no silent failures | `guardrails["max_input_length"]` uses direct dict subscript. If `guardrails` section is missing or incomplete in `coordinator.yaml`, raises `KeyError` at request time instead of at startup. | Validate coordinator config structure at load time via Pydantic schema. Access validated typed attributes instead of raw dict subscripts. | PATTERN-01 |
-| 5 | HIGH | `modules/backend/agents/coordinator/coordinator.py` | L23, L26 | No dead code | `from functools import lru_cache` (L23) and `import yaml` (L26) are imported but never used in this file. Indicates incomplete refactoring when these functions were moved to `middleware.py` and `registry.py`. | Remove both unused imports. | PATTERN-01 |
-| 6 | HIGH | `modules/backend/gateway/adapters/telegram.py` | L16 | No hardcoded values | `TELEGRAM_MAX_MESSAGE_LENGTH = 4096` is a module-level constant. | Move to `config/settings/application.yaml` under `telegram` section (e.g., `max_message_length: 4096`) and read via `get_app_config().application.telegram.max_message_length`. | PATTERN-05 |
-| 7 | HIGH | `modules/telegram/middlewares/auth.py` | L19-L23, L117 | No hardcoded values / configurable behaviour | `USER_ROLES = {"admin": 3, "trader": 2, "viewer": 1}` is hardcoded. Role assignment logic (L117: first user in list = admin, rest = traders) is a hardcoded business rule. | Move role definitions and user-to-role mapping to YAML config. Role assignment should be configurable, not positional. | PATTERN-05 |
-| 8 | HIGH | `modules/backend/core/database.py`, `modules/telegram/bot.py`, `modules/backend/gateway/registry.py`, `modules/backend/gateway/security/rate_limiter.py`, `modules/backend/main.py`, `modules/backend/agents/vertical/code/qa/agent.py`, `modules/backend/agents/vertical/system/health/agent.py` | various | No global mutable state | 8+ modules use module-level `_variables` as lazy singletons (`_engine`, `_bot`, `_adapters`, `_rate_limiter`, `_app`, `_agent`, etc.). No reset mechanism for testing, no thread safety, no cleanup hooks. | Wrap singletons in a lifecycle-managed container or application context that supports reset (for testing), proper shutdown, and thread-safe initialization. | PATTERN-03 |
-| 9 | HIGH | `modules/backend/agents/vertical/code/qa/agent.py` | L~139 | No global mutable state / resource management | `_conversations: dict[str, list] = {}` accumulates conversation histories in memory with no cleanup, TTL, or size limit. Unbounded growth in a long-running server process. | Use Redis-backed session storage (TTL from `coordinator.yaml` `redis_ttl.session: 3600`), or at minimum add an LRU eviction policy. | PATTERN-03 |
-| 10 | HIGH | `modules/backend/agents/deps/base.py` | L77 | No hardcoded values | `max_delegation_depth: int = 2` is a hardcoded default on the `HorizontalAgentDeps` dataclass. | Read from `coordinator.yaml` `routing.max_routing_depth` at construction time. Remove hardcoded default. | PATTERN-05 |
-| 11 | MEDIUM | `tests/unit/conftest.py`, `tests/unit/backend/services/test_note_service.py`, `tests/unit/backend/core/test_middleware.py`, `tests/unit/backend/core/test_security.py`, `tests/unit/backend/core/test_exception_handlers.py`, `tests/unit/backend/core/test_pagination.py`, `tests/unit/backend/core/test_logging.py`, `tests/unit/backend/api/test_health.py`, `tests/unit/backend/services/test_base_service.py`, `tests/unit/telegram/test_middlewares.py`, `tests/unit/telegram/test_notifications.py`, `tests/unit/backend/gateway/test_startup_checks.py`, `tests/unit/backend/gateway/test_rate_limiter.py`, `tests/unit/backend/gateway/test_adapters.py` | various | No mocked tests / tests must exercise real code | 15 test files import `unittest.mock`. Unit `conftest.py` provides `mock_db_session`, `mock_redis`, `mock_settings`, `mock_app_config`, `mock_logger`. Individual tests use `MagicMock`, `AsyncMock`, `patch()` to replace all dependencies. | Rewrite tests to exercise real code against real infrastructure (in-memory SQLite, real config loading, real service instantiation). Mocks should be the exception, not the default. | PATTERN-02 |
-| 12 | MEDIUM | `tests/conftest.py` | L63 | No os.getenv with hardcoded fallback | `os.environ.get("TEST_DATABASE_URL", "sqlite+aiosqlite:///:memory:")` uses a hardcoded fallback default. | Read from a test configuration YAML or fail fast if the env var is not set. Alternatively, define the default in a `config/settings/test.yaml`. | PATTERN-02 |
-| 13 | MEDIUM | `AGENTS.md`, `modules/__init__.py` | L1-L6 (modules/__init__.py) | No dead references / documentation accuracy | `AGENTS.md` key modules table lists `modules/frontend/ \| React + Vite + Tailwind`. `modules/__init__.py` docstring references `frontend/: Web frontend`. The directory does not exist. | Remove the `modules/frontend/` reference from `AGENTS.md` and `modules/__init__.py`, or create the module if planned. Documentation must match reality. | — |
-| 14 | MEDIUM | `cli.py` | — | File size target ~500 lines | `cli.py` is 706 lines. Contains 10+ service handler functions (run_server, run_worker, run_scheduler, run_telegram_poll, check_health, show_config, run_tests, run_migrations, show_info, plus helpers). | Extract service handlers into a `modules/backend/cli/` subpackage (e.g., `services.py`, `migrations.py`, `health.py`). Keep `cli.py` as a thin dispatcher. | — |
-| 15 | MEDIUM | `modules/backend/agents/coordinator/coordinator.py`, `modules/backend/agents/coordinator/registry.py`, `modules/backend/agents/coordinator/router.py`, `modules/backend/agents/coordinator/middleware.py` | — | Every public interface must have tests | The coordinator module (322 lines), registry, router, and middleware have zero test coverage. The coordinator is the central orchestration module for all agent interactions. | Create `tests/unit/backend/agents/test_coordinator.py`, `test_registry.py`, `test_router.py`, `test_middleware.py` covering routing, direct invocation, guardrails, cost tracking, and registry loading. | — |
-| 16 | MEDIUM | `modules/backend/repositories/base.py`, `modules/backend/repositories/note.py` | — | Every public interface must have tests | `tests/unit/backend/repositories/__init__.py` exists but the directory contains no test files. `BaseRepository` (11 public methods) and `NoteRepository` (6 additional methods) have no dedicated tests. | Create `tests/unit/backend/repositories/test_base_repository.py` and `test_note_repository.py` testing CRUD operations against the in-memory SQLite test database. | — |
-| 17 | MEDIUM | `tests/e2e/`, `tests/integration/backend/workflows/` | — | No empty scaffolding | `tests/e2e/` contains only `__init__.py` and `conftest.py` with zero test files. `tests/integration/backend/workflows/` contains only `__init__.py`. | Either add tests or remove the empty directories to avoid misleading structure. | — |
-| 18 | MEDIUM | `modules/backend/agents/coordinator/registry.py` | L68-L82 | Fail fast / no silent failures | `_ensure_loaded()` silently skips any agent YAML that is missing `agent_name` or has `enabled: false`. No warning is logged for malformed configs (e.g., missing `agent_name` key). Only successfully loaded agents are counted. | Log a warning for each skipped agent YAML file, distinguishing between "disabled by config" and "malformed config". Fail fast on YAML parse errors. | PATTERN-01 |
-| 19 | LOW | `requirements.txt` | — | No unused dependencies | `typer>=0.9.0` is listed but never imported anywhere in the codebase. CLI uses `click` exclusively. | Remove `typer>=0.9.0` from `requirements.txt`. | — |
-| 20 | LOW | `scripts/dead_code_detector.py` | L24, L29, L47, L64, L429, L439, L490, L577-L578, L608 | Multiple: centralized logging, no datetime.now, CLI options, fail fast | Uses `import logging` (L24), `logging.basicConfig()` (L47), `logging.getLogger()` (L64, L608), `datetime.now()` (L429), bare `except:` (L439, L490), `argparse` with positional argument `path` (L577-L578). | Rewrite to use `click` with `--options` only, centralized `setup_logging()` / `get_logger()`, `utc_now()`, and proper exception handling. Remove bare `except:` clauses. | PATTERN-04 |
-| 21 | LOW | `modules/telegram/middlewares/auth.py` | L117 | Configurable behaviour | `if user_id == authorized_users[0]: role = "admin"` — role is determined by list position. No explicit user-to-role mapping. | Add a configurable role mapping in `application.yaml` (e.g., `telegram.user_roles: {123456789: admin, 987654321: trader}`). | PATTERN-05 |
-| 22 | LOW | `tests/conftest.py` | L95-L96, L104-L105 | No hardcoded values in code | `echo=False` (L95-96), `pool_size=5` (L104), `max_overflow=10` (L105) are hardcoded in the test database engine creation. | Read from a test configuration section or centralize test database settings. | — |
+| 1 | CRITICAL | `scripts/dead_code_detector.py` | L439, L490 | Fail fast — no swallowed exceptions | Bare `except:` clauses silently swallow all exceptions, returning `0` or empty list | Catch specific exception types (`SyntaxError`, `OSError`, `UnicodeDecodeError`); log the error; propagate or fail fast | PATTERN-01 |
+| 2 | CRITICAL | `scripts/dead_code_detector.py` | L429 | Timezone-naive UTC via `utc_now()` | `datetime.now().isoformat()` produces local-timezone timestamp | `utc_now().isoformat()` from `modules.backend.core.utils` | PATTERN-01 |
+| 3 | HIGH | `scripts/dead_code_detector.py` | L24 | Centralized logging only | `import logging` — direct stdlib import | `from modules.backend.core.logging import get_logger` | PATTERN-01 |
+| 4 | HIGH | `scripts/dead_code_detector.py` | L35–47 | Centralized logging only | Custom `setup_logging()` function using `logging.basicConfig()` | Use `setup_logging()` from `modules.backend.core.logging` | PATTERN-01 |
+| 5 | HIGH | `scripts/dead_code_detector.py` | L64 | Centralized logging only | `self.logger = logging.getLogger(__name__)` — direct logger instantiation | Use `get_logger(__name__)` from centralized logging module | PATTERN-01 |
+| 6 | HIGH | `scripts/dead_code_detector.py` | L577–579 | CLI `--options` only, no positional args | `parser.add_argument('path', nargs='?', default='.')` — positional argument | Convert to `--path` option flag: `@click.option("--path", default=".", ...)` | PATTERN-01 |
+| 7 | HIGH | `scripts/dead_code_detector.py` | L27, L558 | CLI framework consistency | Uses `argparse.ArgumentParser` | Use `Click` (`@click.command()` with `@click.option()`) consistent with all other scripts | PATTERN-01 |
+| 8 | HIGH | `scripts/dead_code_detector.py` | L32 | Project root via `.project_root` | `sys.path.insert(0, str(Path(__file__).parent))` — adds `scripts/` to path, not project root; modules cannot be imported | `sys.path.insert(0, str(Path(__file__).parent.parent))` to add project root, then use `find_project_root()` | PATTERN-01 |
+| 9 | HIGH | `scripts/dead_code_detector.py` | L629, L631 | No ad-hoc `print()` | `print()` statements for output | Use `click.echo()` for CLI output | PATTERN-01 |
+| 10 | HIGH | `cli.py` | L597, L634 | Project root via `.project_root` | `PROJECT_ROOT = Path(__file__).parent` used for alembic.ini path construction and `cwd` in `run_migrations()` | Use `find_project_root()` from `modules.backend.core.config` for all path construction after bootstrapping | — |
+| 11 | HIGH | 15 files in `tests/unit/` | Various | No mocked tests; black-box testing | `from unittest.mock import MagicMock, AsyncMock, patch` in: `test_config.py`, `test_exception_handlers.py`, `test_logging.py`, `test_middleware.py`, `test_pagination.py`, `test_security.py`, `test_health.py`, `test_note_service.py`, `test_base_service.py`, `test_startup_checks.py`, `test_rate_limiter.py`, `test_adapters.py`, `test_middlewares.py`, `test_notifications.py`, `conftest.py` | Tests must exercise real code against the real platform; replace mocks with real implementations or move to integration tests | PATTERN-02 |
+| 12 | MEDIUM | `scripts/dead_code_detector.py` | L78–81 | No hardcoded values | `self.preserved_patterns = {'test_', '__main__', ...}` hardcoded in class body | Read from configuration file or accept as CLI option | PATTERN-01 |
+| 13 | MEDIUM | `scripts/dead_code_detector.py` | L110–114 | No hardcoded values | Hardcoded directory skip list: `['__pycache__', '.git', '.venv', ...]` in method body | Read from configuration file or accept as CLI option | PATTERN-01 |
+| 14 | MEDIUM | `config/settings/application.yaml` | L1–27 | YAML files must have commented list of all options at top | Comment header lists `telegram.webhook_path` and `telegram.authorized_users` but omits `telegram.max_message_length` | Add `#     max_message_length - Maximum message length (integer, default: 4096)` to the comment header | — |
+| 15 | MEDIUM | `tests/unit/backend/repositories/` | — | Every public module interface must have tests | Directory exists with empty `__init__.py` but contains no test files; `NoteRepository` and `BaseRepository` have zero dedicated tests | Add test files covering the public interfaces of `BaseRepository` and `NoteRepository` | — |
 
 ---
 
@@ -57,57 +44,24 @@
 
 > Dependency-sequenced. The coding agent must not skip ahead. Some fixes will break others if done out of order.
 
-1. **Finding #1** (CRITICAL) — Fix startup security check to enforce `webhook_secret_min_length`. This is a security gap with zero dependencies. Fix and verify independently. Update `TELEGRAM_WEBHOOK_SECRET` in `config/.env` to meet the 16-char minimum.
+1. **[PATTERN-01]** — Rewrite `scripts/dead_code_detector.py` to comply with project coding standards. This single action resolves findings #1, #2, #3, #4, #5, #6, #7, #8, #9, #12, #13. Use `scripts/compliance_checker.py` as the reference implementation (it already follows all standards: Click CLI, `--verbose`/`--debug`, centralized logging, no positional args, no hardcoded values). The rewrite must:
+   - Replace `argparse` with `Click`
+   - Convert positional `path` to `--path` option
+   - Replace `import logging` / `logging.getLogger()` / `logging.basicConfig()` with centralized `get_logger()` / `setup_logging()` from `modules.backend.core.logging`
+   - Replace `datetime.now()` with `utc_now()` from `modules.backend.core.utils`
+   - Replace bare `except:` with specific exception types and proper logging
+   - Replace `print()` with `click.echo()`
+   - Fix `sys.path.insert` to point to project root (`Path(__file__).parent.parent`)
+   - Move hardcoded `preserved_patterns` and directory skip list to CLI options or a config file
+   - Add `--verbose` and `--debug` options wired to centralized logging (already has these as argparse flags — just convert to Click)
 
-2. **[PATTERN-01]** — Centralize agent config loading. Create Pydantic schemas for `coordinator.yaml` and `agent.yaml` structures. Extend `core/config.py` with a `load_agent_config()` function. Unblocks findings #3, #4, #5, #18.
+2. **Finding #10** — In `cli.py`, replace the two uses of `PROJECT_ROOT` after bootstrapping (L597 and L634) with `find_project_root()`. The `PROJECT_ROOT = Path(__file__).parent` assignment at L26 and the `sys.path.insert` at L27 must remain for bootstrapping, but all subsequent path construction must use `find_project_root()`.
 
-3. **Finding #3** — Replace raw `yaml.safe_load()` in `middleware.py` with validated config loading from step 2.
+3. **Finding #14** — In `config/settings/application.yaml`, add `max_message_length` to the commented option header under the `telegram` section. This is a documentation-only change with no code impact.
 
-4. **Finding #4** — After #3, the guardrails config is now validated at load time. Direct dict subscript is replaced by typed attribute access.
+4. **Finding #15** — Add test files to `tests/unit/backend/repositories/` covering the public interfaces of `BaseRepository` and `NoteRepository`. These should be implemented without `unittest.mock` per finding #11, or placed in `tests/integration/` if they require a real database.
 
-5. **Finding #5** — Remove unused `import yaml` and `from functools import lru_cache` from `coordinator.py`. Safe after #3 confirms no usage.
-
-6. **Finding #18** — After #2, add warning logs in registry for skipped/malformed agent configs.
-
-7. **Finding #2** — Refactor API key injection in `coordinator.py`. Pass secrets via deps or model constructor instead of `os.environ.setdefault`. Must test that PydanticAI agents still receive the key correctly.
-
-8. **[PATTERN-05]** — Move hardcoded constants to YAML config. Unblocks findings #6, #7, #10, #21.
-
-9. **Finding #6** — Move `TELEGRAM_MAX_MESSAGE_LENGTH` to `application.yaml`. Update `TelegramAdapter` and `config_schema.py`.
-
-10. **Finding #7** — Move `USER_ROLES` to config. Add configurable user-to-role mapping.
-
-11. **Finding #10** — Remove hardcoded `max_delegation_depth` default. Read from coordinator config.
-
-12. **Finding #21** — Add configurable role mapping in `application.yaml`. Depends on #10 for config pattern.
-
-13. **Finding #13** — Remove `modules/frontend/` references from `AGENTS.md` and `modules/__init__.py`. No code dependency.
-
-14. **Finding #14** — Split `cli.py` into submodules. Extract handler functions into `modules/backend/cli/`. Keep `cli.py` as thin dispatcher.
-
-15. **Finding #19** — Remove `typer>=0.9.0` from `requirements.txt`.
-
-16. **[PATTERN-03]** — Address global mutable state. This is a large refactoring effort. Unblocks findings #8, #9.
-
-17. **Finding #8** — Introduce an application context or container for singletons. Add reset hooks for testing.
-
-18. **Finding #9** — Replace `_conversations` dict with Redis-backed storage using configured TTL, or add LRU eviction. Depends on #17 for singleton lifecycle pattern.
-
-19. **[PATTERN-02]** — Rewrite mock-heavy tests. This is the highest effort item. Unblocks findings #11, #12.
-
-20. **Finding #12** — Replace `os.environ.get` with test config loading.
-
-21. **Finding #11** — Systematically replace mock-based tests with integration-style tests using real services and in-memory SQLite.
-
-22. **Finding #15** — Write tests for coordinator, registry, router, middleware. Should use the new test patterns from step 21.
-
-23. **Finding #16** — Write tests for BaseRepository and NoteRepository against in-memory SQLite.
-
-24. **Finding #17** — Either add e2e and workflow tests or remove empty directories.
-
-25. **Finding #22** — Centralize test DB connection params.
-
-26. **Finding #20** — Rewrite `dead_code_detector.py` to use project standards (click, centralized logging, utc_now, proper error handling). Lowest priority — can be done independently.
+5. **[PATTERN-02] Finding #11** — Audit all 15 unit test files using `unittest.mock`. For each, determine whether the mocked functionality can be replaced with real execution. Tests that require external infrastructure (database, Redis, Anthropic API) should be moved to `tests/integration/` or `tests/e2e/`. Tests that mock purely for isolation where real code can run should have mocks removed. This is a large-scope refactoring effort and should be done file-by-file after all other findings are resolved.
 
 ---
 
@@ -117,8 +71,9 @@
 
 | # | Criticality | File(s) | Reason Excluded |
 |---|-------------|---------|-----------------|
-| — | LOW | `scripts/compliance_checker.py` | Already follows project standards (click, --verbose/--debug, centralized logging). No violations found. |
-| — | INFO | `config/.env` | Contains development credentials (Telegram bot token, Anthropic API key). These are expected in a dev `.env` file. File appears to be `.gitignored` (not shown as tracked in `git status`). Not a code violation. |
-| — | INFO | `modules/backend/tasks/` | `broker.py`, `example.py`, `scheduled.py`, `scheduler.py` reviewed. No violations found against the ruleset. |
-| — | INFO | `modules/backend/migrations/env.py` | Alembic-generated file. Follows Alembic conventions, not project conventions. |
-| — | INFO | `__pycache__/` in project root | Appears in filesystem but is expected to be `.gitignored`. Not a code quality issue. |
+| — | LOW | `modules/backend/core/logging.py` L40 | `import logging` is required — this IS the centralized logging module; it must import stdlib logging to configure it |
+| — | LOW | `modules/backend/migrations/env.py` L10 | `from logging.config import fileConfig` is standard Alembic boilerplate required by the framework |
+| — | LOW | `cli.py` L26–27, `chat.py` L25–26, `tui.py` L19–20 | `PROJECT_ROOT = Path(__file__).parent` + `sys.path.insert` for bootstrapping is necessary — `find_project_root()` cannot be called before the import path is configured. Only flagged in #10 where `PROJECT_ROOT` is reused after bootstrapping |
+| — | LOW | `modules/backend/core/logging.py` L51 | `VALID_SOURCES = frozenset({...})` — this is a validation constant, not a configurable value; it defines the protocol contract for log source fields |
+| — | LOW | `cli.py` L32 | `LONG_RUNNING_SERVICES = {"server", ...}` — this is a code-structural constant mapping CLI service names to behaviour, not a configurable value |
+| — | INFO | Test fixture files (`test_code_qa.py` L35, `test_compliance.py` L30) | Lines containing `from .sibling import something` and `import logging` are intentional test fixtures written to temp files for compliance scanner testing — not actual code violations |
