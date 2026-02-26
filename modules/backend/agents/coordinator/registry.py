@@ -33,12 +33,27 @@ class AgentRegistry:
             return
 
         for path in sorted(agents_dir.rglob("agent.yaml")):
-            with open(path) as f:
-                config = yaml.safe_load(f) or {}
-            if config.get("enabled", False):
-                name = config.get("agent_name")
-                if name:
-                    self._agents[name] = config
+            try:
+                with open(path) as f:
+                    config = yaml.safe_load(f)
+            except yaml.YAMLError as e:
+                logger.error("Failed to parse agent config", extra={"path": str(path), "error": str(e)})
+                continue
+
+            if config is None:
+                logger.warning("Empty agent config file", extra={"path": str(path)})
+                continue
+
+            name = config.get("agent_name")
+            if not name:
+                logger.warning("Agent config missing agent_name", extra={"path": str(path)})
+                continue
+
+            if not config.get("enabled", False):
+                logger.debug("Agent disabled", extra={"agent_name": name})
+                continue
+
+            self._agents[name] = config
 
         self._loaded = True
         logger.debug(

@@ -37,7 +37,7 @@ def run_startup_checks() -> None:
 
     errors: list[str] = []
 
-    _check_secret_strength(settings, security_config, errors)
+    _check_secret_strength(settings, security_config, features, errors)
     _check_channel_secrets(settings, features, errors)
     _check_production_safety(app_config, is_production, errors)
     _check_channel_allowlists(app_config, features, errors)
@@ -56,7 +56,7 @@ def run_startup_checks() -> None:
     )
 
 
-def _check_secret_strength(settings: Settings, security_config: SecuritySchema, errors: list[str]) -> None:
+def _check_secret_strength(settings: Settings, security_config: SecuritySchema, features: FeaturesSchema, errors: list[str]) -> None:
     """Validate that secrets meet minimum length requirements."""
     validation = security_config.secrets_validation
 
@@ -72,6 +72,13 @@ def _check_secret_strength(settings: Settings, security_config: SecuritySchema, 
         errors.append(
             f"API_KEY_SALT is {len(settings.api_key_salt)} chars, "
             f"minimum is {salt_min}"
+        )
+
+    webhook_min = validation.webhook_secret_min_length
+    if features.channel_telegram_enabled and len(settings.telegram_webhook_secret) < webhook_min:
+        errors.append(
+            f"TELEGRAM_WEBHOOK_SECRET is {len(settings.telegram_webhook_secret)} chars, "
+            f"minimum is {webhook_min}"
         )
 
 

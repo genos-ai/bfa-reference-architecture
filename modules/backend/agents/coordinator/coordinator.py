@@ -20,10 +20,8 @@ Public interface:
 import importlib
 import os
 from collections.abc import AsyncGenerator
-from functools import lru_cache
 from typing import Any
 
-import yaml
 from pydantic_ai import UsageLimits
 
 from modules.backend.agents.coordinator.middleware import (

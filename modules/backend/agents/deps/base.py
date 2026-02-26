@@ -81,5 +81,5 @@ class HorizontalAgentDeps(BaseAgentDeps):
     """Horizontal (supervisory) agent deps — adds delegation authority."""
 
     allowed_agents: set[str] = field(default_factory=set)
-    max_delegation_depth: int = 2
+    max_delegation_depth: int = 0
     coordinator: Any = None

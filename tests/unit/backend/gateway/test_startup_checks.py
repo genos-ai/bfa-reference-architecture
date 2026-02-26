@@ -34,11 +34,12 @@ def _mock_settings(
     return settings
 
 
-def _mock_security_config(jwt_min: int = 32, salt_min: int = 16):
+def _mock_security_config(jwt_min: int = 32, salt_min: int = 16, webhook_min: int = 16):
     """Create a mock SecuritySchema."""
     config = MagicMock()
     config.secrets_validation.jwt_secret_min_length = jwt_min
     config.secrets_validation.api_key_salt_min_length = salt_min
+    config.secrets_validation.webhook_secret_min_length = webhook_min
     return config
 
 
@@ -83,14 +84,16 @@ class TestSecretStrength:
         errors: list[str] = []
         settings = _mock_settings(jwt_secret="a" * 64, api_key_salt="b" * 32)
         security = _mock_security_config(jwt_min=32, salt_min=16)
-        _check_secret_strength(settings, security, errors)
+        features = _mock_features(telegram_enabled=False)
+        _check_secret_strength(settings, security, features, errors)
         assert len(errors) == 0
 
     def test_fails_with_short_jwt(self):
         errors: list[str] = []
         settings = _mock_settings(jwt_secret="short")
         security = _mock_security_config(jwt_min=32)
-        _check_secret_strength(settings, security, errors)
+        features = _mock_features(telegram_enabled=False)
+        _check_secret_strength(settings, security, features, errors)
         assert len(errors) == 1
         assert "JWT_SECRET" in errors[0]
 
@@ -98,9 +101,27 @@ class TestSecretStrength:
         errors: list[str] = []
         settings = _mock_settings(api_key_salt="tiny")
         security = _mock_security_config(salt_min=16)
-        _check_secret_strength(settings, security, errors)
+        features = _mock_features(telegram_enabled=False)
+        _check_secret_strength(settings, security, features, errors)
         assert len(errors) == 1
         assert "API_KEY_SALT" in errors[0]
+
+    def test_fails_with_short_webhook_secret(self):
+        errors: list[str] = []
+        settings = _mock_settings(telegram_webhook_secret="short")
+        security = _mock_security_config(webhook_min=16)
+        features = _mock_features(telegram_enabled=True)
+        _check_secret_strength(settings, security, features, errors)
+        assert len(errors) == 1
+        assert "TELEGRAM_WEBHOOK_SECRET" in errors[0]
+
+    def test_skips_webhook_check_when_telegram_disabled(self):
+        errors: list[str] = []
+        settings = _mock_settings(telegram_webhook_secret="short")
+        security = _mock_security_config(webhook_min=16)
+        features = _mock_features(telegram_enabled=False)
+        _check_secret_strength(settings, security, features, errors)
+        assert len(errors) == 0
 
 
 class TestChannelSecrets:
