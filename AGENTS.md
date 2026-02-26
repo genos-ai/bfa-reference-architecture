@@ -130,9 +130,10 @@ Full standards in `docs/99-reference-architecture/`:
 | 10 | Observability |
 | 11 | Testing Standards |
 | 14 | Background Tasks |
-| **Optional Platform (20-26)** | |
+| **Optional Platform (20-27)** | |
 | 21 | Event Architecture |
 | 24 | LLM Integration |
+| 27 | TUI Architecture (Textual + Textual Web) |
 | **AI-First Platform (40-46)** | |
 | 40 | Agentic AI Architecture (conceptual) |
 | 41 | Agentic AI PydanticAI Implementation |

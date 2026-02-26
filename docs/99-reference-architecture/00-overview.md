@@ -9,7 +9,7 @@
 - 3.0.0 (2026-02-26): Renumbered all docs into clean groups — Core Foundation (01-09), Core Operations (10-16), Optional Platform (20-26), AI-First Platform (40-46); added Architecture Profiles; removed cross-contamination (core docs no longer reference AI docs); dependency flows one way (AI→core, never core→AI)
 - 2.4.0 (2026-02-26): Added 46-event-session-architecture.md (was 31) for event-driven sessions, streaming coordinator, plan management, memory architecture, approval gates
 - 2.3.0 (2026-02-24): Added 44-multi-channel-gateway.md (was 29) for channel adapters, session management, real-time push, gateway security; updated 01 with P8 Secure by Default
-- 2.2.0 (2026-02-24): Added 45-tui-architecture.md (was 28) for interactive terminal interface (Textual)
+- 2.2.0 (2026-02-24): Added 27-tui-architecture.md (was 28) for interactive terminal interface (Textual)
 - 2.1.0 (2026-02-20): Added 42-agent-first-infrastructure.md (was 27) for MCP, A2A, agent identity, intent APIs, agent-discoverable endpoints
 - 2.0.0 (2026-02-19): Consolidated agentic docs — trimmed conceptual to framework-agnostic, rewrote implementation with PydanticAI-native patterns
 - 1.9.0 (2026-02-18): Split agentic docs into conceptual and PydanticAI implementation
@@ -100,6 +100,7 @@ General-purpose capabilities. Adopt based on project needs. No AI concepts.
 | 24-llm-integration.md | Integrating LLM capabilities (provider interface, cost tracking) |
 | 25-telegram-bot-integration.md | Building Telegram bot interface |
 | 26-telegram-client-integration.md | Need channel scraping, message history, or autonomous Telegram access |
+| 27-tui-architecture.md | Interactive terminal interface (Textual + Textual Web) for persistent sessions, real-time streaming, dashboards |
 
 ### AI-First Platform (40-46)
 
@@ -112,7 +113,6 @@ Agent architecture, session model, multi-channel delivery. Adopt for BFA project
 | 42-agent-first-infrastructure.md | Exposing platform to external agents (MCP, A2A), agent identity, intent APIs. Independent of 40/41. |
 | 43-ai-first-interface-design.md | Making services consumable by AI agents alongside human clients (adapter registry, self-describing APIs, service factory) |
 | 44-multi-channel-gateway.md | Delivering agent interactions through multiple messaging channels (Telegram, Slack, Discord, WebSocket) with cross-channel sessions |
-| 45-tui-architecture.md | Interactive terminal interface (Textual) for agent sessions, real-time monitoring, approvals |
 | 46-event-session-architecture.md | Interactive conversations, streaming agent responses, multi-step plans with approval gates, long-running autonomous tasks, multi-channel sessions |
 
 ---

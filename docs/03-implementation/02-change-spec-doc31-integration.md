@@ -21,7 +21,7 @@ The new doc is located at `docs/99-reference-architecture/46-event-session-archi
 | Priority | Documents | Rationale |
 |----------|-----------|-----------|
 | **Must change** (structural — doc 31 is invisible without these) | `00-overview.md`, `21-event-architecture.md`, `41-agentic-pydanticai.md`, `44-multi-channel-gateway.md`, `AGENTS.md` | These documents either register doc 31 in the architecture index, or contain patterns that doc 31 supersedes for interactive operations. Without these changes, an AI reading the architecture will not know doc 31 exists or will generate conflicting patterns. |
-| **Should change** (alignment — reduces confusion) | `03-backend-architecture.md`, `40-agentic-architecture.md`, `45-tui-architecture.md`, `43-ai-first-interface-design.md` | These documents describe patterns that doc 31 extends. Cross-references prevent an AI from implementing the older pattern when the session-aware version should be used. |
+| **Should change** (alignment — reduces confusion) | `03-backend-architecture.md`, `40-agentic-architecture.md`, `27-tui-architecture.md`, `43-ai-first-interface-design.md` | These documents describe patterns that doc 31 extends. Cross-references prevent an AI from implementing the older pattern when the session-aware version should be used. |
 | **No change needed** | All other docs (01, 02, 04, 05, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 27) | These documents either cover concerns orthogonal to the session model (security, testing, deployment, frontend, coding standards) or already define patterns that doc 31 consumes without modification (doc 27 — MCP/A2A are event producers, unchanged). |
 
 ---
@@ -416,7 +416,7 @@ If the following sections exist in doc 25, add a one-line cross-reference at the
 
 ---
 
-## Change 8: `45-tui-architecture.md` — Reference Event Rendering
+## Change 8: `27-tui-architecture.md` — Reference Event Rendering
 
 ### Why
 
@@ -513,7 +513,7 @@ Execute changes in this order to maintain consistency:
 5. **`44-multi-channel-gateway.md`** — Converts channels to event subscribers. Conceptually the biggest shift.
 6. **`03-backend-architecture.md`** — Small cross-reference. Low risk.
 7. **`40-agentic-architecture.md`** — Cross-references to concrete implementations. Low risk.
-8. **`45-tui-architecture.md`** — Cross-reference. Low risk.
+8. **`27-tui-architecture.md`** — Cross-reference. Low risk.
 9. **`43-ai-first-interface-design.md`** — Session-aware factory extension. Low risk.
 
 ---
@@ -536,7 +536,7 @@ After all changes are applied, verify:
 - [ ] `AGENTS.md` has doc 31 row in reference table
 - [ ] `03-backend-architecture.md` has Interactive and Streaming Operations paragraph
 - [ ] `40-agentic-architecture.md` Related Documentation includes doc 31
-- [ ] `45-tui-architecture.md` Related Documentation includes doc 31
+- [ ] `27-tui-architecture.md` Related Documentation includes doc 31
 - [ ] `43-ai-first-interface-design.md` has Session-Aware Factory subsection
 - [ ] No document introduces patterns that conflict with doc 31's axioms (A1-A5)
 - [ ] All cross-references use the exact filename `46-event-session-architecture.md`

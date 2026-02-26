@@ -704,7 +704,7 @@ async def websocket_agent_endpoint(websocket: WebSocket, session_id: str) -> Non
         pass
 ```
 
-This is the primary transport for the TUI (**[45-tui-architecture.md](45-tui-architecture.md)**) and the real-time web frontend. Token-by-token streaming via `run_stream()` gives the user immediate feedback as the agent reasons.
+This is the primary transport for the TUI (**[27-tui-architecture.md](27-tui-architecture.md)**) and the real-time web frontend. Token-by-token streaming via `run_stream()` gives the user immediate feedback as the agent reasons.
 
 **Channel adapters (gateway-mediated):**
 

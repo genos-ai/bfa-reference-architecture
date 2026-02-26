@@ -90,13 +90,13 @@ The key decision is that this structure applies from day one, even for small pro
 │           ├── 24-llm-integration.md
 │           ├── 25-telegram-bot-integration.md
 │           ├── 26-telegram-client-integration.md
+│           ├── 27-tui-architecture.md
 │           ├── # --- AI-First Platform (40-46) ---
 │           ├── 40-agentic-architecture.md
 │           ├── 41-agentic-pydanticai.md
 │           ├── 42-agent-first-infrastructure.md
 │           ├── 43-ai-first-interface-design.md
 │           ├── 44-multi-channel-gateway.md
-│           ├── 45-tui-architecture.md
 │           └── 46-event-session-architecture.md
 │
 ├── modules/

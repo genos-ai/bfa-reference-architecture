@@ -1503,7 +1503,7 @@ temporal:
 - Stateless CRUD endpoints (covered by 03-backend-architecture.md — unchanged)
 - Agent definitions and tool registration (covered by 41-agentic-pydanticai.md)
 - MCP server setup and A2A protocol (covered by 42-agent-first-infrastructure.md)
-- TUI panel layout and rendering (covered by 45-tui-architecture.md)
+- TUI panel layout and rendering (covered by 27-tui-architecture.md)
 - Channel adapter registration and gateway security (covered by 44-multi-channel-gateway.md)
 - Service factory and adapter patterns (covered by 43-ai-first-interface-design.md)
 - Frontend architecture (covered by 22-frontend-architecture.md)
@@ -1517,6 +1517,6 @@ temporal:
 - [40-agentic-architecture.md](40-agentic-architecture.md) — Agent concepts, orchestration patterns
 - [41-agentic-pydanticai.md](41-agentic-pydanticai.md) — PydanticAI agent implementation
 - [42-agent-first-infrastructure.md](42-agent-first-infrastructure.md) — MCP, A2A, agent identity
-- [45-tui-architecture.md](45-tui-architecture.md) — TUI rendering (becomes event consumer)
+- [27-tui-architecture.md](27-tui-architecture.md) — TUI rendering (becomes event consumer)
 - [44-multi-channel-gateway.md](44-multi-channel-gateway.md) — Channel adapters (become event subscribers)
 - [43-ai-first-interface-design.md](43-ai-first-interface-design.md) — Service factory, discovery endpoints

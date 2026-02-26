@@ -26,7 +26,7 @@ This module is **optional**. Adopt when your project:
 | Module | Role | Unchanged |
 |--------|------|-----------|
 | **25-telegram-bot-integration.md** | First channel adapter (Telegram) | ✅ Becomes a channel adapter under this module's interface |
-| **45-tui-architecture.md** | TUI client | ✅ Connects via WebSocket defined here |
+| **27-tui-architecture.md** | TUI client | ✅ Connects via WebSocket defined here |
 | **22-frontend-architecture.md** | React web frontend | ✅ Connects via REST + WebSocket defined here |
 | **40/41** | Agent orchestration | ✅ Gateway routes messages to the coordinator |
 | **27** | External agent interop (MCP/A2A) | ✅ Independent — agents consuming your platform, not messaging channels |
@@ -1068,7 +1068,7 @@ See `46-event-session-architecture.md`, Section 3 (Streaming Coordinator — Cha
 - [40-agentic-architecture.md](40-agentic-architecture.md) — Agent orchestration, session concepts, cost tracking
 - [41-agentic-pydanticai.md](41-agentic-pydanticai.md) — Coordinator `handle()`, entry points, streaming
 - [42-agent-first-infrastructure.md](42-agent-first-infrastructure.md) — MCP/A2A (external agent interop, independent of messaging channels)
-- [45-tui-architecture.md](45-tui-architecture.md) — TUI client (connects via WebSocket defined here)
+- [27-tui-architecture.md](27-tui-architecture.md) — TUI client (connects via WebSocket defined here)
 - [22-frontend-architecture.md](22-frontend-architecture.md) — React web frontend, CLI
 - [21-event-architecture.md](21-event-architecture.md) — Event types, WebSocket patterns
 - [05-authentication.md](05-authentication.md) — JWT authentication (extended for WebSocket)

@@ -1042,4 +1042,4 @@ async def test_create_note_parity(adapter, note_data):
 - Human-in-the-loop approval flows within agent workflows (covered by `40-agentic-architecture.md` — durable execution section)
 - Multi-channel gateway and session management (covered by `44-multi-channel-gateway.md`)
 - Frontend architecture (covered by `22-frontend-architecture.md`)
-- TUI architecture (covered by `45-tui-architecture.md`)
+- TUI architecture (covered by `27-tui-architecture.md`)
