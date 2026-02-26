@@ -64,10 +64,10 @@ def main(verbose: bool, debug: bool, rule: str | None, severity: str | None) -> 
     logger = get_logger(__name__)
 
     config = get_registry().get("code.qa.agent")
-    logger.info("Loaded config", extra={"rules": len(config.get("rules", []))})
+    logger.info("Loaded config", extra={"rules": len(config.rules or [])})
 
     project_root = find_project_root()
-    scanner = ComplianceScannerService(project_root, config)
+    scanner = ComplianceScannerService(project_root, config.model_dump())
     findings = scanner.scan_all()
 
     for f in findings:

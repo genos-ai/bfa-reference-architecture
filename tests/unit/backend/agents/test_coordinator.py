@@ -27,11 +27,14 @@ class TestAgentRegistry:
         assert "system.health.agent" in names
 
     def test_get_returns_config(self):
+        from modules.backend.agents.config_schema import AgentConfigSchema
+
         registry = get_registry()
         config = registry.get("code.qa.agent")
-        assert config["agent_name"] == "code.qa.agent"
-        assert config["enabled"] is True
-        assert "model" in config
+        assert isinstance(config, AgentConfigSchema)
+        assert config.agent_name == "code.qa.agent"
+        assert config.enabled is True
+        assert config.model is not None
 
     def test_get_raises_for_unknown(self):
         registry = get_registry()
@@ -120,10 +123,13 @@ class TestMiddleware:
     """Tests for middleware configuration and cost computation."""
 
     def test_coordinator_config_loads(self):
+        from modules.backend.agents.config_schema import CoordinatorConfigSchema
+
         config = _load_coordinator_config()
-        assert "routing" in config
-        assert "limits" in config
-        assert "guardrails" in config
+        assert isinstance(config, CoordinatorConfigSchema)
+        assert config.routing is not None
+        assert config.limits is not None
+        assert config.guardrails is not None
 
     def test_compute_cost_zero_tokens(self):
         cost = compute_cost_usd(0, 0, "anthropic:claude-haiku-4-5-20251001")

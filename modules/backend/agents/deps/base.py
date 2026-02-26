@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from modules.backend.agents.config_schema import AgentConfigSchema
+
 
 @dataclass
 class FileScope:
@@ -54,7 +56,7 @@ class BaseAgentDeps:
 
     project_root: Path
     scope: FileScope
-    config: dict[str, Any] = field(default_factory=dict)
+    config: AgentConfigSchema | None = None
 
 
 @dataclass

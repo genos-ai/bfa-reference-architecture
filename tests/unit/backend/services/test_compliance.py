@@ -82,7 +82,8 @@ class TestComplianceScannerService:
     """Tests for ComplianceScannerService using real temp files."""
 
     def _scanner(self, project_root, qa_config):
-        return ComplianceScannerService(project_root, qa_config)
+        config = qa_config.model_dump() if hasattr(qa_config, "model_dump") else qa_config
+        return ComplianceScannerService(project_root, config)
 
     def test_collect_python_files(self, project_with_violations, qa_config):
         scanner = self._scanner(project_with_violations, qa_config)
@@ -166,14 +167,15 @@ class TestConfigLoading:
     """Tests for agent config loading from YAML."""
 
     def test_loads_config_from_yaml(self, qa_config):
-        assert qa_config["agent_name"] == "code.qa.agent"
-        assert qa_config["enabled"] is True
+        assert qa_config.agent_name == "code.qa.agent"
+        assert qa_config.enabled is True
 
     def test_config_has_rules(self, qa_config):
-        assert len(qa_config["rules"]) > 0
+        assert len(qa_config.rules) > 0
 
     def test_config_has_exclusions(self, qa_config):
-        assert "paths" in qa_config["exclusions"]
+        assert qa_config.exclusions is not None
+        assert len(qa_config.exclusions.paths) > 0
 
     def test_config_has_scope(self, qa_config):
-        assert "read" in qa_config.get("scope", {})
+        assert len(qa_config.scope.read) > 0

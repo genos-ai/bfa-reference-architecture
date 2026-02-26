@@ -41,7 +41,7 @@ def _get_agent(model: str) -> Agent[QaAgentDeps, QaAuditResult]:
     async def list_python_files(ctx: RunContext[QaAgentDeps]) -> list[str]:
         """List all Python files in scope, respecting exclusion patterns."""
         ctx.deps.emit({"type": "tool_start", "tool": "list_python_files"})
-        exclusions = set(ctx.deps.config.get("exclusions", {}).get("paths", []))
+        exclusions = set(ctx.deps.config.exclusions.paths) if ctx.deps.config and ctx.deps.config.exclusions else set()
         files = await filesystem.list_files(ctx.deps.project_root, ctx.deps.scope, exclusions)
         ctx.deps.emit({"type": "tool_done", "tool": "list_python_files", "detail": f"{len(files)} files"})
         return files
@@ -127,7 +127,7 @@ async def run_agent(
     usage_limits: UsageLimits | None = None,
 ) -> QaAuditResult:
     """Standard agent entry point. Called by the coordinator."""
-    model = deps.config["model"]
+    model = deps.config.model
     agent = _get_agent(model)
 
     logger.info("QA agent invoked", extra={"message": user_message})
@@ -172,7 +172,7 @@ async def run_agent_stream(
     deps.on_progress = lambda event: queue.put_nowait(event)
 
     async def _run():
-        model = deps.config["model"]
+        model = deps.config.model
         agent = _get_agent(model)
         logger.info("QA agent invoked (stream)", extra={"message": user_message, "conversation_id": conversation_id})
         result = await agent.run(user_message, deps=deps, usage_limits=usage_limits)

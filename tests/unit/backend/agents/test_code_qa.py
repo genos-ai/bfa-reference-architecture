@@ -152,24 +152,24 @@ class TestScannerViaService:
     """Tests for scanner functionality via ComplianceScannerService."""
 
     def test_finds_relative_import(self, project_with_violations, qa_config):
-        scanner = ComplianceScannerService(project_with_violations, qa_config)
+        scanner = ComplianceScannerService(project_with_violations, qa_config.model_dump())
         findings = scanner.scan_import_violations()
         relative = [f for f in findings if f["rule_id"] == "no_relative_imports"]
         assert len(relative) >= 1
 
     def test_finds_direct_logging(self, project_with_violations, qa_config):
-        scanner = ComplianceScannerService(project_with_violations, qa_config)
+        scanner = ComplianceScannerService(project_with_violations, qa_config.model_dump())
         findings = scanner.scan_import_violations()
         logging_v = [f for f in findings if f["rule_id"] == "no_direct_logging"]
         assert len(logging_v) >= 1
 
     def test_finds_datetime_violations(self, project_with_violations, qa_config):
-        scanner = ComplianceScannerService(project_with_violations, qa_config)
+        scanner = ComplianceScannerService(project_with_violations, qa_config.model_dump())
         findings = scanner.scan_datetime_violations()
         assert len(findings) >= 2
 
     def test_finds_hardcoded_skips_dunders(self, project_with_violations, qa_config):
-        scanner = ComplianceScannerService(project_with_violations, qa_config)
+        scanner = ComplianceScannerService(project_with_violations, qa_config.model_dump())
         findings = scanner.scan_hardcoded_values()
         names = [f["message"].split(" = ")[0] for f in findings]
         assert "MAX_RETRIES" in names
@@ -180,21 +180,22 @@ class TestConfigLoading:
     """Tests for agent config loading from YAML."""
 
     def test_loads_config_from_yaml(self, qa_config):
-        assert qa_config["agent_name"] == "code.qa.agent"
-        assert qa_config["enabled"] is True
+        assert qa_config.agent_name == "code.qa.agent"
+        assert qa_config.enabled is True
 
     def test_config_has_rules(self, qa_config):
-        assert len(qa_config["rules"]) > 0
+        assert len(qa_config.rules) > 0
 
     def test_config_has_exclusions(self, qa_config):
-        assert "paths" in qa_config["exclusions"]
+        assert qa_config.exclusions is not None
+        assert len(qa_config.exclusions.paths) > 0
 
     def test_config_has_keywords(self, qa_config):
-        assert "compliance" in qa_config["keywords"]
+        assert "compliance" in qa_config.keywords
 
     def test_config_has_model(self, qa_config):
-        assert "anthropic:" in qa_config["model"]
+        assert "anthropic:" in qa_config.model
 
     def test_config_has_scope(self, qa_config):
-        assert "read" in qa_config.get("scope", {})
-        assert "write" in qa_config.get("scope", {})
+        assert len(qa_config.scope.read) > 0
+        assert len(qa_config.scope.write) > 0

@@ -10,7 +10,9 @@ from functools import lru_cache
 from typing import Any
 
 import yaml
+from pydantic import ValidationError
 
+from modules.backend.agents.config_schema import AgentConfigSchema
 from modules.backend.core.config import find_project_root
 from modules.backend.core.logging import get_logger
 
@@ -21,7 +23,7 @@ class AgentRegistry:
     """Discovers and caches agent configurations from YAML files."""
 
     def __init__(self) -> None:
-        self._agents: dict[str, dict[str, Any]] = {}
+        self._agents: dict[str, AgentConfigSchema] = {}
         self._loaded = False
 
     def _ensure_loaded(self) -> None:
@@ -35,25 +37,33 @@ class AgentRegistry:
         for path in sorted(agents_dir.rglob("agent.yaml")):
             try:
                 with open(path) as f:
-                    config = yaml.safe_load(f)
+                    raw = yaml.safe_load(f)
             except yaml.YAMLError as e:
                 logger.error("Failed to parse agent config", extra={"path": str(path), "error": str(e)})
                 continue
 
-            if config is None:
+            if raw is None:
                 logger.warning("Empty agent config file", extra={"path": str(path)})
                 continue
 
-            name = config.get("agent_name")
-            if not name:
+            if not raw.get("agent_name"):
                 logger.warning("Agent config missing agent_name", extra={"path": str(path)})
                 continue
 
-            if not config.get("enabled", False):
-                logger.debug("Agent disabled", extra={"agent_name": name})
+            try:
+                config = AgentConfigSchema(**raw)
+            except ValidationError as e:
+                logger.error(
+                    "Invalid agent config",
+                    extra={"path": str(path), "error": str(e)},
+                )
                 continue
 
-            self._agents[name] = config
+            if not config.enabled:
+                logger.debug("Agent disabled", extra={"agent_name": config.agent_name})
+                continue
+
+            self._agents[config.agent_name] = config
 
         self._loaded = True
         logger.debug(
@@ -61,7 +71,7 @@ class AgentRegistry:
             extra={"agent_count": len(self._agents)},
         )
 
-    def get(self, agent_name: str) -> dict[str, Any]:
+    def get(self, agent_name: str) -> AgentConfigSchema:
         """Get agent config by name. Raises KeyError if not found."""
         self._ensure_loaded()
         if agent_name not in self._agents:
@@ -79,10 +89,10 @@ class AgentRegistry:
         self._ensure_loaded()
         return [
             {
-                "agent_name": config["agent_name"],
-                "description": config.get("description", ""),
-                "keywords": config.get("keywords", []),
-                "tools": config.get("tools", []),
+                "agent_name": config.agent_name,
+                "description": config.description,
+                "keywords": config.keywords,
+                "tools": config.tools,
             }
             for config in self._agents.values()
         ]
@@ -95,7 +105,7 @@ class AgentRegistry:
         self._ensure_loaded()
         text_lower = text.lower()
         for agent_name, config in self._agents.items():
-            for keyword in config.get("keywords", []):
+            for keyword in config.keywords:
                 if keyword in text_lower:
                     return agent_name
         return None
@@ -107,7 +117,7 @@ class AgentRegistry:
         horizontal agents: modules.backend.agents.horizontal.{name}.agent
         """
         config = self.get(agent_name)
-        agent_type = config.get("agent_type", "vertical")
+        agent_type = config.agent_type
         parts = agent_name.replace(".agent", "").split(".")
 
         if agent_type == "horizontal":

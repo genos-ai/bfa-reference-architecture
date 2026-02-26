@@ -57,7 +57,7 @@ async def run_agent(
     usage_limits: UsageLimits | None = None,
 ) -> HealthCheckResult:
     """Standard agent entry point. Called by the coordinator."""
-    model = deps.config["model"]
+    model = deps.config.model
     agent = _get_agent(model)
 
     logger.info("Health agent invoked", extra={"message": user_message})

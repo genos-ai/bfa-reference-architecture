@@ -24,6 +24,7 @@ from typing import Any
 
 from pydantic_ai import UsageLimits
 
+from modules.backend.agents.config_schema import AgentConfigSchema
 from modules.backend.agents.coordinator.middleware import (
     _load_coordinator_config,
     with_cost_tracking,
@@ -94,12 +95,11 @@ def assemble_instructions(category: str, name: str) -> str:
 # =============================================================================
 
 
-def build_deps_from_config(agent_config: dict[str, Any]) -> dict[str, Any]:
+def build_deps_from_config(agent_config: AgentConfigSchema) -> dict[str, Any]:
     """Build common dep fields from agent YAML config."""
-    scope_config = agent_config.get("scope", {})
     scope = FileScope(
-        read_paths=scope_config.get("read", []),
-        write_paths=scope_config.get("write", []),
+        read_paths=agent_config.scope.read,
+        write_paths=agent_config.scope.write,
     )
     return {
         "project_root": find_project_root(),
@@ -108,7 +108,7 @@ def build_deps_from_config(agent_config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _build_agent_deps(agent_name: str, agent_config: dict[str, Any]) -> BaseAgentDeps:
+def _build_agent_deps(agent_name: str, agent_config: AgentConfigSchema) -> BaseAgentDeps:
     """Build the appropriate deps dataclass for a given agent."""
     common = build_deps_from_config(agent_config)
     category = agent_name.split(".")[0]
@@ -129,10 +129,9 @@ def _build_agent_deps(agent_name: str, agent_config: dict[str, Any]) -> BaseAgen
 def _get_usage_limits() -> UsageLimits:
     """Build UsageLimits from coordinator.yaml."""
     config = _load_coordinator_config()
-    limits = config.get("limits", {})
     return UsageLimits(
-        request_limit=limits["max_requests_per_task"],
-        total_tokens_limit=limits["max_tokens_per_task"],
+        request_limit=config.limits.max_requests_per_task,
+        total_tokens_limit=config.limits.max_tokens_per_task,
     )
 
 
@@ -173,7 +172,7 @@ def _format_response(agent_name: str, result: Any) -> "CoordinatorResponse":
 async def _execute_agent(
     agent_name: str,
     user_input: str,
-    agent_config: dict[str, Any],
+    agent_config: AgentConfigSchema,
 ) -> dict[str, Any]:
     """Execute any agent dynamically. No agent-specific code needed.
 
@@ -228,7 +227,7 @@ async def handle(user_input: str) -> dict[str, Any]:
 
     if agent_name is None:
         coordinator_config = _load_coordinator_config()
-        fallback = coordinator_config.get("routing", {}).get("fallback_agent")
+        fallback = coordinator_config.routing.fallback_agent
         if fallback and registry.has(fallback):
             agent_name = fallback
             logger.debug("Using fallback agent", extra={"agent_name": fallback})
@@ -315,7 +314,7 @@ def route(user_input: str) -> str:
     agent_name = router.route(request)
     if agent_name is None:
         coordinator_config = _load_coordinator_config()
-        fallback = coordinator_config.get("routing", {}).get("fallback_agent")
+        fallback = coordinator_config.routing.fallback_agent
         if fallback and registry.has(fallback):
             return fallback
         available = ", ".join(c["agent_name"] for c in registry.list_all()) or "none"

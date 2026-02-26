@@ -14,6 +14,7 @@ from typing import Any
 
 import yaml
 
+from modules.backend.agents.config_schema import AgentConfigSchema, CoordinatorConfigSchema
 from modules.backend.core.config import find_project_root
 from modules.backend.core.logging import get_logger
 
@@ -21,13 +22,12 @@ logger = get_logger(__name__)
 
 
 @lru_cache(maxsize=1)
-def _load_coordinator_config() -> dict[str, Any]:
-    """Load and cache coordinator configuration from YAML."""
+def _load_coordinator_config() -> CoordinatorConfigSchema:
+    """Load, validate, and cache coordinator configuration from YAML."""
     config_path = find_project_root() / "config" / "agents" / "coordinator.yaml"
-    if not config_path.exists():
-        return {}
     with open(config_path) as f:
-        return yaml.safe_load(f) or {}
+        raw = yaml.safe_load(f)
+    return CoordinatorConfigSchema(**raw)
 
 
 def compute_cost_usd(
@@ -37,15 +37,16 @@ def compute_cost_usd(
 ) -> float:
     """Compute dollar cost from token counts and model pricing config."""
     config = _load_coordinator_config()
-    pricing = config.get("model_pricing", {})
-    default_rates = pricing.get("default", {})
-    rates = pricing.get(model or "", default_rates)
-    input_cost = (input_tokens / 1_000_000) * rates["input"]
-    output_cost = (output_tokens / 1_000_000) * rates["output"]
+    default_rates = config.model_pricing.get("default")
+    rates = config.model_pricing.get(model or "", default_rates)
+    if rates is None:
+        rates = default_rates
+    input_cost = (input_tokens / 1_000_000) * rates.input
+    output_cost = (output_tokens / 1_000_000) * rates.output
     return round(input_cost + output_cost, 6)
 
 
-def with_guardrails(agent_config: dict[str, Any] | None = None):
+def with_guardrails(agent_config: AgentConfigSchema | None = None):
     """Block unsafe input before any LLM call is made.
 
     Checks coordinator-level injection patterns and respects
@@ -57,10 +58,9 @@ def with_guardrails(agent_config: dict[str, Any] | None = None):
         @functools.wraps(func)
         async def wrapper(user_input: str, *args, **kwargs):
             coordinator_config = _load_coordinator_config()
-            guardrails = coordinator_config.get("guardrails", {})
 
-            coordinator_max = guardrails["max_input_length"]
-            agent_max = (agent_config or {}).get("max_input_length")
+            coordinator_max = coordinator_config.guardrails.max_input_length
+            agent_max = agent_config.max_input_length if agent_config else None
             max_length = agent_max if agent_max is not None else coordinator_max
 
             if len(user_input) > max_length:
@@ -68,7 +68,7 @@ def with_guardrails(agent_config: dict[str, Any] | None = None):
                     f"Input exceeds maximum length ({len(user_input)} > {max_length})"
                 )
 
-            patterns = guardrails.get("injection_patterns", [])
+            patterns = coordinator_config.guardrails.injection_patterns
             text_lower = user_input.lower()
             for pattern in patterns:
                 if re.search(pattern, text_lower):
@@ -113,9 +113,8 @@ def with_cost_tracking(func):
                 log_extra["model"] = model
 
         coordinator_config = _load_coordinator_config()
-        limits = coordinator_config.get("limits", {})
 
-        max_cost_plan = limits.get("max_cost_per_plan")
+        max_cost_plan = coordinator_config.limits.max_cost_per_plan
         if max_cost_plan and cost_usd > max_cost_plan:
             logger.error(
                 "Cost limit exceeded",
