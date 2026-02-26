@@ -51,6 +51,7 @@ class TimeoutsSchema(_StrictBase):
 class TelegramAppSchema(_StrictBase):
     webhook_path: str
     authorized_users: list[int]
+    max_message_length: int = 4096
 
 
 class ApplicationSchema(_StrictBase):

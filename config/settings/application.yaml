@@ -56,3 +56,4 @@ timeouts:
 telegram:
   webhook_path: "/webhook/telegram"
   authorized_users: []
+  max_message_length: 4096

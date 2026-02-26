@@ -149,22 +149,22 @@ async def run_agent(
     return result.output
 
 
-_conversations: dict[str, list] = {}
-
-
 async def run_agent_stream(
     user_message: str,
     deps: QaAgentDeps,
     conversation_id: str | None = None,
     usage_limits: UsageLimits | None = None,
 ) -> AsyncGenerator[dict, None]:
-    """Standard streaming entry point. Called by the coordinator."""
+    """Standard streaming entry point. Called by the coordinator.
+
+    Stateless — each call is a fresh conversation. Conversation
+    persistence will be added when doc 46 session model is implemented.
+    """
     import asyncio
     import uuid
 
     if conversation_id is None:
         conversation_id = str(uuid.uuid4())
-    message_history = _conversations.get(conversation_id)
 
     queue: asyncio.Queue[dict] = asyncio.Queue()
 
@@ -175,8 +175,7 @@ async def run_agent_stream(
         model = deps.config["model"]
         agent = _get_agent(model)
         logger.info("QA agent invoked (stream)", extra={"message": user_message, "conversation_id": conversation_id})
-        result = await agent.run(user_message, deps=deps, message_history=message_history, usage_limits=usage_limits)
-        _conversations[conversation_id] = result.all_messages()
+        result = await agent.run(user_message, deps=deps, usage_limits=usage_limits)
         return result.output
 
     task = asyncio.create_task(_run())
