@@ -29,13 +29,13 @@ This module is **optional**. Adopt when your project:
 | **27-tui-architecture.md** | TUI client | ✅ Connects via WebSocket defined here |
 | **22-frontend-architecture.md** | React web frontend | ✅ Connects via REST + WebSocket defined here |
 | **40/41** | Agent orchestration | ✅ Gateway routes messages to the coordinator |
-| **27** | External agent interop (MCP/A2A) | ✅ Independent — agents consuming your platform, not messaging channels |
+| **42** | External agent interop (MCP/A2A) | ✅ Independent — agents consuming your platform, not messaging channels |
 
 ---
 
 ## Context
 
-The existing architecture defines several client types — React web frontend (22), CLI (22), Telegram bot (20), TUI (28) — each connecting to the FastAPI backend independently. Each has its own connection model, authentication mechanism, and message format. There is no shared session layer across these clients, no centralized security enforcement point, and no mechanism for the backend to push events to clients that are not actively polling.
+The existing architecture defines several client types — React web frontend (22), CLI (28), Telegram bot (25), TUI (27) — each connecting to the FastAPI backend independently. Each has its own connection model, authentication mechanism, and message format. There is no shared session layer across these clients, no centralized security enforcement point, and no mechanism for the backend to push events to clients that are not actively polling.
 
 This works for a traditional BFF where each client is a distinct application with its own user base. It does not work for a **personal AI assistant** where the user expects to start a conversation on Telegram, continue it on the TUI, and receive a push notification on the web dashboard when a long-running agent task completes. Nor does it work for a multi-channel bot that must enforce the same rate limits, authentication policies, and input validation regardless of which channel a message arrives through.
 
@@ -346,7 +346,7 @@ Active sessions live in Redis for fast lookup. When a session becomes inactive (
 
 ### WebSocket Endpoint
 
-The FastAPI application exposes a WebSocket endpoint for real-time bidirectional communication. This serves the TUI (doc 45), the React frontend (22), and any other client that needs server-pushed events.
+The FastAPI application exposes a WebSocket endpoint for real-time bidirectional communication. This serves the TUI (doc 27), the React frontend (22), and any other client that needs server-pushed events.
 
 ```python
 from fastapi import WebSocket, WebSocketDisconnect

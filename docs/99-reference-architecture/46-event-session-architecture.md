@@ -415,7 +415,7 @@ class CostUpdateEvent(SessionEvent):
 
 ### Event Bus Transport
 
-Use Redis Pub/Sub for real-time event delivery within the application. Rationale: Redis is already in the stack (doc 19 uses it for Taskiq), Pub/Sub is fire-and-forget with no persistence overhead, and latency is sub-millisecond.
+Use Redis Pub/Sub for real-time event delivery within the application. Rationale: Redis is already in the stack (doc 14 uses it for Taskiq), Pub/Sub is fire-and-forget with no persistence overhead, and latency is sub-millisecond.
 
 ```python
 # modules/backend/events/bus.py

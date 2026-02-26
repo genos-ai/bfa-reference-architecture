@@ -13,7 +13,7 @@ Telegram bots provide a chat-based interface that complements web and CLI client
 
 This module standardizes on aiogram v3 because it is async-native (sharing FastAPI's event loop), has first-class Pydantic v2 support for type safety, provides a powerful middleware system for cross-cutting concerns (authentication, rate limiting, logging), and integrates cleanly with FastAPI's webhook handling. The bot runs on the same Uvicorn process as the API, sharing the same event loop, database connections, and configuration — not as a separate service.
 
-The critical design decision is that the bot is a thin presentation layer, identical in role to the web frontend or CLI. All business logic lives in the backend service layer (03). Bot handlers call backend services; they never access the database directly. This ensures that bot-specific code handles only Telegram-specific concerns (keyboards, FSM states, message formatting) while business rules remain centralized and testable. For data acquisition capabilities (channel scraping, message history), see the Client API integration (23).
+The critical design decision is that the bot is a thin presentation layer, identical in role to the web frontend or CLI. All business logic lives in the backend service layer (03). Bot handlers call backend services; they never access the database directly. This ensures that bot-specific code handles only Telegram-specific concerns (keyboards, FSM states, message formatting) while business rules remain centralized and testable. For data acquisition capabilities (channel scraping, message history), see the Client API integration (26).
 
 ---
 

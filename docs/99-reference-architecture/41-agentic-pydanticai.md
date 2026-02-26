@@ -40,7 +40,7 @@ This module is the **implementation companion** to **[40-agentic-architecture.md
 
 ## Concept-to-Implementation Mapping
 
-| Concept (Doc 25) | Implementation (This Document) |
+| Concept (Doc 40) | Implementation (This Document) |
 |-------------------|-------------------------------|
 | **AgentTask primitive** | `agent_runs` table + `agent_messages` table |
 | **Orchestrator** | PydanticAI `Agent` with agent-delegation tools (Section 7) |
@@ -283,9 +283,9 @@ The directory structure uses `{category}/{name}/` — each agent gets its own di
 |----------|-------------|---------|
 | Agent config | `config/agents/{category}/{name}/agent.yaml` | `config/agents/system/health/agent.yaml` |
 | Agent code | `modules/backend/agents/vertical/{category}/{name}/agent.py` | `modules/backend/agents/vertical/system/health/agent.py` |
-| Agent tools | `modules/agents/tools/{category}/{name}/` | `modules/agents/tools/code/qa/` |
-| System prompt | `modules/agents/prompts/{category}/{name}/system.md` | `modules/agents/prompts/code/qa/system.md` |
-| Agent deps | `modules/agents/deps/{category}/{name}.py` | `modules/agents/deps/code/qa.py` |
+| Agent tools | `modules/backend/agents/tools/{category}/{name}/` | `modules/backend/agents/tools/code/qa/` |
+| System prompt | `modules/backend/agents/prompts/{category}/{name}/system.md` | `modules/backend/agents/prompts/code/qa/system.md` |
+| Agent deps | `modules/backend/agents/deps/{category}/{name}.py` | `modules/backend/agents/deps/code/qa.py` |
 | Unit test | `tests/unit/backend/agents/test_{category}_{name}.py` | `test_code_qa.py` |
 
 The `agent_name` field in the YAML config file carries the full identifier including the `.agent` suffix:
@@ -332,14 +332,14 @@ code:
 
 ### Service/Agent Boundary Rule
 
-Logic belongs in `modules/backend/services/` if it operates on domain data without an LLM in the loop. Logic belongs in `modules/agents/` if an LLM decides what to do or what to call.
+Logic belongs in `modules/backend/services/` if it operates on domain data without an LLM in the loop. Logic belongs in `modules/backend/agents/` if an LLM decides what to do or what to call.
 
 | Condition | Location |
 |-----------|----------|
 | Pure data access, transformation, or mutation | `modules/backend/services/` |
-| LLM selects which operation to perform | `modules/agents/vertical/` |
-| Cross-cutting execution concern (cost, safety, memory) | `modules/agents/horizontal/` |
-| Routing and orchestration | `modules/agents/coordinator/` |
+| LLM selects which operation to perform | `modules/backend/agents/vertical/` |
+| Cross-cutting execution concern (cost, safety, memory) | `modules/backend/agents/horizontal/` |
+| Routing and orchestration | `modules/backend/agents/coordinator/` |
 
 ### Vertical Agents (Domain Specialists)
 
@@ -1482,7 +1482,7 @@ The registry validates tool declarations against this allowlist at registration 
 
 Adding `data.analysis` (a data-category agent) from zero to working:
 
-**1. Create deps** — `modules/agents/deps/data/analysis.py`:
+**1. Create deps** — `modules/backend/agents/deps/data/analysis.py`:
 
 ```python
 @dataclass
@@ -1493,7 +1493,7 @@ class DataAnalysisAgentDeps:
     session_id: str
 ```
 
-**2. Create prompt** — `modules/agents/prompts/data/analysis/system.md`:
+**2. Create prompt** — `modules/backend/agents/prompts/data/analysis/system.md`:
 
 ```markdown
 You are a data analysis agent. You help users explore, summarise, and interpret datasets.
@@ -1504,7 +1504,7 @@ Rules:
 - Return structured output using the DataAnalysisOutput schema.
 ```
 
-**3. Create agent** — `modules/agents/vertical/data/analysis/agent.py`:
+**3. Create agent** — `modules/backend/agents/vertical/data/analysis/agent.py`:
 
 ```python
 from pydantic_ai import Agent, RunContext
@@ -1556,7 +1556,7 @@ tools:
   - get_column_stats
 ```
 
-**5. Register** — add to `modules/agents/startup.py` registration loop.
+**5. Register** — add to `modules/backend/agents/startup.py` registration loop.
 
 **6. Write tests** — `tests/agents/vertical/test_data_analysis.py`:
 
@@ -1613,7 +1613,7 @@ No coordinator changes needed. The registry auto-discovers the new agent by scan
 - [ ] 40-agentic-architecture.md reviewed (conceptual foundation)
 
 ### Phase 1: Execute
-- [ ] Create `modules/agents/` directory structure
+- [ ] Create `modules/backend/agents/` directory structure
 - [ ] Implement coordinator Agent with hybrid routing
 - [ ] Implement `VerticalAgentRegistry`
 - [ ] Implement horizontal decorators (guardrails, cost, output format)

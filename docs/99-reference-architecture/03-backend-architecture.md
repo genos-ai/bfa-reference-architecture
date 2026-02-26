@@ -16,7 +16,7 @@ The backend is the center of gravity for every project in this architecture. Per
 
 FastAPI was chosen because it is async-native (matching the I/O-bound nature of most web backends), generates OpenAPI documentation automatically, integrates Pydantic for request/response validation, and has extensive AI training data for code assistance. The layered architecture (API → Service → Repository → Model) enforces separation between HTTP handling, business logic, and data access, making each layer independently testable and replaceable.
 
-This document standardizes the patterns that, left to individual choice, create the most friction: response envelope format, pagination strategy (cursor-based, never offset), error handling hierarchy, timeout values, configuration loading order, and health check endpoints. These are precisely the areas where "let each developer decide" leads to inconsistency across services and wasted integration time. Nearly every other standard — module structure (04), coding standards (10), error codes (14), testing (16), background tasks (19), and deployment (21, 22) — builds on the patterns defined here.
+This document standardizes the patterns that, left to individual choice, create the most friction: response envelope format, pagination strategy (cursor-based, never offset), error handling hierarchy, timeout values, configuration loading order, and health check endpoints. These are precisely the areas where "let each developer decide" leads to inconsistency across services and wasted integration time. Nearly every other standard — module structure (04), coding standards (08), error codes (09), testing (11), background tasks (14), and deployment (15, 16) — builds on the patterns defined here.
 
 ---
 

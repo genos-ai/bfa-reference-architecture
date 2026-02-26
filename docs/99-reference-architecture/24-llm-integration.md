@@ -31,7 +31,7 @@ LLM providers have incompatible APIs, different pricing models, varying reliabil
 
 This module solves that by defining a centralized LLM service layer with a common `LLMProvider` interface. All LLM calls go through this abstraction, which handles provider-specific details (authentication, request format, response parsing), model version tracking, fallback configuration, and cost recording. The abstraction boundary sits between the application's business logic and the provider API — not inside a generic utility.
 
-Tool/function calling is standardized with explicit limits (5 calls per turn, 10 rounds maximum) and timeout enforcement because unconstrained tool loops are the primary failure mode in LLM-powered applications. Prompts live in YAML configuration files rather than code, enabling iteration on prompts without code deployments. Cost tracking records every call with enough detail (model, tokens, cost, duration, user, task type) to attribute spend and detect anomalies. For simple LLM use cases (summarization, classification, extraction), this module is sufficient on its own. For agentic systems that reason, plan, and use tools autonomously, the agentic architecture (25) builds on top of it.
+Tool/function calling is standardized with explicit limits (5 calls per turn, 10 rounds maximum) and timeout enforcement because unconstrained tool loops are the primary failure mode in LLM-powered applications. Prompts live in YAML configuration files rather than code, enabling iteration on prompts without code deployments. Cost tracking records every call with enough detail (model, tokens, cost, duration, user, task type) to attribute spend and detect anomalies. For simple LLM use cases (summarization, classification, extraction), this module is sufficient on its own. For agentic systems that reason, plan, and use tools autonomously, the agentic architecture (40) builds on top of it.
 
 ---
 
@@ -557,14 +557,14 @@ Test environments use smallest viable models. Advanced models only used in produ
 
 ---
 
-## Agentic AI Systems
+## Agentic AI Systems (AI-First Platform Profile Only)
 
 For autonomous AI agents — systems where LLMs reason, plan, use tools, collaborate, and maintain memory — see:
 
 - **[40-agentic-architecture.md](40-agentic-architecture.md)** — Conceptual architecture (framework-agnostic): phases, principles, orchestration patterns, AgentTask primitive, safety model
 - **[41-agentic-pydanticai.md](41-agentic-pydanticai.md)** — Implementation guide (PydanticAI-specific): coordinator, agents, middleware, database schema, testing patterns, configuration
 
-This module (08) provides the LLM provider layer, prompt management, cost tracking, and error handling that the agentic architecture depends on. Adopt all three when building agent systems.
+This module (24) provides the LLM provider layer, prompt management, cost tracking, and error handling that the agentic architecture depends on. Adopt all three when building agent systems.
 
 ---
 

@@ -20,9 +20,9 @@ This document defines coding standards for Python backend development. It covers
 
 Coding standards exist because code is read far more often than it is written, and inconsistent style creates friction every time a developer (or an AI assistant) works with unfamiliar code. This document removes style decisions from individual developers by standardizing Python file organization, import conventions, configuration patterns, error handling, and tooling for all backend projects.
 
-The driving insight is that most Python code quality issues stem from a small set of recurring problems: relative imports that break when files move, hardcoded values scattered across modules, inconsistent logging that makes debugging impossible, and files that grow until they are unreadable. Each standard directly addresses one of these: absolute imports only, centralized configuration via Pydantic Settings with no hardcoded fallbacks, structured logging via `structlog`, and file size limits (target 300-400 lines, hard limit 500).
+The driving insight is that most Python code quality issues stem from a small set of recurring problems: relative imports that break when files move, hardcoded values scattered across modules, inconsistent logging that makes debugging impossible, and files that grow until they are unreadable. Each standard directly addresses one of these: absolute imports only, centralized configuration via Pydantic Settings with no hardcoded fallbacks, structured logging via `structlog`, and file size limits (target ~400-500 lines, hard limit 1000).
 
-Every CLI script must include `--verbose` and `--debug` flags because the cost of adding them later — during a production incident, when you need them most — is far higher than including them upfront. Timezone handling is standardized to naive UTC datetimes because mixing timezone-aware and timezone-naive objects is a persistent source of subtle bugs. These standards are enforced by the development workflow (13) through pre-commit hooks and CI checks, and complement the TypeScript standards (11) for frontend development.
+Every CLI script must include `--verbose` and `--debug` flags because the cost of adding them later — during a production incident, when you need them most — is far higher than including them upfront. Timezone handling is standardized to naive UTC datetimes because mixing timezone-aware and timezone-naive objects is a persistent source of subtle bugs. These standards are enforced by the development workflow (12) through pre-commit hooks and CI checks, and complement the TypeScript standards (23) for frontend development.
 
 ---
 
@@ -66,9 +66,9 @@ project/
 
 | File Type | Maximum Lines | Target |
 |-----------|---------------|--------|
-| Modules | 500 | ~300-400 |
-| Entry scripts | 300 | ~200 |
-| Test files | 600 | ~400 |
+| Modules | 1000 | ~400-500 |
+| Entry scripts | 1000 | ~400-500 |
+| Test files | 1000 | ~400-500 |
 | Config files | 200 | ~100 |
 
 Files exceeding limits must be split into focused submodules.
@@ -190,7 +190,7 @@ def find_project_root() -> Path:
 
 All CLI scripts use `@click.command()` with `--options`. No subcommands, no positional arguments, no `@click.group()`. Every script must include `--verbose` and `--debug` options.
 
-For the full CLI architecture — command structure, implementation patterns, output formatting, testing, and configuration — see **[28-cli-architecture.md](28-cli-architecture.md)**.
+The full CLI architecture (command structure, implementation patterns, output formatting, testing) is defined in the Optional Platform module `28-cli-architecture.md`.
 
 ---
 
@@ -506,7 +506,7 @@ class UserService:
 - Global mutable state
 - Silenced exceptions
 - Missing type hints
-- Files over 500 lines
+- Files over 1000 lines
 - Business logic in `__init__.py`
 - Circular imports
 - Deep nesting (>3-4 levels)

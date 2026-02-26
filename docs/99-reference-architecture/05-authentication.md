@@ -17,7 +17,7 @@ Authentication and authorization are the most security-critical parts of any app
 
 The architecture supports three authentication methods because different clients have different needs: API keys for programmatic access (CLI, service-to-service, integrations), JWT tokens for web sessions (short-lived access + long-lived refresh), and session cookies as an alternative for traditional web flows. API keys are the primary method because they are simpler, stateless, and work across all client types.
 
-The key design decision is that authorization checks happen in the service layer, not the API layer. This ensures that business rules about who can access what are enforced regardless of how the service is called — whether from an HTTP endpoint, a background task, or another module's internal API. Security standards (17) and data protection (18) complement this document with deeper technical controls and privacy requirements respectively.
+The key design decision is that authorization checks happen in the service layer, not the API layer. This ensures that business rules about who can access what are enforced regardless of how the service is called — whether from an HTTP endpoint, a background task, or another module's internal API. Security standards (06) and data protection (07) complement this document with deeper technical controls and privacy requirements respectively.
 
 ---
 

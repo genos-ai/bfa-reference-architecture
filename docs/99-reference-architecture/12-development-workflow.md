@@ -16,7 +16,7 @@ The gap between "code works on my machine" and "code is reliably deployed to pro
 
 The branching model uses `main` (production) and `develop` (integration) with feature and hotfix branches because it balances simplicity with the need for a stable production branch and a safe integration point. CI/CD runs through GitHub Actions with a defined pipeline: lint, test, security scan, build, deploy. Every merge is gated on passing checks — no exceptions.
 
-Environment management standardizes on `uv` for web applications and `conda` for data/ML projects, reflecting the different dependency ecosystems each deals with. Semantic versioning, pre-commit hooks, and a maintained CHANGELOG ensure that releases are predictable, code quality is enforced before commit, and the history of changes is human-readable. This workflow integrates with coding standards (10) for quality gates, testing (16) for CI test execution, and deployment (21, 22) for release automation.
+Environment management standardizes on `uv` for web applications and `conda` for data/ML projects, reflecting the different dependency ecosystems each deals with. Semantic versioning, pre-commit hooks, and a maintained CHANGELOG ensure that releases are predictable, code quality is enforced before commit, and the history of changes is human-readable. This workflow integrates with coding standards (08) for quality gates, testing (11) for CI test execution, and deployment (15, 16) for release automation.
 
 ---
 

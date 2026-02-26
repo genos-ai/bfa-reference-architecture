@@ -22,7 +22,7 @@ Tests are the safety net that enables confident refactoring, deployment, and onb
 
 The hybrid test structure — organized by test type at the top level (`unit/`, `integration/`, `e2e/`) with source structure mirrored within each type — was chosen because it answers the two most common questions simultaneously: "what kind of test is this?" (top level) and "what code does it test?" (directory structure within). Fixtures follow a hierarchy with shared fixtures in root `conftest.py` and type-specific fixtures in each test type's `conftest.py`, preventing the fixture duplication that makes test suites brittle.
 
-Coverage targets are intentionally asymmetric: 100% for critical paths (authentication, payments, data integrity) and 80% for general business logic. This reflects the reality that not all code carries equal risk, and chasing 100% everywhere produces low-value tests that slow down development without improving safety. The testing standards integrate with CI/CD (13) to gate all merges on passing tests and with the project template (15) for directory layout.
+Coverage targets are intentionally asymmetric: 100% for critical paths (authentication, payments, data integrity) and 80% for general business logic. This reflects the reality that not all code carries equal risk, and chasing 100% everywhere produces low-value tests that slow down development without improving safety. The testing standards integrate with CI/CD (12) to gate all merges on passing tests and with the project template (13) for directory layout.
 
 ---
 
@@ -696,7 +696,7 @@ modules/frontend/src/
             └── UserProfile.test.tsx
 ```
 
-See **23-typescript-coding-standards.md** for frontend testing standards.
+For frontend testing standards, see `23-typescript-coding-standards.md` (adopted with the web frontend module).
 
 ---
 

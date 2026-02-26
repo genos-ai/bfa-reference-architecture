@@ -24,7 +24,7 @@ Security vulnerabilities are the highest-impact bugs a system can have — a sin
 
 The organizing principle is defense in depth: no single security control is trusted in isolation. Network-layer controls (TLS, firewalls), application-layer controls (authentication, input validation), and data-layer controls (encryption, access logging) each provide independent protection. If one layer fails, others still protect the system. The document maps every OWASP Top 10 risk to the specific document and section where it is addressed, so nothing falls through the cracks.
 
-Approved cryptographic algorithms, rate limiting thresholds, security headers, and supply chain security rules are defined explicitly because "use appropriate security measures" is not actionable guidance. This document complements authentication (09) for access control, data protection (18) for privacy and PII handling, and observability (12) for security logging and alerting.
+Approved cryptographic algorithms, rate limiting thresholds, security headers, and supply chain security rules are defined explicitly because "use appropriate security measures" is not actionable guidance. This document complements authentication (05) for access control, data protection (07) for privacy and PII handling, and observability (10) for security logging and alerting.
 
 ---
 

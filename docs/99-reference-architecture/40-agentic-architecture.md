@@ -706,7 +706,7 @@ The provider layer is defined in **24-llm-integration.md** and provides the `LLM
 
 The agents module uses the provider layer through this interface. It does not interact with provider-specific APIs directly.
 
-**Agent-specific requirements on top of 08:**
+**Agent-specific requirements on top of 24:**
 - Every LLM call returns cost and usage data. The execution engine accumulates these into the AgentTask record.
 - Fallback model usage is recorded in both the `LLMResponse` metadata and the AgentTask audit trail.
 - The exact model version (from the provider response, not the requested alias) is stored on every AgentTask for reproducibility.
@@ -819,7 +819,7 @@ For concrete implementation of agent-as-tool delegation, see **[41-agentic-pydan
 
 ## Module Structure, Configuration, and Implementation
 
-The agent module lives under `modules/agents/`, separate from `modules/backend/`, following the module boundaries defined in **04-module-structure.md**. It contains the orchestrator, agent definitions, tool definitions, execution engine, and memory components.
+The agent module lives under `modules/backend/agents/`, separate from `modules/backend/`, following the module boundaries defined in **04-module-structure.md**. It contains the orchestrator, agent definitions, tool definitions, execution engine, and memory components.
 
 For the concrete directory layout, configuration files, YAML schemas, database models, API endpoints, and testing patterns, see **[41-agentic-pydanticai.md](41-agentic-pydanticai.md)**.
 

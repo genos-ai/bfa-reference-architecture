@@ -16,7 +16,7 @@ Not every project runs on a cloud platform. Teams with dedicated servers, regula
 
 This module defines that model using standard Linux infrastructure: systemd for process management, nginx for reverse proxy and TLS termination, and a symlink-based release strategy that enables instant rollback. The key insight is that the deployment model should not constrain the scaling path — the same application code runs on a single server with everything co-located, then scales to separate database servers, multiple application servers behind a load balancer, and eventually managed services if the scale justifies the cost.
 
-The application code is identical regardless of whether it deploys to bare metal or Azure (22). This document covers only the infrastructure: server setup, service configuration, release management, backup procedures, and monitoring integration. It implements the security standards (17) at the infrastructure level and integrates with background tasks (19) for worker and scheduler service definitions.
+The application code is identical regardless of whether it deploys to bare metal or Azure (16). This document covers only the infrastructure: server setup, service configuration, release management, backup procedures, and monitoring integration. It implements the security standards (06) at the infrastructure level and integrates with background tasks (14) for worker and scheduler service definitions.
 
 ---
 

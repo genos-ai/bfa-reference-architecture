@@ -22,7 +22,7 @@ This module is **optional**. Adopt when your project needs:
 
 **Dependencies**: This module requires **22-frontend-architecture.md** (thin client principles).
 
-For command-based, one-shot operations (automation, scripting, CI/CD), use the CLI (Click) defined in 22-frontend-architecture.md. Adopt this module when the user needs a persistent, interactive session with real-time feedback.
+For command-based, one-shot operations (automation, scripting, CI/CD), use the CLI (Click) defined in 28-cli-architecture.md. Adopt this module when the user needs a persistent, interactive session with real-time feedback.
 
 ---
 

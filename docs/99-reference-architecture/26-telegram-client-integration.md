@@ -31,7 +31,7 @@ The Bot API (25-telegram-bot-integration) is designed for bots that respond to u
 
 This module exists because Client API integration carries significant risks that must be managed carefully. Unlike the Bot API (which is designed for automation), the Client API was designed for human users. Telegram actively detects and restricts automated usage, and misuse can result in account bans. The module defines rate limiting patterns, human-like delay strategies, session management, and connection recovery specifically to mitigate these risks.
 
-The recommended architecture is hybrid: Bot API for user interaction (commands, notifications, interactive UI) and Client API for data acquisition (channel monitoring, message history, scraping), decoupled via a Redis message queue. This separation means a Client API failure or rate limit does not disrupt user-facing bot functionality. The module integrates with event architecture (06) for message queue patterns and can feed data into the agentic architecture (25) for AI-powered analysis of scraped content.
+The recommended architecture is hybrid: Bot API for user interaction (commands, notifications, interactive UI) and Client API for data acquisition (channel monitoring, message history, scraping), decoupled via a Redis message queue. This separation means a Client API failure or rate limit does not disrupt user-facing bot functionality. The module integrates with event architecture (21) for message queue patterns and can feed data into the agentic architecture (40) for AI-powered analysis of scraped content.
 
 ---
 
@@ -649,61 +649,15 @@ logger.info(
 
 ---
 
-## Agentic AI Integration
+## Integration with AI-First Platform
 
-### Agent Access Patterns
+When adopting the AI-First Platform profile (docs 40-46), the Telegram Client API serves as an autonomous data acquisition layer — monitoring channels, scraping history, and feeding data to agents for analysis. Agent implementation patterns are defined in `41-agentic-pydanticai.md`.
 
 | Agent Type | API Choice | Pattern |
 |------------|------------|---------|
 | Reactive (responds to users) | Bot API | Webhook handlers |
 | Autonomous (monitors channels) | Client API | Event handlers |
 | Hybrid (both capabilities) | Both APIs | Coordinated via message queue |
-
-### PydanticAI Agent Integration
-
-```python
-# Example: Agent that monitors channels and responds via bot
-
-from dataclasses import dataclass
-from pydantic import BaseModel
-from pydantic_ai import Agent, RunContext
-
-from modules.telegram.services.notifications import NotificationService
-
-
-class ChannelAnalysis(BaseModel):
-    """Structured output from channel message analysis."""
-    requires_action: bool
-    summary: str
-    severity: str  # "info", "warning", "critical"
-
-
-@dataclass
-class MonitorDeps:
-    """Dependencies injected into the monitor agent."""
-    notification_service: NotificationService
-    admin_user_id: int
-
-
-monitor_agent = Agent(
-    "openai:gpt-4o",
-    deps_type=MonitorDeps,
-    result_type=ChannelAnalysis,
-    system_prompt="Analyze channel messages. Flag items requiring action.",
-)
-
-
-@monitor_agent.tool
-async def notify_admin(
-    ctx: RunContext[MonitorDeps], title: str, body: str
-) -> str:
-    """Send notification via Bot API (reliable, no ban risk)."""
-    await ctx.deps.notification_service.send_message(
-        user_id=ctx.deps.admin_user_id,
-        text=f"<b>{title}</b>\n{body}",
-    )
-    return "Notification sent"
-```
 
 ---
 

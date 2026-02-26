@@ -19,7 +19,7 @@ For backend-only services, API-only projects, or terminal-only interfaces, this 
 
 If adopting, also adopt **23-typescript-coding-standards.md**.
 
-**CLI patterns** are covered by **08-python-coding-standards.md** (Click, `--verbose`/`--debug`, Rich output, `--options` not subcommands). TUI patterns are covered by **27-tui-architecture.md** (Textual).
+**CLI patterns** are covered by **28-cli-architecture.md** (Click, `--options` not subcommands, service lifecycle, output formatting). TUI patterns are covered by **27-tui-architecture.md** (Textual).
 
 ---
 

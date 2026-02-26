@@ -12,11 +12,11 @@
 
 ## Context
 
-For organizations that mandate Azure or want managed infrastructure, this module provides an alternative deployment model to bare metal (21). The application code is identical in both cases — the difference is entirely in the infrastructure layer.
+For organizations that mandate Azure or want managed infrastructure, this module provides an alternative deployment model to bare metal (15). The application code is identical in both cases — the difference is entirely in the infrastructure layer.
 
 The deployment philosophy is "managed services first": Azure handles patching, high availability, backups, and scaling, while the team focuses exclusively on application code. Private endpoints keep all Azure-to-Azure traffic off the public internet, and managed identity eliminates credential management for internal service communication. This removes entire categories of operational work that bare-metal deployments must handle manually.
 
-The key constraint is no containers and no Azure Functions for API backends. App Service with native Python runtime provides the same direct execution model as bare metal, avoiding container orchestration complexity. Azure Functions are excluded because their timeout limits and cold start latency are incompatible with the API response time requirements defined in backend architecture (03). Deployment slots enable zero-downtime releases through slot swap, replacing the symlink-based release strategy used in bare metal. This document implements security standards (17) via Azure-native controls and integrates with background tasks (19) for worker deployment.
+The key constraint is no containers and no Azure Functions for API backends. App Service with native Python runtime provides the same direct execution model as bare metal, avoiding container orchestration complexity. Azure Functions are excluded because their timeout limits and cold start latency are incompatible with the API response time requirements defined in backend architecture (03). Deployment slots enable zero-downtime releases through slot swap, replacing the symlink-based release strategy used in bare metal. This document implements security standards (06) via Azure-native controls and integrates with background tasks (14) for worker deployment.
 
 ---
 
@@ -126,7 +126,7 @@ resource "azurerm_linux_web_app" "backend" {
 }
 ```
 
-WebSocket connections on App Service have a **240-minute idle timeout**. The application must implement heartbeat/keepalive per 21-event-architecture.md (30-second ping interval) to prevent premature disconnection.
+WebSocket connections on App Service have a **240-minute idle timeout**. The application must implement heartbeat/keepalive (30-second ping interval) to prevent premature disconnection.
 
 ### Deployment Slots
 

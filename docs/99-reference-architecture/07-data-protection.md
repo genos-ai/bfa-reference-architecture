@@ -24,7 +24,7 @@ Applications that handle personal data carry legal and ethical obligations. GDPR
 
 This document solves the problem by classifying all data into four levels (Public, Internal, Confidential, Restricted) and defining handling rules for each: what encryption is required, who can access it, how long it is retained, and how it is disposed of. The key insight is that data protection must be embedded in the data model itself — classification metadata on database columns, field-level encryption for sensitive attributes, and retention policies enforced automatically rather than manually.
 
-The document also standardizes data subject rights (access, erasure, rectification, portability) and breach response procedures, because these are operational capabilities that must be built into the system, not improvised during an incident. This module complements authentication (09) for access control enforcement and security standards (17) for the underlying technical controls.
+The document also standardizes data subject rights (access, erasure, rectification, portability) and breach response procedures, because these are operational capabilities that must be built into the system, not improvised during an incident. This module complements authentication (05) for access control enforcement and security standards (06) for the underlying technical controls.
 
 ---
 

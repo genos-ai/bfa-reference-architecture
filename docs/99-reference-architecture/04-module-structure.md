@@ -16,7 +16,7 @@ The architecture uses a modular monolith — a single deployable unit that is in
 
 The key design decision is that modules communicate through defined interfaces (`api.py` functions and events), never through direct imports of each other's internals. Each module owns its database tables exclusively — no shared tables, no cross-module joins. This boundary discipline means a module can be extracted into a separate service later by replacing its `api.py` interface with an HTTP API, without rewriting the consumers.
 
-This document directly implements the separation of concerns mandate from Core Principles (01) and provides the organizational backbone for backend development (03). Event-driven communication between modules follows the patterns in Event Architecture (06), and the module layout defined here is reflected in the project template (15) and testing standards (16).
+This document directly implements the separation of concerns mandate from Core Principles (01) and provides the organizational backbone for backend development (03). Event-driven communication between modules follows the patterns in Event Architecture (21), and the module layout defined here is reflected in the project template (13) and testing standards (11).
 
 ---
 
