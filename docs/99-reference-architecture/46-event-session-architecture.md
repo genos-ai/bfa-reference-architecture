@@ -60,7 +60,7 @@ Not every endpoint needs a session. The architecture supports four interaction t
 | 3: Interactive session | Session + event stream | Yes | No | Chat conversation, multi-step agent task, approval flow |
 | 4: Long-running autonomous | Session + Temporal + event stream | Yes | Yes | Week-long QA plan, research project, migration |
 
-Tiers 1-2 use the existing patterns from docs 03 and 30. Tiers 3-4 use the patterns defined in this document. A `GET /api/v1/notes` does not create a session — it hits the endpoint, calls `NoteService.list_notes()`, returns JSON. Unchanged.
+Tiers 1-2 use the existing patterns from docs 03 and 43. Tiers 3-4 use the patterns defined in this document. A `GET /api/v1/notes` does not create a session — it hits the endpoint, calls `NoteService.list_notes()`, returns JSON. Unchanged.
 
 ---
 

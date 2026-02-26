@@ -6,7 +6,7 @@
 
 ## Changelog
 
-- 3.0.0 (2026-02-26): Renumbered all docs into clean groups — Core Foundation (01-09), Core Operations (10-16), Optional Platform (20-26), AI-First Platform (40-46); added Architecture Profiles; removed cross-contamination (core docs no longer reference AI docs); dependency flows one way (AI→core, never core→AI)
+- 3.0.0 (2026-02-26): Renumbered all docs into clean groups — Core Foundation (01-09), Core Operations (10-16), Optional Platform (20-28), AI-First Platform (40-46); added Architecture Profiles; removed cross-contamination (core docs no longer reference AI docs); dependency flows one way (AI→core, never core→AI)
 - 2.4.0 (2026-02-26): Added 46-event-session-architecture.md (was 31) for event-driven sessions, streaming coordinator, plan management, memory architecture, approval gates
 - 2.3.0 (2026-02-24): Added 44-multi-channel-gateway.md (was 29) for channel adapters, session management, real-time push, gateway security; updated 01 with P8 Secure by Default
 - 2.2.0 (2026-02-24): Added 27-tui-architecture.md (was 28) for interactive terminal interface (Textual)
@@ -41,7 +41,7 @@ This architecture serves two use cases. Choose your profile to know which docs a
 
 A Python/FastAPI backend with thin clients (web, CLI, Telegram). Stateless CRUD, standard request/response patterns.
 
-**Adopt:** Core Foundation (01-09) + Core Operations (10-16) + Optional Platform (20-26) as needed.
+**Adopt:** Core Foundation (01-09) + Core Operations (10-16) + Optional Platform (20-28) as needed.
 
 **Ignore:** AI-First Platform (40-46) entirely.
 
@@ -49,7 +49,7 @@ A Python/FastAPI backend with thin clients (web, CLI, Telegram). Stateless CRUD,
 
 An agent-first backend where AI agents are the primary consumers. Sessions, streaming, plans, memory, approval gates, multi-channel delivery.
 
-**Adopt:** Core Foundation (01-09) + Core Operations (10-16) + Optional Platform (20-26) as needed + AI-First Platform (40-46).
+**Adopt:** Core Foundation (01-09) + Core Operations (10-16) + Optional Platform (20-28) as needed + AI-First Platform (40-46).
 
 **The core docs are the foundation for both profiles.** AI-First docs build on top of core — they never replace it. The service layer, repository layer, and API design patterns from core apply in both profiles.
 
@@ -87,7 +87,7 @@ Quality, workflow, and deployment. Apply to all projects.
 | 15-deployment-bare-metal.md | Self-hosted deployment (Ubuntu, systemd, nginx) |
 | 16-deployment-azure.md | Azure managed services deployment |
 
-### Optional Platform (20-26)
+### Optional Platform (20-28)
 
 General-purpose capabilities. Adopt based on project needs. No AI concepts.
 
@@ -184,7 +184,7 @@ Architecture choices favor technologies with extensive AI training data. This ma
 | Source group | Can reference | Cannot reference |
 |--------------|--------------|-----------------|
 | Core (01-16) | Other core docs | Optional, AI-First |
-| Optional Platform (20-26) | Core, other optional | AI-First |
+| Optional Platform (20-28) | Core, other optional | AI-First |
 | AI-First (40-46) | Core, optional, other AI-First | — (unrestricted) |
 
 ### Dependency Tree
@@ -306,7 +306,7 @@ For a new project:
 
 1. Choose your profile: **Traditional Backend** or **AI-First Platform (BFA)**
 2. Apply all Core standards (01-16)
-3. Review Optional Platform modules (20-26) against project requirements
+3. Review Optional Platform modules (20-28) against project requirements
 4. If BFA profile, adopt AI-First modules (40-46)
 5. Document which modules are adopted in project README
 6. Follow the primitive identification process (02-primitive-identification.md)

@@ -697,7 +697,7 @@ The **OWASP Top 10 for Agentic Applications** (December 2025) defines the author
 | Agent Goal Hijacking | Guardrails decorator (41), input validation on MCP tools |
 | Tool Misuse and Exploitation | Tool sandboxing — agents can only call explicitly registered tools |
 | Identity and Privilege Abuse | Three-layer identity (this document), scope narrowing at each delegation hop |
-| Excessive Agency | UsageLimits on every agent run (26), cost-aware rate limiting (this document) |
+| Excessive Agency | UsageLimits on every agent run (41), cost-aware rate limiting (this document) |
 | Inadequate Guardrails | Prompt injection patterns in guardrails config, output validation |
 | Poisoned Training Data | Not applicable at infrastructure level — model provider concern |
 | Insufficient Monitoring | Behavioral baselining, OTel GenAI conventions (this document) |

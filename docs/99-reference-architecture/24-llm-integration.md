@@ -561,8 +561,8 @@ Test environments use smallest viable models. Advanced models only used in produ
 
 For autonomous AI agents — systems where LLMs reason, plan, use tools, collaborate, and maintain memory — see:
 
-- **[40-agentic-architecture.md](40-agentic-architecture.md)** — Conceptual architecture (framework-agnostic): phases, principles, orchestration patterns, AgentTask primitive, safety model
-- **[41-agentic-pydanticai.md](41-agentic-pydanticai.md)** — Implementation guide (PydanticAI-specific): coordinator, agents, middleware, database schema, testing patterns, configuration
+- ****40-agentic-architecture.md**** — Conceptual architecture (framework-agnostic): phases, principles, orchestration patterns, AgentTask primitive, safety model
+- ****41-agentic-pydanticai.md**** — Implementation guide (PydanticAI-specific): coordinator, agents, middleware, database schema, testing patterns, configuration
 
 This module (24) provides the LLM provider layer, prompt management, cost tracking, and error handling that the agentic architecture depends on. Adopt all three when building agent systems.
 
@@ -598,8 +598,8 @@ If also adopting **40-agentic-architecture.md**:
 
 ## Related Documentation
 
-- [40-agentic-architecture.md](40-agentic-architecture.md) — Agentic AI conceptual architecture (phases, principles, patterns)
-- [41-agentic-pydanticai.md](41-agentic-pydanticai.md) — Agentic AI implementation using PydanticAI
+- **40-agentic-architecture.md** — Agentic AI conceptual architecture (phases, principles, patterns)
+- **41-agentic-pydanticai.md** — Agentic AI implementation using PydanticAI
 - [21-event-architecture.md](21-event-architecture.md) — Event bus for async processing
 - [10-observability.md](10-observability.md) — Logging and monitoring standards
 - [14-background-tasks.md](14-background-tasks.md) — Background task processing

@@ -130,7 +130,7 @@ Full standards in `docs/99-reference-architecture/`:
 | 10 | Observability |
 | 11 | Testing Standards |
 | 14 | Background Tasks |
-| **Optional Platform (20-27)** | |
+| **Optional Platform (20-28)** | |
 | 21 | Event Architecture |
 | 24 | LLM Integration |
 | 27 | TUI Architecture (Textual + Textual Web) |

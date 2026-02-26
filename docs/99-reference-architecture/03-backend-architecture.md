@@ -12,7 +12,7 @@
 
 ## Context
 
-The backend is the center of gravity for every project in this architecture. Per Core Principle P1, all business logic, validation, and data processing lives here, which means the backend framework choice, project structure, and API patterns affect everything downstream — from how modules communicate (04) to how clients consume data (07) to how tests are structured (16).
+The backend is the center of gravity for every project in this architecture. Per Core Principle P1, all business logic, validation, and data processing lives here, which means the backend framework choice, project structure, and API patterns affect everything downstream — from how modules communicate (04) to how clients consume data (22) to how tests are structured (11).
 
 FastAPI was chosen because it is async-native (matching the I/O-bound nature of most web backends), generates OpenAPI documentation automatically, integrates Pydantic for request/response validation, and has extensive AI training data for code assistance. The layered architecture (API → Service → Repository → Model) enforces separation between HTTP handling, business logic, and data access, making each layer independently testable and replaceable.
 

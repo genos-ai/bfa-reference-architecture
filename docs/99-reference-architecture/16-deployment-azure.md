@@ -20,9 +20,9 @@ The key constraint is no containers and no Azure Functions for API backends. App
 
 ---
 
-## Relationship to 21-Deployment
+## Relationship to 15-Deployment
 
-Document 21 defines deployment for self-hosted bare-metal infrastructure (Ubuntu + systemd + nginx). This document defines an alternative deployment target using Azure managed services. Projects choose one deployment model. Both follow the same application architecture — the backend code, service layer, and repository patterns are identical regardless of deployment target.
+Document 15 defines deployment for self-hosted bare-metal infrastructure (Ubuntu + systemd + nginx). This document defines an alternative deployment target using Azure managed services. Projects choose one deployment model. Both follow the same application architecture — the backend code, service layer, and repository patterns are identical regardless of deployment target.
 
 Choose this document when:
 - The hosting organisation mandates Azure
@@ -30,7 +30,7 @@ Choose this document when:
 - Integration with Entra ID, Azure OpenAI, or other Azure-native services is required
 - CI/CD runs through Azure DevOps
 
-Choose 21-Deployment (bare-metal) when:
+Choose 15-Deployment (bare-metal) when:
 - Full infrastructure control is required
 - Cost sensitivity favours fixed compute over consumption-based billing
 - Regulatory requirements prohibit public cloud
@@ -52,7 +52,7 @@ Rationale:
 
 ### No Containers
 
-Consistent with 21-Deployment: applications run directly on the platform runtime, not in containers. Azure App Service provides native Python support on Linux without Docker.
+Consistent with 15-Deployment: applications run directly on the platform runtime, not in containers. Azure App Service provides native Python support on Linux without Docker.
 
 Exception: If the project already requires containerisation for other reasons (multi-language polyglot, GPU workloads, sidecar patterns), use Azure Container Apps instead. Do not use AKS unless the organisation already operates an AKS cluster.
 
@@ -1101,7 +1101,7 @@ az webapp deployment slot swap \
 
 ---
 
-## Migration from Bare-Metal (14-Deployment)
+## Migration from Bare-Metal (15-Deployment)
 
 For teams migrating an existing bare-metal deployment to Azure:
 

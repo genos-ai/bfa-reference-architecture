@@ -775,7 +775,6 @@ success_count = sum(1 for r in results if r.success)
 - [Background Tasks](14-background-tasks.md) - Taskiq integration
 - [Observability](10-observability.md) - Logging and monitoring
 - [Authentication](05-authentication.md) - Security patterns
-- [Research Reference](../04-external-references/telegram.md) - Original research document
 
 ---
 
