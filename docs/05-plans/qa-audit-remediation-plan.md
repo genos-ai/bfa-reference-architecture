@@ -34,7 +34,7 @@
 
 1. **Finding #1** ✅ DONE — Replaced `PROJECT_ROOT` with `find_project_root()` in `cli.py` for alembic.ini path (L596) and migration cwd (L633). Bootstrap assignment at L26 unchanged.
 
-2. **Finding #3** — In `config/settings/application.yaml`, add `max_message_length` to the commented option header under the `telegram` section. This is a documentation-only change with no code impact.
+2. **Finding #3** ✅ DONE — Added `max_message_length` to application.yaml comment header. Also fixed `authorized_users` comment from "empty = allow all" to "empty = deny all" per P8.
 
 3. **Finding #4** — Add test files to `tests/unit/backend/repositories/` covering the public interfaces of `BaseRepository` and `NoteRepository`. These should be implemented without `unittest.mock` per finding #2, or placed in `tests/integration/` if they require a real database.
 
