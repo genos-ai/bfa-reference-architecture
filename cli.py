@@ -25,7 +25,7 @@ import click
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from modules.backend.core.config import validate_project_root
+from modules.backend.core.config import find_project_root, validate_project_root
 from modules.backend.core.logging import bind_context, get_logger, setup_logging
 
 LONG_RUNNING_SERVICES = frozenset({"server", "worker", "scheduler", "telegram-poll"})
@@ -593,7 +593,7 @@ def run_migrations(
     )
 
     # Alembic config path
-    alembic_ini = PROJECT_ROOT / "modules" / "backend" / "migrations" / "alembic.ini"
+    alembic_ini = find_project_root() / "modules" / "backend" / "migrations" / "alembic.ini"
 
     if not alembic_ini.exists():
         click.echo(
@@ -630,7 +630,7 @@ def run_migrations(
     click.echo()
 
     try:
-        result = subprocess.run(cmd, cwd=PROJECT_ROOT)
+        result = subprocess.run(cmd, cwd=str(find_project_root()))
         if result.returncode != 0:
             logger.error("Migration failed", extra={"exit_code": result.returncode})
             sys.exit(result.returncode)
