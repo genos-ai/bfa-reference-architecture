@@ -989,6 +989,78 @@ async def test_telegram_message_to_agent_response(
 
 ---
 
+## Event-Driven Channel Adapters (Doc 31)
+
+When the project adopts `31-event-session-architecture.md`, channel adapters become event subscribers rather than direct service callers.
+
+### Architectural Shift
+
+| Concern | Without Doc 31 | With Doc 31 |
+|---------|---------------|-------------|
+| Session state | Per-channel tracking | Centralized `SessionService` — channels bind to sessions via `session.bind_channel()` |
+| Message handling | Channel calls service layer directly | Channel publishes `UserMessageEvent` → coordinator handles → channel subscribes to response events |
+| Response delivery | Service returns response, adapter formats it | Adapter subscribes to `session:{id}` event channel, renders events in channel-native format |
+| Streaming | Channel-specific streaming implementation | Universal — coordinator yields `AsyncIterator[Event]`, each adapter renders events differently |
+| Multi-channel | Separate session per channel | Single session, multiple channel bindings — user can start in Telegram, continue in TUI |
+
+### Channel Adapter Pattern (Event-Driven)
+
+Each channel adapter performs three operations:
+
+1. **Ingest**: Convert channel-native input (Telegram message, WebSocket frame, TUI keypress) into a `UserMessageEvent` and publish to the event bus.
+2. **Subscribe**: Subscribe to `session:{session_id}` channel on Redis pub/sub.
+3. **Render**: Convert session events into channel-native output.
+
+```python
+# Conceptual pattern — each channel implements this differently
+class ChannelAdapter:
+    async def on_user_input(self, channel_input) -> None:
+        session = await self.resolve_session(channel_input)
+        event = UserMessageEvent(session_id=session.id, content=channel_input.text)
+        await event_bus.publish(event)
+
+    async def subscribe(self, session_id: str) -> None:
+        async for event in event_bus.subscribe(f"session:{session_id}"):
+            await self.render(event)
+
+    async def render(self, event: SessionEvent) -> None:
+        # Channel-specific rendering
+        raise NotImplementedError
+```
+
+### Channel-Specific Rendering
+
+| Event Type | REST/SSE | Telegram | TUI | WebSocket |
+|-----------|----------|----------|-----|-----------|
+| `AgentThinkingEvent` | SSE `event: thinking` | Edit message with "⏳ Thinking..." | Update thinking panel | JSON frame `{type: "thinking"}` |
+| `AgentResponseChunkEvent` | SSE `event: chunk` | Buffer chunks, edit message every 500ms | Append to response panel | JSON frame `{type: "chunk", content: "..."}` |
+| `AgentToolCallEvent` | SSE `event: tool_call` | Inline "🔧 Searching..." | Tool call panel | JSON frame `{type: "tool_call"}` |
+| `ApprovalRequestedEvent` | SSE `event: approval` + poll endpoint | Inline keyboard buttons | Modal dialog | JSON frame `{type: "approval"}` |
+
+### Session-Channel Binding
+
+Sessions support multiple channel bindings. A user can start a conversation in Telegram and continue it in the TUI — same session, same history, same plan state.
+
+```python
+await session_service.bind_channel(session_id, channel_type="telegram", channel_id="chat_12345")
+await session_service.bind_channel(session_id, channel_type="tui", channel_id="tui_session_abc")
+```
+
+The session service maintains a `session_channels` table mapping session IDs to channel bindings.
+
+### Migration Path
+
+Existing channel adapters can be migrated incrementally:
+1. Add event bus subscription alongside existing direct service calls
+2. Route new features through events, keep existing features on direct calls
+3. Once all features use events, remove direct service calls
+
+The existing per-channel session tracking in doc 29 remains valid for projects that do not adopt doc 31.
+
+See `31-event-session-architecture.md`, Section 3 (Streaming Coordinator — Channel Adapters) for the complete adapter implementations.
+
+---
+
 ## Related Documentation
 
 - [03-backend-architecture.md](03-backend-architecture.md) — FastAPI application where WebSocket endpoint is mounted
@@ -1002,3 +1074,4 @@ async def test_telegram_message_to_agent_response(
 - [09-authentication.md](09-authentication.md) — JWT authentication (extended for WebSocket)
 - [12-observability.md](12-observability.md) — Source-based logging, X-Frontend-ID
 - [98-research/07-Personal AI assistant architecture](../98-research/07-Personal%20AI%20assistant%20architecture-%20lessons%20from%20OpenClaw%20for%20agent-first%20platforms.md) — Analysis that motivated this module
+- [31-event-session-architecture.md](31-event-session-architecture.md) — Channels as event subscribers, session-channel binding, unified session state

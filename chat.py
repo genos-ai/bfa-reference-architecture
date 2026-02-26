@@ -40,7 +40,7 @@ async def send_message(base_url: str, timeout: float, message: str, agent: str |
     async with httpx.AsyncClient(
         base_url=base_url,
         timeout=timeout,
-        headers={"X-Frontend-ID": "chat"},
+        headers={"X-Frontend-ID": "cli"},
     ) as client:
         try:
             response = await client.post(
@@ -80,6 +80,129 @@ async def send_message(base_url: str, timeout: float, message: str, agent: str |
         click.echo(click.style(f"\nAdvice: {advice}", dim=True))
 
     return 0
+
+
+async def send_message_stream(base_url: str, message: str, agent: str | None, raw: bool, verbose: bool) -> int:
+    """Interactive agent conversation via SSE streaming.
+
+    Sends a message, displays streaming progress and results.
+    If the agent needs human decisions, prompts for input and
+    continues the conversation until done.
+    """
+    import httpx
+
+    conversation_id = None
+    current_message = message
+
+    async with httpx.AsyncClient(
+        base_url=base_url,
+        timeout=None,
+        headers={"X-Frontend-ID": "cli"},
+    ) as client:
+        while True:
+            payload: dict = {"message": current_message}
+            if agent:
+                payload["agent"] = agent
+            if conversation_id:
+                payload["conversation_id"] = conversation_id
+
+            try:
+                result_data = None
+                async with client.stream(
+                    "POST",
+                    "/api/v1/agents/chat/stream",
+                    json=payload,
+                ) as response:
+                    if response.status_code != 200:
+                        await response.aread()
+                        click.echo(click.style(f"Error: {response.text}", fg="red"), err=True)
+                        return 1
+
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        event = json.loads(line[6:])
+                        event_type = event.get("type")
+
+                        if event_type == "tool_start":
+                            if verbose:
+                                click.echo(click.style(f"  → {event['tool']}...", dim=True))
+                        elif event_type == "tool_done":
+                            detail = event.get("detail", "")
+                            if verbose:
+                                click.echo(click.style(f"  ✓ {event['tool']} ({detail})", fg="green"))
+                        elif event_type == "complete":
+                            result_data = event.get("result", {})
+                            conversation_id = event.get("conversation_id")
+
+            except httpx.ConnectError:
+                click.echo(click.style("Error: Backend is not reachable.", fg="red"), err=True)
+                click.echo("Start it with: python cli.py --service server", err=True)
+                return 1
+
+            if result_data is None:
+                click.echo(click.style("Error: No result received", fg="red"), err=True)
+                return 1
+
+            if raw:
+                click.echo(json.dumps(result_data, indent=2))
+                return 0
+
+            _display_qa_result(result_data)
+
+            needs_human = result_data.get("needs_human_count", 0)
+            if needs_human == 0:
+                return 0
+
+            click.echo()
+            click.echo(click.style(
+                f"{needs_human} violation(s) need your decision. "
+                "Type your response, or 'done' to exit.",
+                bold=True,
+            ))
+            click.echo()
+
+            try:
+                user_response = click.prompt("You", prompt_suffix="> ")
+            except (click.Abort, EOFError):
+                return 0
+
+            if user_response.strip().lower() in ("done", "exit", "quit", "q"):
+                return 0
+
+            current_message = user_response
+
+
+def _display_qa_result(result_data: dict) -> None:
+    """Display a QA audit result with colored output."""
+    click.echo()
+    click.echo(click.style(result_data.get("summary", ""), bold=True))
+
+    violations = result_data.get("violations", [])
+    if violations:
+        click.echo()
+        for i, v in enumerate(violations, 1):
+            fixed = v.get("fixed", False)
+            needs_human = v.get("needs_human_decision", False)
+            if fixed:
+                icon = click.style("FIXED", fg="green")
+            elif needs_human:
+                icon = click.style("HUMAN?", fg="yellow")
+            else:
+                icon = click.style("OPEN", fg="red")
+            sev = click.style(v["severity"], fg="red" if v["severity"] == "error" else "yellow")
+            loc = f"{v['file']}:{v.get('line', '?')}"
+            click.echo(f"  {i}. [{icon}] {sev}: {loc} — {v['message']}")
+
+            if needs_human and v.get("human_question"):
+                click.echo(click.style(f"         ↳ {v['human_question']}", dim=True))
+            if fixed and v.get("fix_description"):
+                click.echo(click.style(f"         ↳ {v['fix_description']}", dim=True))
+
+    tests = result_data.get("tests_passed")
+    if tests is not None:
+        status = click.style("PASSED", fg="green") if tests else click.style("FAILED", fg="red")
+        click.echo(f"\nTests: {status}")
 
 
 async def ping_backend(base_url: str, timeout: float, raw: bool) -> int:
@@ -228,6 +351,8 @@ def main(message: str | None, agent: str | None, list_agents: bool, ping: bool, 
         exit_code = asyncio.run(list_agents_cmd(base_url, timeout, raw))
     elif ping:
         exit_code = asyncio.run(ping_backend(base_url, timeout, raw))
+    elif agent:
+        exit_code = asyncio.run(send_message_stream(base_url, message, agent, raw, verbose))
     else:
         exit_code = asyncio.run(send_message(base_url, timeout, message, agent, raw, verbose))
 

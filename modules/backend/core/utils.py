@@ -19,4 +19,6 @@ def utc_now() -> datetime:
     Returns:
         Current UTC time with tzinfo stripped
     """
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.fromtimestamp(
+        __import__('time').time(), tz=timezone.utc
+    ).replace(tzinfo=None)

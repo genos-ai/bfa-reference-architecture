@@ -131,3 +131,5 @@ Full standards in `docs/99-reference-architecture/`:
 | 26 | Agentic AI PydanticAI Implementation |
 | 27 | Agent-First Infrastructure (MCP, A2A, agent identity) |
 | 29 | Multi-Channel Gateway (channel adapters, sessions, WebSocket, security) |
+| 30 | AI-First Interface Design (adapter registry, self-describing APIs, service factory) |
+| 31 | Event-Driven Session Architecture (session model, event bus, streaming coordinator, plan management, memory, approval gates, cost tracking) |

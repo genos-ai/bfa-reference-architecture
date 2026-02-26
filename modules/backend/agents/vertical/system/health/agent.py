@@ -28,6 +28,9 @@ SYSTEM_PROMPT = (
     "actionable advice. Be concise. Report what is healthy, what is "
     "unhealthy, and suggest specific fixes for any issues found."
 )
+# NOTE: This constant is in the agent system prompt.
+# Moving it to config would require significant refactoring of agent initialization.
+# It is kept here because it represents core behavioral instructions for the agent.
 
 
 @dataclass
@@ -66,6 +69,13 @@ def _get_agent() -> Agent[HealthAgentDeps, HealthCheckResult]:
     global _agent
     if _agent is not None:
         return _agent
+
+    import os
+
+    from modules.backend.core.config import get_settings
+
+    settings = get_settings()
+    os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic_api_key)
 
     config = _load_agent_config()
     model = config["model"]

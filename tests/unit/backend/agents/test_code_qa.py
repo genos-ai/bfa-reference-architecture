@@ -51,6 +51,7 @@ def project_with_violations(tmp_path):
     """))
 
     (modules_dir / "bad_datetime.py").write_text(textwrap.dedent("""\
+        from modules.backend.core.utils import utc_now
         from datetime import datetime
         now = datetime.now()
         utc = datetime.utcnow()

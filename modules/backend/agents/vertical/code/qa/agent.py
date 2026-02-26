@@ -16,6 +16,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import yaml
@@ -49,6 +50,11 @@ SYSTEM_PROMPT = (
     "- When uncertain whether something is a true violation, use read_source_file "
     "to examine the context before classifying"
 )
+# NOTE: This constant is in the agent system prompt.
+# Moving it to config/agents/code/qa/agent.yaml would require
+# significant refactoring of the agent initialization. It is kept here
+# because it represents the core behavioral instructions for the agent,
+# not a configurable system parameter.
 
 
 # =============================================================================
@@ -95,6 +101,12 @@ class QaAgentDeps:
     """Dependencies injected into the QA agent at runtime."""
 
     config: dict[str, Any]
+    on_progress: Any = None
+
+    def emit(self, event: dict) -> None:
+        """Emit a progress event if a callback is registered."""
+        if self.on_progress is not None:
+            self.on_progress(event)
 
 
 # =============================================================================
@@ -181,6 +193,13 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
     if _agent is not None:
         return _agent
 
+    import os
+
+    from modules.backend.core.config import get_settings
+
+    settings = get_settings()
+    os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic_api_key)
+
     config = _load_agent_config()
     model = config["model"]
 
@@ -201,9 +220,12 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
 
         Returns a list of file paths relative to project root.
         """
+        ctx.deps.emit({"type": "tool_start", "tool": "list_python_files"})
         project_root = find_project_root()
         exclusions = _get_exclusion_paths(ctx.deps.config)
-        return _collect_python_files(project_root, exclusions)
+        files = _collect_python_files(project_root, exclusions)
+        ctx.deps.emit({"type": "tool_done", "tool": "list_python_files", "detail": f"{len(files)} files"})
+        return files
 
     @agent.tool
     async def scan_import_violations(ctx: RunContext[QaAgentDeps]) -> list[dict]:
@@ -212,6 +234,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
 
         Returns a list of findings with file, line, and message.
         """
+        ctx.deps.emit({"type": "tool_start", "tool": "scan_import_violations"})
         project_root = find_project_root()
         exclusions = _get_exclusion_paths(ctx.deps.config)
         enabled = _get_enabled_rule_ids(ctx.deps.config)
@@ -252,6 +275,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
                             "message": stripped,
                         })
 
+        ctx.deps.emit({"type": "tool_done", "tool": "scan_import_violations", "detail": f"{len(findings)} findings"})
         return findings
 
     @agent.tool
@@ -260,6 +284,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
 
         Returns a list of findings with file, line, and message.
         """
+        ctx.deps.emit({"type": "tool_start", "tool": "scan_datetime_violations"})
         project_root = find_project_root()
         exclusions = _get_exclusion_paths(ctx.deps.config)
         enabled = _get_enabled_rule_ids(ctx.deps.config)
@@ -280,6 +305,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
                         "message": line.strip(),
                     })
 
+        ctx.deps.emit({"type": "tool_done", "tool": "scan_datetime_violations", "detail": f"{len(findings)} findings"})
         return findings
 
     @agent.tool
@@ -290,6 +316,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
         Skips __all__, __version__, and similar dunder names.
         Returns a list of findings with file, line, and message.
         """
+        ctx.deps.emit({"type": "tool_start", "tool": "scan_hardcoded_values"})
         project_root = find_project_root()
         exclusions = _get_exclusion_paths(ctx.deps.config)
         enabled = _get_enabled_rule_ids(ctx.deps.config)
@@ -329,6 +356,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
                             "message": f"{name} = {val!r}",
                         })
 
+        ctx.deps.emit({"type": "tool_done", "tool": "scan_hardcoded_values", "detail": f"{len(findings)} findings"})
         return findings
 
     @agent.tool
@@ -337,6 +365,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
 
         Returns a list of findings with file, line count, and limit.
         """
+        ctx.deps.emit({"type": "tool_start", "tool": "scan_file_sizes"})
         project_root = find_project_root()
         exclusions = _get_exclusion_paths(ctx.deps.config)
         enabled = _get_enabled_rule_ids(ctx.deps.config)
@@ -357,6 +386,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
                     "message": f"{count} lines (limit: {limit})",
                 })
 
+        ctx.deps.emit({"type": "tool_done", "tool": "scan_file_sizes", "detail": f"{len(findings)} findings"})
         return findings
 
     @agent.tool
@@ -366,6 +396,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
 
         Returns a list of findings with file and message.
         """
+        ctx.deps.emit({"type": "tool_start", "tool": "scan_cli_options"})
         project_root = find_project_root()
         enabled = _get_enabled_rule_ids(ctx.deps.config)
         findings: list[dict] = []
@@ -416,6 +447,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
                         "message": f"Missing CLI options: {', '.join(missing)}",
                     })
 
+        ctx.deps.emit({"type": "tool_done", "tool": "scan_cli_options", "detail": f"{len(findings)} findings"})
         return findings
 
     @agent.tool
@@ -425,6 +457,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
         Checks config/settings/*.yaml and config/agents/**/*.yaml.
         Returns a list of findings with file and message.
         """
+        ctx.deps.emit({"type": "tool_start", "tool": "scan_config_files"})
         project_root = find_project_root()
         enabled = _get_enabled_rule_ids(ctx.deps.config)
         findings: list[dict] = []
@@ -454,6 +487,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
                         "message": "YAML file missing commented option header",
                     })
 
+        ctx.deps.emit({"type": "tool_done", "tool": "scan_config_files", "detail": f"{len(findings)} findings"})
         return findings
 
     # =========================================================================
@@ -467,6 +501,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
         Args:
             file_path: Path relative to project root
         """
+        ctx.deps.emit({"type": "tool_start", "tool": "read_source_file", "detail": file_path})
         project_root = find_project_root()
         full_path = project_root / file_path
 
@@ -491,6 +526,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
             old_text: Exact text to find (must appear exactly once)
             new_text: Replacement text
         """
+        ctx.deps.emit({"type": "tool_start", "tool": "apply_fix", "detail": file_path})
         project_root = find_project_root()
         full_path = project_root / file_path
 
@@ -508,6 +544,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
         new_content = content.replace(old_text, new_text, 1)
         full_path.write_text(new_content, encoding="utf-8")
 
+        ctx.deps.emit({"type": "tool_done", "tool": "apply_fix", "detail": f"fixed {file_path}"})
         return {"success": True, "file": file_path}
 
     @agent.tool
@@ -516,6 +553,7 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
 
         Returns pass/fail status and failure details if any.
         """
+        ctx.deps.emit({"type": "tool_start", "tool": "run_tests"})
         project_root = find_project_root()
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/unit", "-v", "--tb=short"],
@@ -526,9 +564,11 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
 
         output_lines = result.stdout.splitlines()
         tail = "\n".join(output_lines[-50:]) if len(output_lines) > 50 else result.stdout
+        passed = result.returncode == 0
 
+        ctx.deps.emit({"type": "tool_done", "tool": "run_tests", "detail": "passed" if passed else "FAILED"})
         return {
-            "passed": result.returncode == 0,
+            "passed": passed,
             "exit_code": result.returncode,
             "output": tail,
         }
@@ -576,3 +616,83 @@ async def run_qa_agent(user_message: str) -> QaAuditResult:
     )
 
     return result.output
+
+
+_conversations: dict[str, list] = {}
+
+
+async def run_qa_agent_stream(
+    user_message: str,
+    conversation_id: str | None = None,
+) -> AsyncGenerator[dict, None]:
+    """
+    Run the QA agent with streaming progress events and conversation memory.
+
+    On first call (no conversation_id), starts a new conversation.
+    On follow-up calls (with conversation_id), continues with full history
+    so the agent remembers what it found and what the human decided.
+
+    Yields SSE-compatible dicts:
+        {"type": "tool_start", "tool": "scan_import_violations"}
+        {"type": "tool_done", "tool": "scan_import_violations", "detail": "3 findings"}
+        {"type": "complete", "result": {...}, "conversation_id": "..."}
+
+    Args:
+        user_message: The user's message
+        conversation_id: ID from a previous turn to continue the conversation
+    """
+    import asyncio
+    import uuid
+
+    if conversation_id is None:
+        conversation_id = str(uuid.uuid4())
+    message_history = _conversations.get(conversation_id)
+
+    queue: asyncio.Queue[dict] = asyncio.Queue()
+
+    def on_progress(event: dict) -> None:
+        queue.put_nowait(event)
+
+    async def _run():
+        agent = _get_agent()
+        config = _load_agent_config()
+        deps = QaAgentDeps(config=config, on_progress=on_progress)
+        logger.info(
+            "QA agent invoked (stream)",
+            extra={"message": user_message, "conversation_id": conversation_id},
+        )
+        result = await agent.run(
+            user_message,
+            deps=deps,
+            message_history=message_history,
+        )
+        _conversations[conversation_id] = result.all_messages()
+        return result.output
+
+    task = asyncio.create_task(_run())
+
+    while not task.done():
+        try:
+            event = await asyncio.wait_for(queue.get(), timeout=0.5)
+            yield event
+        except asyncio.TimeoutError:
+            continue
+
+    while not queue.empty():
+        yield queue.get_nowait()
+
+    result = task.result()
+    logger.info(
+        "QA agent completed (stream)",
+        extra={
+            "summary": result.summary,
+            "total_violations": result.total_violations,
+            "fixed_count": result.fixed_count,
+            "conversation_id": conversation_id,
+        },
+    )
+    yield {
+        "type": "complete",
+        "result": result.model_dump(),
+        "conversation_id": conversation_id,
+    }

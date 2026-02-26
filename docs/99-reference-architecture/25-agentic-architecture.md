@@ -911,6 +911,8 @@ This is where the system approaches Option C behavior — not by removing the or
 | Tool execution failure | Agent receives error, decides whether to retry or report failure |
 | All retries exhausted | Task marked `failed`, escalation to human if configured |
 
+For the concrete DAG-based implementation with PostgreSQL schema, ready-task queries, and plan revision patterns, see `31-event-session-architecture.md`, Section 4.
+
 ---
 
 ## Human-in-the-Loop
@@ -951,6 +953,8 @@ The kill switch halts execution immediately:
 - Partial results preserved in completed steps
 - Event published: `agents.execution.cancelled`
 - Audit log entry created with who cancelled and why
+
+For the concrete unified responder pattern with Temporal Signals, escalation chains, and durable approval workflows, see `31-event-session-architecture.md`, Section 6.
 
 ---
 
@@ -1132,6 +1136,8 @@ Agents actively use their accumulated expertise to propose approaches. This is *
 - Self-evaluation agent reviews past work and identifies improvement patterns
 - Orchestrator tracks per-agent performance metrics and adjusts trust levels
 - Intelligent agents choose which worker agents to delegate to based on past outcomes
+
+For the concrete three-tier memory architecture (episodic, semantic, procedural) with anchored rolling summaries and context window assembly, see `31-event-session-architecture.md`, Section 5.
 
 ---
 
@@ -1360,3 +1366,4 @@ Follow the phase-by-phase implementation checklist in **[26-agentic-pydanticai.m
 - [12-observability.md](12-observability.md) — Logging standards
 - [09-authentication.md](09-authentication.md) — RBAC for agent API access
 - [04-module-structure.md](04-module-structure.md) — Module boundaries and communication
+- [31-event-session-architecture.md](31-event-session-architecture.md) — Concrete implementation of session model, plan management (mutable DAGs with dependency tracking), memory architecture (episodic/semantic/procedural with anchored rolling summaries), and approval gates (unified responder pattern with Temporal Signals). Read this for implementation; read doc 25 for concepts.

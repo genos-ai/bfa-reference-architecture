@@ -1,12 +1,15 @@
 """
 Agent Endpoints.
 
-REST API for agent interaction: chat, direct invocation, and registry listing.
+REST API for agent interaction: chat, direct invocation, streaming, and registry listing.
 """
+
+import json
 
 from pydantic import BaseModel, Field
 
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 
 from modules.backend.core.dependencies import RequestId
 from modules.backend.core.logging import get_logger
@@ -29,6 +32,10 @@ class ChatRequest(BaseModel):
     agent: str | None = Field(
         default=None,
         description="Target a specific agent by name, bypassing routing.",
+    )
+    conversation_id: str | None = Field(
+        default=None,
+        description="Continue a previous conversation by ID.",
     )
 
 
@@ -76,6 +83,27 @@ async def agent_chat(
             advice=result.get("advice"),
         ),
     )
+
+
+@router.post(
+    "/chat/stream",
+    summary="Chat with an agent (streaming SSE)",
+    description="Send a message to an agent and receive progress events via Server-Sent Events.",
+)
+async def agent_chat_stream(data: ChatRequest) -> StreamingResponse:
+    """Stream agent progress events as SSE."""
+    from modules.backend.agents.coordinator.coordinator import handle_direct_stream
+
+    agent_name = data.agent
+    if not agent_name:
+        from modules.backend.agents.coordinator.coordinator import _route
+        agent_name = _route(data.message)
+
+    async def generate():
+        async for event in handle_direct_stream(agent_name, data.message, data.conversation_id):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @router.get(

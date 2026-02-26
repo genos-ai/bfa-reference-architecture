@@ -1184,6 +1184,68 @@ Set `enabled: false` in any agent YAML to disable it without code deployment. Th
 
 ---
 
+## Session-Aware Agent Invocation (Doc 31)
+
+When the project adopts `31-event-session-architecture.md`, agent invocation changes from direct `run()` calls to coordinator-mediated streaming.
+
+### Primary Path: `run_stream()` via Coordinator
+
+All interactive agent invocations go through the streaming coordinator, which calls `agent.run_stream()` internally:
+
+```python
+# modules/backend/agents/coordinator/handle.py
+from pydantic_ai import Agent
+
+async def handle(session_id: str, message: str) -> AsyncIterator[Event]:
+    session = await session_service.get(session_id)
+    agent = agent_router.resolve(message, session)
+    deps = AgentDeps(session=session, db=session.db)
+
+    async with agent.run_stream(message, deps=deps) as stream:
+        async for chunk in stream.stream_text(delta=True):
+            yield AgentResponseChunkEvent(session_id=session_id, content=chunk)
+
+    yield AgentResponseCompleteEvent(session_id=session_id, content=stream.result.data)
+```
+
+### When to Use Direct `run()`
+
+Direct `agent.run()` is still appropriate for:
+- Background tasks that do not have an interactive session (Taskiq jobs)
+- Batch processing where streaming is irrelevant
+- Unit tests where you need a synchronous result
+
+Direct `run()` bypasses session cost tracking, event emission, and approval gates. Use it only when these features are not needed.
+
+### Extended AgentDeps
+
+Add an optional `Session` field to the dependency container:
+
+```python
+# modules/backend/agents/dependencies.py
+from dataclasses import dataclass
+from modules.backend.services.base import BaseService
+
+@dataclass
+class AgentDeps:
+    db: AsyncSession
+    session: Session | None = None  # Present for interactive, None for batch
+
+    @property
+    def note_service(self) -> NoteService:
+        return NoteService(self.db)
+
+    @property
+    def cost_remaining(self) -> float | None:
+        return self.session.cost_budget_remaining if self.session else None
+```
+
+Tools that need session context access it through `ctx.deps.session`. Tools that don't need it are unaffected — `session` defaults to `None`.
+
+See `31-event-session-architecture.md`, Section 3 (Streaming Coordinator) for the complete `handle()` implementation and agent routing.
+
+---
+
 ## Testing
 
 ### CI Guardrail
@@ -1606,3 +1668,4 @@ No coordinator changes needed. The registry auto-discovers the new agent by scan
 - [12-observability.md](12-observability.md) — Logging standards
 - [09-authentication.md](09-authentication.md) — RBAC for agent API access
 - [04-module-structure.md](04-module-structure.md) — Module boundaries and communication
+- [31-event-session-architecture.md](31-event-session-architecture.md) — Session-aware agent invocation, streaming coordinator, event-driven interaction model

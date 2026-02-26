@@ -663,3 +663,4 @@ When adopting this module:
 - [06-event-architecture.md](06-event-architecture.md) — WebSocket patterns, event types
 - [12-observability.md](12-observability.md) — X-Frontend-ID, log sources
 - [01-core-principles.md](01-core-principles.md) — Thin client mandate (P1, P2)
+- [31-event-session-architecture.md](31-event-session-architecture.md) — When adopted, the TUI becomes an event subscriber. Agent thinking, tool calls, and response chunks arrive as typed events on the session bus. The TUI renders these in dedicated panels (thinking panel, tool call panel, response panel) rather than polling for updates.

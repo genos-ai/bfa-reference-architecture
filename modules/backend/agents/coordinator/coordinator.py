@@ -97,6 +97,42 @@ async def handle_direct(agent_name: str, user_input: str) -> dict[str, Any]:
     return await _execute(agent_name, user_input)
 
 
+async def handle_direct_stream(
+    agent_name: str,
+    user_input: str,
+    conversation_id: str | None = None,
+):
+    """
+    Stream progress events from a named agent with conversation memory.
+
+    Yields dicts with progress events. The final event includes a
+    conversation_id for continuing the conversation in the next turn.
+
+    Args:
+        agent_name: The agent to invoke (e.g., "code.qa.agent")
+        user_input: The user's message
+        conversation_id: ID from a previous turn to continue the conversation
+    """
+    registry = _load_agent_registry()
+    if agent_name not in registry:
+        available = ", ".join(registry.keys()) or "none"
+        raise ValueError(f"Agent '{agent_name}' not found. Available: {available}")
+
+    logger.info(
+        "Direct agent invocation (stream)",
+        extra={"agent_name": agent_name, "conversation_id": conversation_id},
+    )
+
+    if agent_name == "code.qa.agent":
+        from modules.backend.agents.vertical.code.qa.agent import run_qa_agent_stream
+
+        async for event in run_qa_agent_stream(user_input, conversation_id):
+            yield event
+    else:
+        result = await _execute(agent_name, user_input)
+        yield {"type": "complete", "result": result}
+
+
 _AGENT_EXECUTORS: dict[str, Any] = {}
 
 
