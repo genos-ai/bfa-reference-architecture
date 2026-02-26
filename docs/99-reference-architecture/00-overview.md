@@ -6,6 +6,7 @@
 
 ## Changelog
 
+- 3.1.0 (2026-02-26): Added 47-agent-module-organization.md for agent system layout, naming conventions, agent types, shared tool architecture, layered prompt system, access control model
 - 3.0.0 (2026-02-26): Renumbered all docs into clean groups — Core Foundation (01-09), Core Operations (10-16), Optional Platform (20-28), AI-First Platform (40-46); added Architecture Profiles; removed cross-contamination (core docs no longer reference AI docs); dependency flows one way (AI→core, never core→AI)
 - 2.4.0 (2026-02-26): Added 46-event-session-architecture.md (was 31) for event-driven sessions, streaming coordinator, plan management, memory architecture, approval gates
 - 2.3.0 (2026-02-24): Added 44-multi-channel-gateway.md (was 29) for channel adapters, session management, real-time push, gateway security; updated 01 with P8 Secure by Default
@@ -103,7 +104,7 @@ General-purpose capabilities. Adopt based on project needs. No AI concepts.
 | 27-tui-architecture.md | Interactive terminal interface (Textual + Textual Web) for persistent sessions, real-time streaming, dashboards |
 | 28-cli-architecture.md | CLI architecture — Click, `--options` over subcommands, service lifecycle, one-shot operations, output formatting, testing |
 
-### AI-First Platform (40-46)
+### AI-First Platform (40-47)
 
 Agent architecture, session model, multi-channel delivery. Adopt for BFA projects.
 
@@ -115,6 +116,7 @@ Agent architecture, session model, multi-channel delivery. Adopt for BFA project
 | 43-ai-first-interface-design.md | Making services consumable by AI agents alongside human clients (adapter registry, self-describing APIs, service factory) |
 | 44-multi-channel-gateway.md | Delivering agent interactions through multiple messaging channels (Telegram, Slack, Discord, WebSocket) with cross-channel sessions |
 | 46-event-session-architecture.md | Interactive conversations, streaming agent responses, multi-step plans with approval gates, long-running autonomous tasks, multi-channel sessions |
+| 47-agent-module-organization.md | Agent system layout, naming conventions, agent types (vertical/horizontal), shared tool architecture, layered prompt system, access control model |
 
 ---
 
@@ -271,6 +273,7 @@ If adopting 41-agentic-pydanticai.md, also adopt 40-agentic-architecture.md, 24-
 If adopting 42-agent-first-infrastructure.md, ensure 03-backend-architecture.md and 05-authentication.md are in place (both are core, so always present). Doc 42 is independent of 40/41 but composes naturally with them.
 If adopting 44-multi-channel-gateway.md, ensure 03-backend-architecture.md and 25-telegram-bot-integration.md are in place. Doc 44 benefits from 40/41 for agent routing but can operate with any backend handler.
 If adopting 46-event-session-architecture.md, also adopt 03-backend-architecture.md (core, always present), 21-event-architecture.md (event primitives), 40-agentic-architecture.md (agent concepts), and 41-agentic-pydanticai.md (PydanticAI implementation). Doc 46 composes with 44 (channels become event subscribers) and 43 (service factory accepts optional Session context) but does not require them.
+If adopting any AI-First module (40-47), also adopt 47-agent-module-organization.md. Doc 47 defines the directory layout, naming conventions, and access control model that all other AI-First docs assume. Read it before building any agent.
 
 ---
 
@@ -307,7 +310,7 @@ For a new project:
 1. Choose your profile: **Traditional Backend** or **AI-First Platform (BFA)**
 2. Apply all Core standards (01-16)
 3. Review Optional Platform modules (20-28) against project requirements
-4. If BFA profile, adopt AI-First modules (40-46)
+4. If BFA profile, adopt AI-First modules (40-47)
 5. Document which modules are adopted in project README
 6. Follow the primitive identification process (02-primitive-identification.md)
 7. Set up project structure per 03-backend-architecture.md

@@ -135,10 +135,11 @@ Full standards in `docs/99-reference-architecture/`:
 | 24 | LLM Integration |
 | 27 | TUI Architecture (Textual + Textual Web) |
 | 28 | CLI Architecture (Click, --options, service lifecycle, testing) |
-| **AI-First Platform (40-46)** | |
+| **AI-First Platform (40-47)** | |
 | 40 | Agentic AI Architecture (conceptual) |
 | 41 | Agentic AI PydanticAI Implementation |
 | 42 | Agent-First Infrastructure (MCP, A2A, agent identity) |
 | 43 | AI-First Interface Design (adapter registry, self-describing APIs, service factory) |
 | 44 | Multi-Channel Gateway (channel adapters, sessions, WebSocket, security) |
 | 46 | Event-Driven Session Architecture (session model, event bus, streaming coordinator, plan management, memory, approval gates, cost tracking) |
+| 47 | Agent Module Organization (layout, naming, agent types, shared tools, layered prompts, access control) |
