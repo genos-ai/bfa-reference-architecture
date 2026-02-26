@@ -134,6 +134,7 @@ Full standards in `docs/99-reference-architecture/`:
 | 21 | Event Architecture |
 | 24 | LLM Integration |
 | 27 | TUI Architecture (Textual + Textual Web) |
+| 28 | CLI Architecture (Click, --options, service lifecycle, testing) |
 | **AI-First Platform (40-46)** | |
 | 40 | Agentic AI Architecture (conceptual) |
 | 41 | Agentic AI PydanticAI Implementation |

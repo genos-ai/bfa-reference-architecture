@@ -101,6 +101,7 @@ General-purpose capabilities. Adopt based on project needs. No AI concepts.
 | 25-telegram-bot-integration.md | Building Telegram bot interface |
 | 26-telegram-client-integration.md | Need channel scraping, message history, or autonomous Telegram access |
 | 27-tui-architecture.md | Interactive terminal interface (Textual + Textual Web) for persistent sessions, real-time streaming, dashboards |
+| 28-cli-architecture.md | CLI architecture — Click, `--options` over subcommands, service lifecycle, one-shot operations, output formatting, testing |
 
 ### AI-First Platform (40-46)
 

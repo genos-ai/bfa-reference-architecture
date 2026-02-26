@@ -91,6 +91,7 @@ The key decision is that this structure applies from day one, even for small pro
 │           ├── 25-telegram-bot-integration.md
 │           ├── 26-telegram-client-integration.md
 │           ├── 27-tui-architecture.md
+│           ├── 28-cli-architecture.md
 │           ├── # --- AI-First Platform (40-46) ---
 │           ├── 40-agentic-architecture.md
 │           ├── 41-agentic-pydanticai.md

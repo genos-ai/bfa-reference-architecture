@@ -188,57 +188,9 @@ def find_project_root() -> Path:
 
 ## CLI Standards
 
-### Command Structure
+All CLI scripts use `@click.command()` with `--options`. No subcommands, no positional arguments, no `@click.group()`. Every script must include `--verbose` and `--debug` options.
 
-Use subcommands for complex CLIs:
-
-```bash
-# Recommended for complex CLIs
-mycli auth login
-mycli project create --name test
-mycli data export --format csv
-```
-
-Use flat structure with `--action` for simple CLIs:
-
-```bash
-# Acceptable for simple CLIs
-myscript --action create --name test
-```
-
-### Required Options
-
-All scripts must implement:
-
-| Option | Purpose |
-|--------|---------|
-| `--help` | Detailed help information |
-| `--verbose` | Enable verbose logging (INFO level) |
-| `--debug` | Enable debug logging (DEBUG level) |
-
-### Implementation Pattern
-
-```python
-import click
-from modules.backend.core.logging import setup_logging
-
-@click.group()
-@click.option('--verbose', is_flag=True, help='Enable verbose output')
-@click.option('--debug', is_flag=True, help='Enable debug output')
-@click.pass_context
-def cli(ctx, verbose: bool, debug: bool):
-    ctx.ensure_object(dict)
-    log_level = 'DEBUG' if debug else 'INFO' if verbose else 'WARNING'
-    setup_logging(level=log_level)
-    ctx.obj['verbose'] = verbose
-
-@cli.command()
-@click.option('--name', required=True)
-@click.pass_context
-def create(ctx, name: str):
-    """Create a new resource."""
-    # Implementation
-```
+For the full CLI architecture — command structure, implementation patterns, output formatting, testing, and configuration — see **[28-cli-architecture.md](28-cli-architecture.md)**.
 
 ---
 
