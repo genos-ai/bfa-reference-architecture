@@ -99,18 +99,24 @@ class TestAuthMiddleware:
         handler.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_first_user_is_admin(self):
-        """Test that the first authorized user gets admin role."""
+    async def test_explicit_role_mapping_from_config(self):
+        """Test that user gets role from security.yaml user_roles mapping."""
         from modules.telegram.middlewares.auth import AuthMiddleware
 
         middleware = AuthMiddleware()
         handler = AsyncMock(return_value="result")
         data = {}
 
-        event = self._create_mock_update(123456789, "admin")
+        event = self._create_mock_update(123456789, "admin_user")
 
         mock_app_config = MagicMock()
         mock_app_config.application.telegram.authorized_users = [123456789, 987654321]
+        mock_app_config.security.roles = {
+            "viewer": MagicMock(level=1),
+            "trader": MagicMock(level=2),
+            "admin": MagicMock(level=3),
+        }
+        mock_app_config.security.user_roles = {"123456789": "admin"}
 
         with patch(
             "modules.telegram.middlewares.auth.get_app_config",
@@ -121,18 +127,24 @@ class TestAuthMiddleware:
         assert data["user_role"] == "admin"
 
     @pytest.mark.asyncio
-    async def test_non_first_user_is_trader(self):
-        """Test that non-first authorized users get trader role."""
+    async def test_unmapped_user_defaults_to_viewer(self):
+        """Test that authorized users without explicit mapping get viewer role."""
         from modules.telegram.middlewares.auth import AuthMiddleware
 
         middleware = AuthMiddleware()
         handler = AsyncMock(return_value="result")
         data = {}
 
-        event = self._create_mock_update(987654321, "trader")
+        event = self._create_mock_update(987654321, "other_user")
 
         mock_app_config = MagicMock()
         mock_app_config.application.telegram.authorized_users = [123456789, 987654321]
+        mock_app_config.security.roles = {
+            "viewer": MagicMock(level=1),
+            "trader": MagicMock(level=2),
+            "admin": MagicMock(level=3),
+        }
+        mock_app_config.security.user_roles = {"123456789": "admin"}
 
         with patch(
             "modules.telegram.middlewares.auth.get_app_config",
@@ -140,7 +152,7 @@ class TestAuthMiddleware:
         ):
             await middleware(handler, event, data)
 
-        assert data["user_role"] == "trader"
+        assert data["user_role"] == "viewer"
 
 
 class TestRateLimitMiddleware:
@@ -289,19 +301,31 @@ class TestLoggingMiddleware:
 
 
 class TestUserRoles:
-    """Tests for user role definitions."""
+    """Tests for config-driven role definitions."""
 
-    def test_user_roles_hierarchy(self):
-        """Test that user roles have correct hierarchy."""
-        from modules.telegram.middlewares.auth import USER_ROLES
+    def test_role_hierarchy_from_config(self):
+        """Test that role hierarchy is read from security.yaml."""
+        from modules.backend.core.config import get_app_config
 
-        assert USER_ROLES["viewer"] < USER_ROLES["trader"]
-        assert USER_ROLES["trader"] < USER_ROLES["admin"]
+        roles = get_app_config().security.roles
+        assert roles["viewer"].level < roles["trader"].level
+        assert roles["trader"].level < roles["admin"].level
 
-    def test_all_roles_defined(self):
-        """Test that all expected roles are defined."""
-        from modules.telegram.middlewares.auth import USER_ROLES
+    def test_all_roles_defined_in_config(self):
+        """Test that all expected roles exist in security.yaml."""
+        from modules.backend.core.config import get_app_config
 
-        assert "viewer" in USER_ROLES
-        assert "trader" in USER_ROLES
-        assert "admin" in USER_ROLES
+        roles = get_app_config().security.roles
+        assert "viewer" in roles
+        assert "trader" in roles
+        assert "admin" in roles
+
+    def test_get_role_hierarchy_helper(self):
+        """Test the _get_role_hierarchy helper returns flat dict."""
+        from modules.telegram.middlewares.auth import _get_role_hierarchy
+
+        hierarchy = _get_role_hierarchy()
+        assert isinstance(hierarchy, dict)
+        assert hierarchy["viewer"] == 1
+        assert hierarchy["trader"] == 2
+        assert hierarchy["admin"] == 3

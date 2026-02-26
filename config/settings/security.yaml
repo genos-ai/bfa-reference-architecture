@@ -30,6 +30,12 @@
 #     jwt_secret_min_length       - Minimum JWT secret length (integer)
 #     api_key_salt_min_length     - Minimum API key salt length (integer)
 #     webhook_secret_min_length   - Minimum webhook secret length (integer)
+#   roles               - Role definitions with hierarchy levels (object)
+#     {role_name}        - Role name (object)
+#       level            - Hierarchy level, higher = more access (integer)
+#       description      - Human-readable description (string)
+#   user_roles          - User ID to role name mapping (object)
+#     {user_id}          - Telegram user ID as string key (string: role_name)
 #   cors                - Production CORS enforcement (object)
 #     enforce_in_production       - Reject localhost origins in production (boolean)
 #     allow_methods               - Allowed HTTP methods (list of strings)
@@ -83,6 +89,26 @@ secrets_validation:
   jwt_secret_min_length: 32
   api_key_salt_min_length: 16
   webhook_secret_min_length: 16
+
+# -----------------------------------------------------------------------------
+# Role Definitions (hierarchy level — higher = more access)
+# -----------------------------------------------------------------------------
+roles:
+  viewer:
+    level: 1
+    description: "Read-only: status commands only"
+  trader:
+    level: 2
+    description: "Trade access: buy/sell within limits"
+  admin:
+    level: 3
+    description: "Full access: kill switch, deploy, config changes"
+
+# -----------------------------------------------------------------------------
+# User Role Mapping (Telegram user ID → role name)
+# Empty = all authorized users default to 'viewer'
+# -----------------------------------------------------------------------------
+user_roles: {}
 
 # -----------------------------------------------------------------------------
 # CORS Production Enforcement
