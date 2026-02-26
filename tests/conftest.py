@@ -12,6 +12,10 @@ Test Database Configuration:
     The test database is created fresh for each test session and cleaned up after.
 """
 
+from pydantic_ai import models as pydantic_ai_models
+
+pydantic_ai_models.ALLOW_MODEL_REQUESTS = False
+
 import asyncio
 import os
 from collections.abc import AsyncGenerator, Generator

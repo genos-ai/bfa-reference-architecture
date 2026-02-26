@@ -1,0 +1,43 @@
+# =============================================================================
+# Agent Coordinator Configuration
+# =============================================================================
+# Available options:
+#   routing             - Routing configuration (object)
+#     strategy          - Routing strategy (string: rule | llm | hybrid)
+#     llm_model         - Model for LLM-based routing fallback (string)
+#     fallback_agent    - Default agent when routing fails (string)
+#     max_routing_depth - Maximum delegation depth (integer)
+#   limits              - Budget and safety limits (object)
+#     max_requests_per_task    - Max LLM calls per task (integer)
+#     max_tool_calls_per_task  - Max tool invocations per task (integer)
+#     max_tokens_per_task      - Max tokens per task (integer)
+#     max_cost_per_plan        - Max USD per plan (decimal)
+#     max_cost_per_user_daily  - Max USD per user per day (decimal)
+#     task_timeout_seconds     - Wall-clock timeout per task (integer)
+#     plan_timeout_seconds     - Wall-clock timeout per plan (integer)
+#   guardrails          - Input validation settings (object)
+#     max_input_length  - Maximum input character count (integer)
+#     injection_patterns - Regex patterns to block (list of strings)
+# =============================================================================
+
+routing:
+  strategy: rule
+  fallback_agent: system.health.agent
+  max_routing_depth: 3
+
+limits:
+  max_requests_per_task: 10
+  max_tool_calls_per_task: 25
+  max_tokens_per_task: 50000
+  max_cost_per_plan: 10.00
+  max_cost_per_user_daily: 50.00
+  task_timeout_seconds: 300
+  plan_timeout_seconds: 1800
+
+guardrails:
+  max_input_length: 32000
+  injection_patterns:
+    - "ignore (all |previous |prior )?instructions"
+    - "you are now"
+    - "system prompt:"
+    - "disregard (your |all )?previous"
