@@ -130,8 +130,8 @@ def _get_usage_limits() -> UsageLimits:
     config = _load_coordinator_config()
     limits = config.get("limits", {})
     return UsageLimits(
-        request_limit=limits.get("max_requests_per_task", 10),
-        total_tokens_limit=limits.get("max_tokens_per_task", 50000),
+        request_limit=limits["max_requests_per_task"],
+        total_tokens_limit=limits["max_tokens_per_task"],
     )
 
 

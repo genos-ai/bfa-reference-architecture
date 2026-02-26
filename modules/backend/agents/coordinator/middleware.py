@@ -38,7 +38,7 @@ def compute_cost_usd(
     """Compute dollar cost from token counts and model pricing config."""
     config = _load_coordinator_config()
     pricing = config.get("model_pricing", {})
-    default_rates = pricing.get("default", {"input": 1.00, "output": 5.00})
+    default_rates = pricing.get("default", {})
     rates = pricing.get(model or "", default_rates)
     input_cost = (input_tokens / 1_000_000) * rates["input"]
     output_cost = (output_tokens / 1_000_000) * rates["output"]
@@ -59,7 +59,7 @@ def with_guardrails(agent_config: dict[str, Any] | None = None):
             coordinator_config = _load_coordinator_config()
             guardrails = coordinator_config.get("guardrails", {})
 
-            coordinator_max = guardrails.get("max_input_length", 32000)
+            coordinator_max = guardrails["max_input_length"]
             agent_max = (agent_config or {}).get("max_input_length")
             max_length = agent_max if agent_max is not None else coordinator_max
 

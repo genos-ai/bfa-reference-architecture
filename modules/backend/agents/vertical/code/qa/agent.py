@@ -127,7 +127,7 @@ async def run_agent(
     usage_limits: UsageLimits | None = None,
 ) -> QaAuditResult:
     """Standard agent entry point. Called by the coordinator."""
-    model = deps.config.get("model", "anthropic:claude-haiku-4-5-20251001")
+    model = deps.config["model"]
     agent = _get_agent(model)
 
     logger.info("QA agent invoked", extra={"message": user_message})
@@ -172,7 +172,7 @@ async def run_agent_stream(
     deps.on_progress = lambda event: queue.put_nowait(event)
 
     async def _run():
-        model = deps.config.get("model", "anthropic:claude-haiku-4-5-20251001")
+        model = deps.config["model"]
         agent = _get_agent(model)
         logger.info("QA agent invoked (stream)", extra={"message": user_message, "conversation_id": conversation_id})
         result = await agent.run(user_message, deps=deps, message_history=message_history, usage_limits=usage_limits)
