@@ -2,8 +2,8 @@
 Agent Registry.
 
 Discovers all agent configurations from config/agents/**/agent.yaml.
-Provides lookup by name, keyword matching, and listing. Caches results
-after first load.
+Provides lookup by name, keyword matching, module path resolution,
+and listing. Caches results after first load.
 """
 
 from functools import lru_cache
@@ -85,18 +85,26 @@ class AgentRegistry:
                     return agent_name
         return None
 
-    def all_configs(self) -> dict[str, dict[str, Any]]:
-        """Return all agent configs (for coordinator executor registration)."""
-        self._ensure_loaded()
-        return dict(self._agents)
+    def resolve_module_path(self, agent_name: str) -> str:
+        """Derive the Python import path from agent name and type.
+
+        vertical agents: modules.backend.agents.vertical.{category}.{name}.agent
+        horizontal agents: modules.backend.agents.horizontal.{name}.agent
+        """
+        config = self.get(agent_name)
+        agent_type = config.get("agent_type", "vertical")
+        parts = agent_name.replace(".agent", "").split(".")
+
+        if agent_type == "horizontal":
+            name = parts[-1]
+            return f"modules.backend.agents.horizontal.{name}.agent"
+
+        category = parts[0]
+        name = parts[1]
+        return f"modules.backend.agents.vertical.{category}.{name}.agent"
 
 
-_registry: AgentRegistry | None = None
-
-
+@lru_cache(maxsize=1)
 def get_registry() -> AgentRegistry:
-    """Get the singleton registry instance."""
-    global _registry
-    if _registry is None:
-        _registry = AgentRegistry()
-    return _registry
+    """Get the cached registry instance."""
+    return AgentRegistry()

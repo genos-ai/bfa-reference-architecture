@@ -3,32 +3,58 @@ Agent Coordinator.
 
 Routes user requests to the appropriate vertical agent. Assembles
 layered prompt instructions, builds agent deps from YAML config,
-composes middleware, and manages agent executors.
+dynamically discovers agent executors from the registry, and composes
+middleware around every execution.
 
-Public interface (preserved from previous version):
+No agent-specific code in this file. Adding a new agent requires only
+a YAML config and an agent.py with run_agent() / run_agent_stream()
+— no coordinator changes needed.
+
+Public interface:
     handle(user_input) -> dict
     handle_direct(agent_name, user_input) -> dict
     handle_direct_stream(agent_name, user_input, conversation_id) -> AsyncGenerator
     list_agents() -> list[dict]
-
-Usage:
-    from modules.backend.agents.coordinator.coordinator import handle, list_agents
-    result = await handle("How is the system doing?")
-    agents = list_agents()
 """
 
+import importlib
+import os
 from collections.abc import AsyncGenerator
-from pathlib import Path
+from functools import lru_cache
 from typing import Any
 
-from modules.backend.agents.coordinator.middleware import with_cost_tracking, with_guardrails
-from modules.backend.agents.coordinator.registry import AgentRegistry, get_registry
+import yaml
+from pydantic_ai import UsageLimits
+
+from modules.backend.agents.coordinator.middleware import (
+    _load_coordinator_config,
+    with_cost_tracking,
+    with_guardrails,
+)
+from modules.backend.agents.coordinator.registry import get_registry
 from modules.backend.agents.coordinator.router import RuleBasedRouter
-from modules.backend.agents.deps.base import FileScope
-from modules.backend.core.config import find_project_root
+from modules.backend.agents.deps.base import (
+    BaseAgentDeps,
+    FileScope,
+    HealthAgentDeps,
+    QaAgentDeps,
+)
+from modules.backend.core.config import find_project_root, get_app_config, get_settings
 from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+_api_key_set = False
+
+
+def _ensure_api_key() -> None:
+    """Set the ANTHROPIC_API_KEY once at coordinator level."""
+    global _api_key_set
+    if _api_key_set:
+        return
+    settings = get_settings()
+    os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic_api_key)
+    _api_key_set = True
 
 
 # =============================================================================
@@ -40,7 +66,7 @@ def assemble_instructions(category: str, name: str) -> str:
     """Compose layered prompt: organization -> category -> agent.
 
     Reads markdown files from config/prompts/ and concatenates them.
-    Missing layers are silently skipped — not every agent needs all layers.
+    Missing layers are silently skipped.
     """
     project_root = find_project_root()
     prompts_dir = project_root / "config" / "prompts"
@@ -68,11 +94,7 @@ def assemble_instructions(category: str, name: str) -> str:
 
 
 def build_deps_from_config(agent_config: dict[str, Any]) -> dict[str, Any]:
-    """Build common dep fields from agent YAML config.
-
-    Returns a dict with project_root, scope, and config — ready to be
-    unpacked into a BaseAgentDeps (or subclass) constructor.
-    """
+    """Build common dep fields from agent YAML config."""
     scope_config = agent_config.get("scope", {})
     scope = FileScope(
         read_paths=scope_config.get("read", []),
@@ -85,61 +107,94 @@ def build_deps_from_config(agent_config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _build_agent_deps(agent_name: str, agent_config: dict[str, Any]) -> BaseAgentDeps:
+    """Build the appropriate deps dataclass for a given agent."""
+    common = build_deps_from_config(agent_config)
+    category = agent_name.split(".")[0]
+
+    if category == "system" and "health" in agent_name:
+        return HealthAgentDeps(**common, app_config=get_app_config())
+    if category == "code" and "qa" in agent_name:
+        return QaAgentDeps(**common)
+
+    return BaseAgentDeps(**common)
+
+
 # =============================================================================
-# Executor Registration
+# UsageLimits
 # =============================================================================
 
 
-_AGENT_EXECUTORS: dict[str, Any] = {}
+def _get_usage_limits() -> UsageLimits:
+    """Build UsageLimits from coordinator.yaml."""
+    config = _load_coordinator_config()
+    limits = config.get("limits", {})
+    return UsageLimits(
+        request_limit=limits.get("max_requests_per_task", 10),
+        total_tokens_limit=limits.get("max_tokens_per_task", 50000),
+    )
 
 
-def _register_executors() -> None:
-    """Discover agents from registry and register their executor functions.
+# =============================================================================
+# Dynamic Executor Discovery
+# =============================================================================
 
-    Called once on first use. Each executor is wrapped with middleware.
-    """
-    if _AGENT_EXECUTORS:
-        return
 
+def _import_agent_module(agent_name: str) -> Any:
+    """Dynamically import an agent module from the registry."""
     registry = get_registry()
-    configs = registry.all_configs()
+    module_path = registry.resolve_module_path(agent_name)
+    return importlib.import_module(module_path)
 
-    if "system.health.agent" in configs:
-        from modules.backend.agents.vertical.system.health.agent import run_health_agent
 
-        @with_guardrails
-        @with_cost_tracking
-        async def _exec_health(user_input: str) -> dict[str, Any]:
-            result = await run_health_agent(user_input)
-            return {
-                "agent_name": "system.health.agent",
-                "output": result.summary,
-                "components": result.components,
-                "advice": result.advice,
-            }
+def _format_response(agent_name: str, result: Any) -> dict[str, Any]:
+    """Format an agent result into a standard response envelope.
 
-        _AGENT_EXECUTORS["system.health.agent"] = _exec_health
+    Every agent returns a Pydantic BaseModel. We convert it to a dict
+    with a standard structure: agent_name + output (summary string) +
+    the full model data as additional fields.
+    """
+    if hasattr(result, "model_dump"):
+        data = result.model_dump()
+    else:
+        data = {"raw": str(result)}
 
-    if "code.qa.agent" in configs:
-        from modules.backend.agents.vertical.code.qa.agent import run_qa_agent
+    output = data.get("summary", str(result))
 
-        @with_guardrails
-        @with_cost_tracking
-        async def _exec_qa(user_input: str) -> dict[str, Any]:
-            result = await run_qa_agent(user_input)
-            return {
-                "agent_name": "code.qa.agent",
-                "output": result.summary,
-                "violations": [v.model_dump() for v in result.violations],
-                "total_violations": result.total_violations,
-                "error_count": result.error_count,
-                "warning_count": result.warning_count,
-                "fixed_count": result.fixed_count,
-                "needs_human_count": result.needs_human_count,
-                "tests_passed": result.tests_passed,
-            }
+    return {
+        "agent_name": agent_name,
+        "output": output,
+        **data,
+    }
 
-        _AGENT_EXECUTORS["code.qa.agent"] = _exec_qa
+
+async def _execute_agent(
+    agent_name: str,
+    user_input: str,
+    agent_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Execute any agent dynamically. No agent-specific code needed.
+
+    1. Import the agent module from registry
+    2. Build deps from config
+    3. Call agent_module.run_agent(user_input, deps, usage_limits)
+    4. Format into standard response envelope
+    """
+    _ensure_api_key()
+    module = _import_agent_module(agent_name)
+    deps = _build_agent_deps(agent_name, agent_config)
+    limits = _get_usage_limits()
+
+    result = await module.run_agent(user_input, deps, usage_limits=limits)
+    response = _format_response(agent_name, result)
+
+    usage = {}
+    if hasattr(result, "model_dump"):
+        usage_data = response.get("_usage", {})
+        if usage_data:
+            response["_usage"] = usage_data
+
+    return response
 
 
 # =============================================================================
@@ -155,8 +210,10 @@ def list_agents() -> list[dict[str, Any]]:
 async def handle(user_input: str) -> dict[str, Any]:
     """Route a user request to the appropriate agent via keyword matching.
 
+    Falls back to the configured fallback_agent when no keyword matches.
+
     Raises:
-        ValueError: If no agent matches the request.
+        ValueError: If no agent matches and no fallback is configured.
     """
     from modules.backend.agents.coordinator.models import CoordinatorRequest
 
@@ -165,12 +222,25 @@ async def handle(user_input: str) -> dict[str, Any]:
     request = CoordinatorRequest(user_input=user_input)
 
     agent_name = router.route(request)
-    if agent_name is None:
-        available = ", ".join(c["agent_name"] for c in registry.list_all()) or "none"
-        raise ValueError(f"No agent matched. Available agents: {available}.")
 
-    logger.debug("Routed to agent", extra={"agent_name": agent_name})
-    return await _execute(agent_name, user_input)
+    if agent_name is None:
+        coordinator_config = _load_coordinator_config()
+        fallback = coordinator_config.get("routing", {}).get("fallback_agent")
+        if fallback and registry.has(fallback):
+            agent_name = fallback
+            logger.debug("Using fallback agent", extra={"agent_name": fallback})
+        else:
+            available = ", ".join(c["agent_name"] for c in registry.list_all()) or "none"
+            raise ValueError(f"No agent matched. Available agents: {available}.")
+
+    agent_config = registry.get(agent_name)
+
+    @with_guardrails(agent_config)
+    @with_cost_tracking
+    async def _run(user_input: str) -> dict[str, Any]:
+        return await _execute_agent(agent_name, user_input, agent_config)
+
+    return await _run(user_input)
 
 
 async def handle_direct(agent_name: str, user_input: str) -> dict[str, Any]:
@@ -184,8 +254,15 @@ async def handle_direct(agent_name: str, user_input: str) -> dict[str, Any]:
         available = ", ".join(c["agent_name"] for c in registry.list_all()) or "none"
         raise ValueError(f"Agent '{agent_name}' not found. Available: {available}")
 
+    agent_config = registry.get(agent_name)
     logger.info("Direct agent invocation", extra={"agent_name": agent_name})
-    return await _execute(agent_name, user_input)
+
+    @with_guardrails(agent_config)
+    @with_cost_tracking
+    async def _run(user_input: str) -> dict[str, Any]:
+        return await _execute_agent(agent_name, user_input, agent_config)
+
+    return await _run(user_input)
 
 
 async def handle_direct_stream(
@@ -193,10 +270,10 @@ async def handle_direct_stream(
     user_input: str,
     conversation_id: str | None = None,
 ) -> AsyncGenerator[dict, None]:
-    """Stream progress events from a named agent with conversation memory.
+    """Stream progress events from any agent that supports streaming.
 
-    Yields dicts with progress events. The final event includes a
-    conversation_id for continuing the conversation in the next turn.
+    Dynamically imports the agent module and calls run_agent_stream().
+    No agent-specific checks — any agent with run_agent_stream() works.
     """
     registry = get_registry()
     if not registry.has(agent_name):
@@ -208,30 +285,24 @@ async def handle_direct_stream(
         extra={"agent_name": agent_name, "conversation_id": conversation_id},
     )
 
+    _ensure_api_key()
     agent_config = registry.get(agent_name)
-    agent_type = agent_config.get("agent_type", "vertical")
+    module = _import_agent_module(agent_name)
 
-    if agent_type == "vertical" and agent_name == "code.qa.agent":
-        from modules.backend.agents.vertical.code.qa.agent import run_qa_agent_stream
-
-        async for event in run_qa_agent_stream(user_input, conversation_id):
+    if hasattr(module, "run_agent_stream"):
+        deps = _build_agent_deps(agent_name, agent_config)
+        limits = _get_usage_limits()
+        async for event in module.run_agent_stream(
+            user_input, deps, conversation_id=conversation_id, usage_limits=limits,
+        ):
             yield event
     else:
-        result = await _execute(agent_name, user_input)
+        result = await _execute_agent(agent_name, user_input, agent_config)
         yield {"type": "complete", "result": result}
 
 
-async def _execute(agent_name: str, user_input: str) -> dict[str, Any]:
-    """Execute a named agent with the given input."""
-    _register_executors()
-    executor = _AGENT_EXECUTORS.get(agent_name)
-    if executor is None:
-        raise ValueError(f"Agent '{agent_name}' is registered but has no executor.")
-    return await executor(user_input)
-
-
 def _route(user_input: str) -> str:
-    """Route user input to an agent name. Raises ValueError if no match."""
+    """Route user input to an agent name. Used by the API streaming endpoint."""
     from modules.backend.agents.coordinator.models import CoordinatorRequest
 
     registry = get_registry()
@@ -240,6 +311,10 @@ def _route(user_input: str) -> str:
 
     agent_name = router.route(request)
     if agent_name is None:
+        coordinator_config = _load_coordinator_config()
+        fallback = coordinator_config.get("routing", {}).get("fallback_agent")
+        if fallback and registry.has(fallback):
+            return fallback
         available = ", ".join(c["agent_name"] for c in registry.list_all()) or "none"
         raise ValueError(f"No agent matched. Available agents: {available}.")
     return agent_name

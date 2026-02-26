@@ -3,50 +3,30 @@ System Health Agent (system.health.agent).
 
 Thin wrapper over shared system tool implementations. Checks backend
 service health and provides diagnostic advice. Prompts assembled from
-the layered config/prompts/ hierarchy.
+the layered config/prompts/ hierarchy. Config received from coordinator.
 """
 
-from typing import Any
+from collections.abc import AsyncGenerator
 
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent, RunContext, UsageLimits
 
-from modules.backend.agents.coordinator.coordinator import assemble_instructions, build_deps_from_config
+from modules.backend.agents.coordinator.coordinator import assemble_instructions
 from modules.backend.agents.deps.base import HealthAgentDeps
 from modules.backend.agents.schemas import HealthCheckResult
 from modules.backend.agents.tools import system
-from modules.backend.core.config import get_app_config
 from modules.backend.core.logging import get_logger
-from modules.backend.services.compliance import load_config as _load_qa_config
 
 logger = get_logger(__name__)
 
 _agent: Agent[HealthAgentDeps, HealthCheckResult] | None = None
 
 
-def _load_agent_config() -> dict[str, Any]:
-    """Load health agent configuration from YAML."""
-    import yaml
-    from modules.backend.core.config import find_project_root
-    config_path = find_project_root() / "config" / "agents" / "system" / "health" / "agent.yaml"
-    if not config_path.exists():
-        raise FileNotFoundError(f"Agent config not found: {config_path}")
-    with open(config_path) as f:
-        return yaml.safe_load(f) or {}
-
-
-def _get_agent() -> Agent[HealthAgentDeps, HealthCheckResult]:
+def _get_agent(model: str) -> Agent[HealthAgentDeps, HealthCheckResult]:
     """Lazy initialization — creates the agent on first call."""
     global _agent
     if _agent is not None:
         return _agent
 
-    import os
-    from modules.backend.core.config import get_settings
-    settings = get_settings()
-    os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic_api_key)
-
-    config = _load_agent_config()
-    model = config["model"]
     instructions = assemble_instructions("system", "health")
 
     agent = Agent(
@@ -71,17 +51,17 @@ def _get_agent() -> Agent[HealthAgentDeps, HealthCheckResult]:
     return _agent
 
 
-async def run_health_agent(user_message: str) -> HealthCheckResult:
-    """Run the health agent. Returns structured health check result."""
-    agent = _get_agent()
-    config = _load_agent_config()
-    deps = HealthAgentDeps(
-        **build_deps_from_config(config),
-        app_config=get_app_config(),
-    )
+async def run_agent(
+    user_message: str,
+    deps: HealthAgentDeps,
+    usage_limits: UsageLimits | None = None,
+) -> HealthCheckResult:
+    """Standard agent entry point. Called by the coordinator."""
+    model = deps.config.get("model", "anthropic:claude-haiku-4-5-20251001")
+    agent = _get_agent(model)
 
     logger.info("Health agent invoked", extra={"message": user_message})
-    result = await agent.run(user_message, deps=deps)
+    result = await agent.run(user_message, deps=deps, usage_limits=usage_limits)
 
     logger.info(
         "Health agent completed",
@@ -95,3 +75,18 @@ async def run_health_agent(user_message: str) -> HealthCheckResult:
         },
     )
     return result.output
+
+
+async def run_agent_stream(
+    user_message: str,
+    deps: HealthAgentDeps,
+    conversation_id: str | None = None,
+    usage_limits: UsageLimits | None = None,
+) -> AsyncGenerator[dict, None]:
+    """Standard streaming entry point. Called by the coordinator."""
+    result = await run_agent(user_message, deps, usage_limits)
+    yield {
+        "type": "complete",
+        "result": result.model_dump(),
+        "conversation_id": conversation_id,
+    }

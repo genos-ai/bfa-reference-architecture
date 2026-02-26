@@ -3,40 +3,31 @@ QA Compliance Agent (code.qa.agent).
 
 Thin wrapper over shared tool implementations and ComplianceScannerService.
 All scanning logic lives in services/compliance.py. All tool implementations
-live in agents/tools/. This file registers tools, assembles prompts, and
-exposes run_qa_agent() and run_qa_agent_stream() entry points.
+live in agents/tools/. This file registers tools, receives config from the
+coordinator, and exposes the standard run_agent() / run_agent_stream() interface.
 """
 
 from collections.abc import AsyncGenerator
-from typing import Any
 
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent, RunContext, UsageLimits
 
-from modules.backend.agents.coordinator.coordinator import assemble_instructions, build_deps_from_config
+from modules.backend.agents.coordinator.coordinator import assemble_instructions
 from modules.backend.agents.deps.base import QaAgentDeps
 from modules.backend.agents.schemas import QaAuditResult
-from modules.backend.agents.tools import compliance, code, filesystem
+from modules.backend.agents.tools import code, compliance, filesystem
 from modules.backend.core.logging import get_logger
-from modules.backend.services.compliance import load_config
 
 logger = get_logger(__name__)
 
 _agent: Agent[QaAgentDeps, QaAuditResult] | None = None
 
 
-def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
+def _get_agent(model: str) -> Agent[QaAgentDeps, QaAuditResult]:
     """Lazy initialization — creates the agent on first call."""
     global _agent
     if _agent is not None:
         return _agent
 
-    import os
-    from modules.backend.core.config import get_settings
-    settings = get_settings()
-    os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic_api_key)
-
-    config = load_config()
-    model = config["model"]
     instructions = assemble_instructions("code", "qa")
 
     agent = Agent(
@@ -130,14 +121,17 @@ def _get_agent() -> Agent[QaAgentDeps, QaAuditResult]:
     return _agent
 
 
-async def run_qa_agent(user_message: str) -> QaAuditResult:
-    """Run the QA compliance agent. Returns structured audit result."""
-    agent = _get_agent()
-    config = load_config()
-    deps = QaAgentDeps(**build_deps_from_config(config))
+async def run_agent(
+    user_message: str,
+    deps: QaAgentDeps,
+    usage_limits: UsageLimits | None = None,
+) -> QaAuditResult:
+    """Standard agent entry point. Called by the coordinator."""
+    model = deps.config.get("model", "anthropic:claude-haiku-4-5-20251001")
+    agent = _get_agent(model)
 
     logger.info("QA agent invoked", extra={"message": user_message})
-    result = await agent.run(user_message, deps=deps)
+    result = await agent.run(user_message, deps=deps, usage_limits=usage_limits)
 
     logger.info(
         "QA agent completed",
@@ -158,11 +152,13 @@ async def run_qa_agent(user_message: str) -> QaAuditResult:
 _conversations: dict[str, list] = {}
 
 
-async def run_qa_agent_stream(
+async def run_agent_stream(
     user_message: str,
+    deps: QaAgentDeps,
     conversation_id: str | None = None,
+    usage_limits: UsageLimits | None = None,
 ) -> AsyncGenerator[dict, None]:
-    """Run the QA agent with streaming progress events and conversation memory."""
+    """Standard streaming entry point. Called by the coordinator."""
     import asyncio
     import uuid
 
@@ -172,15 +168,14 @@ async def run_qa_agent_stream(
 
     queue: asyncio.Queue[dict] = asyncio.Queue()
 
-    def on_progress(event: dict) -> None:
-        queue.put_nowait(event)
+    original_progress = deps.on_progress
+    deps.on_progress = lambda event: queue.put_nowait(event)
 
     async def _run():
-        agent = _get_agent()
-        config = load_config()
-        deps = QaAgentDeps(**build_deps_from_config(config), on_progress=on_progress)
+        model = deps.config.get("model", "anthropic:claude-haiku-4-5-20251001")
+        agent = _get_agent(model)
         logger.info("QA agent invoked (stream)", extra={"message": user_message, "conversation_id": conversation_id})
-        result = await agent.run(user_message, deps=deps, message_history=message_history)
+        result = await agent.run(user_message, deps=deps, message_history=message_history, usage_limits=usage_limits)
         _conversations[conversation_id] = result.all_messages()
         return result.output
 
@@ -195,6 +190,8 @@ async def run_qa_agent_stream(
 
     while not queue.empty():
         yield queue.get_nowait()
+
+    deps.on_progress = original_progress
 
     result = task.result()
     logger.info(

@@ -11,18 +11,16 @@ from pathlib import Path
 
 import pytest
 
+from modules.backend.agents.coordinator.registry import get_registry
 from modules.backend.agents.deps.base import FileScope
 from modules.backend.agents.schemas import QaAuditResult, Violation
-from modules.backend.services.compliance import (
-    ComplianceScannerService,
-    load_config,
-)
+from modules.backend.services.compliance import ComplianceScannerService
 
 
 @pytest.fixture
 def qa_config():
-    """Load the real QA agent config from disk."""
-    return load_config()
+    """Load the real QA agent config from the registry."""
+    return get_registry().get("code.qa.agent")
 
 
 @pytest.fixture

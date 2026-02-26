@@ -24,7 +24,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from modules.backend.core.config import find_project_root
 from modules.backend.core.logging import get_logger, setup_logging
-from modules.backend.services.compliance import ComplianceScannerService, load_config
+from modules.backend.agents.coordinator.registry import get_registry
+from modules.backend.services.compliance import ComplianceScannerService
 
 
 def format_table(findings: list[dict]) -> str:
@@ -62,7 +63,7 @@ def main(verbose: bool, debug: bool, rule: str | None, severity: str | None) -> 
 
     logger = get_logger(__name__)
 
-    config = load_config()
+    config = get_registry().get("code.qa.agent")
     logger.info("Loaded config", extra={"rules": len(config.get("rules", []))})
 
     project_root = find_project_root()

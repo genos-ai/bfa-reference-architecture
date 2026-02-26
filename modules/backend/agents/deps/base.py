@@ -42,9 +42,8 @@ class FileScope:
                 return True
             if pattern.startswith("*.") and rel_path.endswith(pattern[1:]):
                 return True
-            if rel_path.startswith(pattern):
-                return True
-            if rel_path.startswith(pattern.rstrip("/")):
+            normalized = pattern.rstrip("/")
+            if rel_path == normalized or rel_path.startswith(normalized + "/"):
                 return True
         return False
 

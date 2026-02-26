@@ -6,9 +6,8 @@ compliance violations. Business logic for the code.qa.agent and
 the scripts/compliance_checker.py CLI. No LLM dependency.
 
 Usage:
-    from modules.backend.services.compliance import ComplianceScannerService, load_config
+    from modules.backend.services.compliance import ComplianceScannerService
 
-    config = load_config()
     scanner = ComplianceScannerService(project_root, config)
     violations = scanner.scan_import_violations()
 """
@@ -18,24 +17,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-from modules.backend.core.config import find_project_root
 from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
-
-
-def load_config() -> dict[str, Any]:
-    """Load QA agent configuration from YAML."""
-    project_root = find_project_root()
-    config_path = project_root / "config" / "agents" / "code" / "qa" / "agent.yaml"
-
-    if not config_path.exists():
-        raise FileNotFoundError(f"Agent config not found: {config_path}")
-
-    with open(config_path) as f:
-        return yaml.safe_load(f) or {}
 
 
 class ComplianceScannerService:
