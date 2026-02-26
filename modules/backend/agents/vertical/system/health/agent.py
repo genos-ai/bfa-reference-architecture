@@ -9,6 +9,7 @@ the layered config/prompts/ hierarchy. Config received from coordinator.
 from collections.abc import AsyncGenerator
 
 from pydantic_ai import Agent, RunContext, UsageLimits
+from pydantic_ai.models import Model
 
 from modules.backend.agents.coordinator.coordinator import assemble_instructions
 from modules.backend.agents.deps.base import HealthAgentDeps
@@ -21,7 +22,7 @@ logger = get_logger(__name__)
 _agent: Agent[HealthAgentDeps, HealthCheckResult] | None = None
 
 
-def _get_agent(model: str) -> Agent[HealthAgentDeps, HealthCheckResult]:
+def _get_agent(model: str | Model) -> Agent[HealthAgentDeps, HealthCheckResult]:
     """Lazy initialization — creates the agent on first call."""
     global _agent
     if _agent is not None:
@@ -55,10 +56,11 @@ async def run_agent(
     user_message: str,
     deps: HealthAgentDeps,
     usage_limits: UsageLimits | None = None,
+    model: str | Model | None = None,
 ) -> HealthCheckResult:
     """Standard agent entry point. Called by the coordinator."""
-    model = deps.config.model
-    agent = _get_agent(model)
+    resolved_model = model or deps.config.model
+    agent = _get_agent(resolved_model)
 
     logger.info("Health agent invoked", extra={"message": user_message})
     result = await agent.run(user_message, deps=deps, usage_limits=usage_limits)
@@ -82,9 +84,10 @@ async def run_agent_stream(
     deps: HealthAgentDeps,
     conversation_id: str | None = None,
     usage_limits: UsageLimits | None = None,
+    model: str | Model | None = None,
 ) -> AsyncGenerator[dict, None]:
     """Standard streaming entry point. Called by the coordinator."""
-    result = await run_agent(user_message, deps, usage_limits)
+    result = await run_agent(user_message, deps, usage_limits, model=model)
     yield {
         "type": "complete",
         "result": result.model_dump(),

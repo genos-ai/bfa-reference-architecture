@@ -18,11 +18,11 @@ Public interface:
 """
 
 import importlib
-import os
 from collections.abc import AsyncGenerator
 from typing import Any
 
 from pydantic_ai import UsageLimits
+from pydantic_ai.models import Model
 
 from modules.backend.agents.config_schema import AgentConfigSchema
 from modules.backend.agents.coordinator.middleware import (
@@ -43,20 +43,25 @@ from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-def _ensure_api_key() -> None:
-    """Propagate ANTHROPIC_API_KEY from .env settings to os.environ.
+def _build_model(config_model: str) -> Model:
+    """Construct a PydanticAI Model from a config string with API key injection.
 
-    PydanticAI's Anthropic provider reads the API key from the
-    ANTHROPIC_API_KEY environment variable at Agent construction time.
-    This is a framework constraint — PydanticAI does not accept the
-    key via constructor injection. We bridge it once from our centralized
-    settings (.env → pydantic Settings → os.environ). setdefault()
-    ensures an externally-set env var is never overwritten.
+    Parses the 'provider:model_name' format from agent YAML config and builds
+    the appropriate model object with the API key from centralized settings.
+    This avoids mutating os.environ — the key flows directly from config/.env
+    through Pydantic Settings into the provider constructor.
     """
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return
     settings = get_settings()
-    os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+
+    if config_model.startswith("anthropic:"):
+        from pydantic_ai.models.anthropic import AnthropicModel
+        from pydantic_ai.providers.anthropic import AnthropicProvider
+
+        model_name = config_model.split(":", 1)[1]
+        provider = AnthropicProvider(api_key=settings.anthropic_api_key)
+        return AnthropicModel(model_name, provider=provider)
+
+    raise ValueError(f"Unsupported model provider in '{config_model}'. Expected 'anthropic:model_name'.")
 
 
 # =============================================================================
@@ -184,12 +189,12 @@ async def _execute_agent(
     Returns dict for backward compatibility with API endpoints.
     The dict is a flattened CoordinatorResponse: {agent_name, output, **metadata}.
     """
-    _ensure_api_key()
+    model = _build_model(agent_config.model)
     module = _import_agent_module(agent_name)
     deps = _build_agent_deps(agent_name, agent_config)
     limits = _get_usage_limits()
 
-    result = await module.run_agent(user_input, deps, usage_limits=limits)
+    result = await module.run_agent(user_input, deps, usage_limits=limits, model=model)
     response = _format_response(agent_name, result)
 
     return {
@@ -287,15 +292,15 @@ async def handle_direct_stream(
         extra={"agent_name": agent_name, "conversation_id": conversation_id},
     )
 
-    _ensure_api_key()
     agent_config = registry.get(agent_name)
+    model = _build_model(agent_config.model)
     module = _import_agent_module(agent_name)
 
     if hasattr(module, "run_agent_stream"):
         deps = _build_agent_deps(agent_name, agent_config)
         limits = _get_usage_limits()
         async for event in module.run_agent_stream(
-            user_input, deps, conversation_id=conversation_id, usage_limits=limits,
+            user_input, deps, conversation_id=conversation_id, usage_limits=limits, model=model,
         ):
             yield event
     else:

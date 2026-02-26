@@ -10,6 +10,7 @@ coordinator, and exposes the standard run_agent() / run_agent_stream() interface
 from collections.abc import AsyncGenerator
 
 from pydantic_ai import Agent, RunContext, UsageLimits
+from pydantic_ai.models import Model
 
 from modules.backend.agents.coordinator.coordinator import assemble_instructions
 from modules.backend.agents.deps.base import QaAgentDeps
@@ -22,7 +23,7 @@ logger = get_logger(__name__)
 _agent: Agent[QaAgentDeps, QaAuditResult] | None = None
 
 
-def _get_agent(model: str) -> Agent[QaAgentDeps, QaAuditResult]:
+def _get_agent(model: str | Model) -> Agent[QaAgentDeps, QaAuditResult]:
     """Lazy initialization — creates the agent on first call."""
     global _agent
     if _agent is not None:
@@ -125,10 +126,11 @@ async def run_agent(
     user_message: str,
     deps: QaAgentDeps,
     usage_limits: UsageLimits | None = None,
+    model: str | Model | None = None,
 ) -> QaAuditResult:
     """Standard agent entry point. Called by the coordinator."""
-    model = deps.config.model
-    agent = _get_agent(model)
+    resolved_model = model or deps.config.model
+    agent = _get_agent(resolved_model)
 
     logger.info("QA agent invoked", extra={"message": user_message})
     result = await agent.run(user_message, deps=deps, usage_limits=usage_limits)
@@ -154,6 +156,7 @@ async def run_agent_stream(
     deps: QaAgentDeps,
     conversation_id: str | None = None,
     usage_limits: UsageLimits | None = None,
+    model: str | Model | None = None,
 ) -> AsyncGenerator[dict, None]:
     """Standard streaming entry point. Called by the coordinator.
 
@@ -172,8 +175,8 @@ async def run_agent_stream(
     deps.on_progress = lambda event: queue.put_nowait(event)
 
     async def _run():
-        model = deps.config.model
-        agent = _get_agent(model)
+        resolved_model = model or deps.config.model
+        agent = _get_agent(resolved_model)
         logger.info("QA agent invoked (stream)", extra={"message": user_message, "conversation_id": conversation_id})
         result = await agent.run(user_message, deps=deps, usage_limits=usage_limits)
         return result.output
