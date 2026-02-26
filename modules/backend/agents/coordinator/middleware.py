@@ -19,14 +19,6 @@ from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-MODEL_COST_PER_MILLION_TOKENS: dict[str, dict[str, float]] = {
-    "anthropic:claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
-    "anthropic:claude-sonnet-4-20250514": {"input": 3.00, "output": 15.00},
-    "anthropic:claude-opus-4-20250514": {"input": 15.00, "output": 75.00},
-}
-
-DEFAULT_COST_PER_MILLION: dict[str, float] = {"input": 1.00, "output": 5.00}
-
 
 @lru_cache(maxsize=1)
 def _load_coordinator_config() -> dict[str, Any]:
@@ -43,8 +35,11 @@ def compute_cost_usd(
     output_tokens: int,
     model: str | None = None,
 ) -> float:
-    """Compute dollar cost from token counts and model pricing."""
-    rates = MODEL_COST_PER_MILLION_TOKENS.get(model or "", DEFAULT_COST_PER_MILLION)
+    """Compute dollar cost from token counts and model pricing config."""
+    config = _load_coordinator_config()
+    pricing = config.get("model_pricing", {})
+    default_rates = pricing.get("default", {"input": 1.00, "output": 5.00})
+    rates = pricing.get(model or "", default_rates)
     input_cost = (input_tokens / 1_000_000) * rates["input"]
     output_cost = (output_tokens / 1_000_000) * rates["output"]
     return round(input_cost + output_cost, 6)

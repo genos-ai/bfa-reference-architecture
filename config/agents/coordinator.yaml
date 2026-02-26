@@ -8,6 +8,11 @@
 #     complex_request_agent - Agent for multi-step requests (string)
 #     fallback_agent      - Default agent when routing fails (string)
 #     max_routing_depth   - Maximum delegation depth (integer)
+#   model_pricing         - Cost per million tokens by model (object)
+#     {model_name}        - Model identifier (object)
+#       input             - Cost per 1M input tokens in USD (decimal)
+#       output            - Cost per 1M output tokens in USD (decimal)
+#     default             - Fallback pricing when model not listed (object)
 #   limits                - Budget and safety limits (object)
 #     max_requests_per_task    - Max LLM calls per task (integer)
 #     max_tool_calls_per_task  - Max tool invocations per task (integer)
@@ -28,6 +33,20 @@
 #     poll_interval_seconds - Polling interval (integer)
 #     timeout_seconds       - Max wait for approval (integer)
 # =============================================================================
+
+model_pricing:
+  "anthropic:claude-haiku-4-5-20251001":
+    input: 1.00
+    output: 5.00
+  "anthropic:claude-sonnet-4-20250514":
+    input: 3.00
+    output: 15.00
+  "anthropic:claude-opus-4-20250514":
+    input: 15.00
+    output: 75.00
+  default:
+    input: 1.00
+    output: 5.00
 
 routing:
   strategy: hybrid
