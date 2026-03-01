@@ -4,12 +4,9 @@ Root Pytest Fixtures.
 Shared fixtures available to all test types.
 
 Test Database Configuration:
-    By default, tests use an in-memory SQLite database for speed.
-    To test against PostgreSQL, set the TEST_DATABASE_URL environment variable:
-
-        export TEST_DATABASE_URL="postgresql+asyncpg://user:pass@localhost/test_db"
-
-    The test database is created fresh for each test session and cleaned up after.
+    Test DB params come from config/settings/test.yaml. To use PostgreSQL
+    instead of the default in-memory SQLite, set the TEST_DATABASE_URL
+    environment variable (see config/.env.example).
 """
 
 from pydantic_ai import models as pydantic_ai_models
@@ -17,12 +14,10 @@ from pydantic_ai import models as pydantic_ai_models
 pydantic_ai_models.ALLOW_MODEL_REQUESTS = False
 
 import asyncio
-import os
 from collections.abc import AsyncGenerator, Generator
 from typing import Any
 
 import pytest
-from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -32,6 +27,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import StaticPool
 
 from modules.backend.models.base import Base
+from tests.test_config import get_test_database_url as _get_test_database_url
 
 
 # =============================================================================
@@ -48,22 +44,13 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
 
 
 # =============================================================================
-# Database Configuration
+# Database Configuration (from config/settings/test.yaml or TEST_DATABASE_URL)
 # =============================================================================
 
 
 def get_test_database_url() -> str:
-    """
-    Get the test database URL.
-
-    Returns TEST_DATABASE_URL if set, otherwise uses in-memory SQLite.
-    SQLite is fast and requires no external setup, making it ideal for
-    unit tests and CI environments without database infrastructure.
-    """
-    return os.environ.get(
-        "TEST_DATABASE_URL",
-        "sqlite+aiosqlite:///:memory:",
-    )
+    """Get test database URL from env or config/settings/test.yaml."""
+    return _get_test_database_url()
 
 
 def is_sqlite() -> bool:

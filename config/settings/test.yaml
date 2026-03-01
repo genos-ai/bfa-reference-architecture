@@ -1,0 +1,33 @@
+# =============================================================================
+# Test Configuration
+# =============================================================================
+# Used by pytest fixtures (tests/conftest.py, tests/unit/conftest.py,
+# tests/integration/conftest.py). Not used by the application at runtime.
+#
+# database_url: Used when env TEST_DATABASE_URL is not set (default in-memory
+#               SQLite for CI/local unit tests without PostgreSQL).
+# database:     Structured DB/Redis params for mock app config in unit and
+#               integration tests. Override via TEST_DATABASE_URL for real DB.
+# =============================================================================
+
+# Default test database URL when TEST_DATABASE_URL env is unset.
+database_url: "sqlite+aiosqlite:///:memory:"
+
+database:
+  host: "localhost"
+  port: 5432
+  name: "test_db"
+  user: "test_user"
+  pool_size: 5
+  max_overflow: 10
+  pool_timeout: 30
+  pool_recycle: 1800
+  echo: false
+  echo_pool: false
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 0
+    broker:
+      queue_name: "test_tasks"
+      result_expiry_seconds: 3600
