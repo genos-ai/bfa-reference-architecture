@@ -19,14 +19,14 @@ from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-_agent: Agent[HealthAgentDeps, HealthCheckResult] | None = None
 
+def create_agent(model: str | Model) -> Agent[HealthAgentDeps, HealthCheckResult]:
+    """Factory: create a health agent with all tools registered.
 
-def _get_agent(model: str | Model) -> Agent[HealthAgentDeps, HealthCheckResult]:
-    """Lazy initialization — creates the agent on first call."""
-    global _agent
-    if _agent is not None:
-        return _agent
+    Called by AgentRegistry.get_instance() on first use.
+    The registry caches the result — this function is not called again
+    unless registry.reset() is called.
+    """
 
     instructions = assemble_instructions("system", "health")
 
@@ -47,20 +47,20 @@ def _get_agent(model: str | Model) -> Agent[HealthAgentDeps, HealthCheckResult]:
         """Get application metadata (name, version, environment, debug mode)."""
         return await system.get_app_info(ctx.deps.app_config)
 
-    _agent = agent
-    logger.info("Health agent initialized", extra={"model": model})
-    return _agent
+    logger.info("Health agent created", extra={"model": str(model)})
+    return agent
 
 
 async def run_agent(
     user_message: str,
     deps: HealthAgentDeps,
+    agent: Agent[HealthAgentDeps, HealthCheckResult],
     usage_limits: UsageLimits | None = None,
-    model: str | Model | None = None,
 ) -> HealthCheckResult:
-    """Standard agent entry point. Called by the coordinator."""
-    resolved_model = model or deps.config.model
-    agent = _get_agent(resolved_model)
+    """Standard agent entry point. Called by the coordinator.
+
+    The agent instance is provided by the coordinator (from the registry).
+    """
 
     logger.info("Health agent invoked", extra={"message": user_message})
     result = await agent.run(user_message, deps=deps, usage_limits=usage_limits)
@@ -82,12 +82,12 @@ async def run_agent(
 async def run_agent_stream(
     user_message: str,
     deps: HealthAgentDeps,
+    agent: Agent[HealthAgentDeps, HealthCheckResult],
     conversation_id: str | None = None,
     usage_limits: UsageLimits | None = None,
-    model: str | Model | None = None,
 ) -> AsyncGenerator[dict, None]:
     """Standard streaming entry point. Called by the coordinator."""
-    result = await run_agent(user_message, deps, usage_limits, model=model)
+    result = await run_agent(user_message, deps, agent, usage_limits=usage_limits)
     yield {
         "type": "complete",
         "result": result.model_dump(),

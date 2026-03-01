@@ -6,6 +6,7 @@ Provides lookup by name, keyword matching, module path resolution,
 and listing. Caches results after first load.
 """
 
+import importlib
 from functools import lru_cache
 from typing import Any
 
@@ -24,6 +25,7 @@ class AgentRegistry:
 
     def __init__(self) -> None:
         self._agents: dict[str, AgentConfigSchema] = {}
+        self._instances: dict[str, Any] = {}
         self._loaded = False
 
     def _ensure_loaded(self) -> None:
@@ -127,6 +129,34 @@ class AgentRegistry:
         category = parts[0]
         name = parts[1]
         return f"modules.backend.agents.vertical.{category}.{name}.agent"
+
+    def get_instance(self, agent_name: str, model: Any) -> Any:
+        """Get or create a cached PydanticAI Agent instance.
+
+        First call imports the agent module and calls its create_agent() factory.
+        Subsequent calls return the cached instance. Call reset() to clear.
+        """
+        if agent_name in self._instances:
+            return self._instances[agent_name]
+
+        module_path = self.resolve_module_path(agent_name)
+        module = importlib.import_module(module_path)
+        agent = module.create_agent(model)
+        self._instances[agent_name] = agent
+
+        logger.info(
+            "Agent instance created",
+            extra={"agent_name": agent_name},
+        )
+        return agent
+
+    def reset(self) -> None:
+        """Clear all cached agent instances.
+
+        Call this in test fixtures to allow TestModel injection.
+        Config cache (_agents) is not affected.
+        """
+        self._instances.clear()
 
 
 @lru_cache(maxsize=1)

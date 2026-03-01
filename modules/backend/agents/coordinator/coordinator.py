@@ -189,12 +189,14 @@ async def _execute_agent(
     Returns dict for backward compatibility with API endpoints.
     The dict is a flattened CoordinatorResponse: {agent_name, output, **metadata}.
     """
+    registry = get_registry()
     model = _build_model(agent_config.model)
+    agent = registry.get_instance(agent_name, model)
     module = _import_agent_module(agent_name)
     deps = _build_agent_deps(agent_name, agent_config)
     limits = _get_usage_limits()
 
-    result = await module.run_agent(user_input, deps, usage_limits=limits, model=model)
+    result = await module.run_agent(user_input, deps, agent, usage_limits=limits)
     response = _format_response(agent_name, result)
 
     return {
@@ -294,13 +296,14 @@ async def handle_direct_stream(
 
     agent_config = registry.get(agent_name)
     model = _build_model(agent_config.model)
+    agent = registry.get_instance(agent_name, model)
     module = _import_agent_module(agent_name)
 
     if hasattr(module, "run_agent_stream"):
         deps = _build_agent_deps(agent_name, agent_config)
         limits = _get_usage_limits()
         async for event in module.run_agent_stream(
-            user_input, deps, conversation_id=conversation_id, usage_limits=limits, model=model,
+            user_input, deps, agent, conversation_id=conversation_id, usage_limits=limits,
         ):
             yield event
     else:

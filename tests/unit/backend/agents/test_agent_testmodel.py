@@ -45,16 +45,13 @@ def health_deps():
 
 
 @pytest.fixture(autouse=True)
-def _reset_agent_singletons():
-    """Reset agent singletons before each test so TestModel can be injected."""
-    import modules.backend.agents.vertical.code.qa.agent as qa_mod
-    import modules.backend.agents.vertical.system.health.agent as health_mod
+def _reset_agent_instances():
+    """Clear registry agent cache before each test so TestModel can be used."""
+    from modules.backend.agents.coordinator.registry import get_registry
 
-    qa_mod._agent = None
-    health_mod._agent = None
+    get_registry().reset()
     yield
-    qa_mod._agent = None
-    health_mod._agent = None
+    get_registry().reset()
 
 
 class TestQaAgentWithTestModel:
@@ -64,9 +61,9 @@ class TestQaAgentWithTestModel:
     async def test_returns_qa_audit_result_schema(self, qa_deps):
         """TestModel with call_tools='none' validates schema output
         without executing tools (tool tests cover execution separately)."""
-        from modules.backend.agents.vertical.code.qa.agent import _get_agent
+        from modules.backend.agents.vertical.code.qa.agent import create_agent
 
-        agent = _get_agent(TestModel(call_tools=[]))
+        agent = create_agent(TestModel(call_tools=[]))
 
         result = await agent.run("run compliance audit", deps=qa_deps)
 
@@ -78,9 +75,9 @@ class TestQaAgentWithTestModel:
 
     @pytest.mark.asyncio
     async def test_usage_is_tracked(self, qa_deps):
-        from modules.backend.agents.vertical.code.qa.agent import _get_agent
+        from modules.backend.agents.vertical.code.qa.agent import create_agent
 
-        agent = _get_agent(TestModel(call_tools=[]))
+        agent = create_agent(TestModel(call_tools=[]))
 
         result = await agent.run("check code quality", deps=qa_deps)
 
@@ -90,15 +87,10 @@ class TestQaAgentWithTestModel:
     @pytest.mark.asyncio
     async def test_run_agent_interface(self, qa_deps):
         """Test the standard run_agent() entry point used by the coordinator."""
-        import modules.backend.agents.vertical.code.qa.agent as qa_mod
+        from modules.backend.agents.vertical.code.qa.agent import create_agent, run_agent
 
-        qa_mod._agent = None
-
-        from modules.backend.agents.vertical.code.qa.agent import _get_agent
-        _get_agent(TestModel(call_tools=[]))
-
-        from modules.backend.agents.vertical.code.qa.agent import run_agent
-        result = await run_agent("scan everything", qa_deps)
+        agent = create_agent(TestModel(call_tools=[]))
+        result = await run_agent("scan everything", qa_deps, agent)
 
         assert isinstance(result, QaAuditResult)
 
@@ -109,9 +101,9 @@ class TestHealthAgentWithTestModel:
     @pytest.mark.asyncio
     async def test_returns_health_check_result_schema(self, health_deps):
         """TestModel with call_tools='none' validates schema output."""
-        from modules.backend.agents.vertical.system.health.agent import _get_agent
+        from modules.backend.agents.vertical.system.health.agent import create_agent
 
-        agent = _get_agent(TestModel(call_tools=[]))
+        agent = create_agent(TestModel(call_tools=[]))
 
         result = await agent.run("check system health", deps=health_deps)
 
@@ -122,9 +114,9 @@ class TestHealthAgentWithTestModel:
 
     @pytest.mark.asyncio
     async def test_usage_is_tracked(self, health_deps):
-        from modules.backend.agents.vertical.system.health.agent import _get_agent
+        from modules.backend.agents.vertical.system.health.agent import create_agent
 
-        agent = _get_agent(TestModel(call_tools=[]))
+        agent = create_agent(TestModel(call_tools=[]))
 
         result = await agent.run("ping", deps=health_deps)
 
@@ -134,15 +126,10 @@ class TestHealthAgentWithTestModel:
     @pytest.mark.asyncio
     async def test_run_agent_interface(self, health_deps):
         """Test the standard run_agent() entry point used by the coordinator."""
-        import modules.backend.agents.vertical.system.health.agent as health_mod
+        from modules.backend.agents.vertical.system.health.agent import create_agent, run_agent
 
-        health_mod._agent = None
-
-        from modules.backend.agents.vertical.system.health.agent import _get_agent
-        _get_agent(TestModel(call_tools=[]))
-
-        from modules.backend.agents.vertical.system.health.agent import run_agent
-        result = await run_agent("how is the system", health_deps)
+        agent = create_agent(TestModel(call_tools=[]))
+        result = await run_agent("how is the system", health_deps, agent)
 
         assert isinstance(result, HealthCheckResult)
 

@@ -58,6 +58,15 @@ class TestAgentRegistry:
         registry = get_registry()
         assert registry.get_by_keyword("bake a cake") is None
 
+    def test_reset_clears_instances(self):
+        """registry.reset() clears cached agent instances."""
+        registry = get_registry()
+        registry._instances["fake.agent"] = "sentinel"
+        assert "fake.agent" in registry._instances
+
+        registry.reset()
+        assert "fake.agent" not in registry._instances
+
     def test_resolve_module_path_vertical(self):
         registry = get_registry()
         path = registry.resolve_module_path("code.qa.agent")

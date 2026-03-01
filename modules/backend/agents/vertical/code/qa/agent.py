@@ -20,14 +20,14 @@ from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-_agent: Agent[QaAgentDeps, QaAuditResult] | None = None
 
+def create_agent(model: str | Model) -> Agent[QaAgentDeps, QaAuditResult]:
+    """Factory: create a QA compliance agent with all tools registered.
 
-def _get_agent(model: str | Model) -> Agent[QaAgentDeps, QaAuditResult]:
-    """Lazy initialization — creates the agent on first call."""
-    global _agent
-    if _agent is not None:
-        return _agent
+    Called by AgentRegistry.get_instance() on first use.
+    The registry caches the result — this function is not called again
+    unless registry.reset() is called.
+    """
 
     instructions = assemble_instructions("code", "qa")
 
@@ -117,20 +117,20 @@ def _get_agent(model: str | Model) -> Agent[QaAgentDeps, QaAuditResult]:
         ctx.deps.emit({"type": "tool_done", "tool": "run_tests", "detail": "passed" if result["passed"] else "FAILED"})
         return result
 
-    _agent = agent
-    logger.info("QA compliance agent initialized", extra={"model": model})
-    return _agent
+    logger.info("QA compliance agent created", extra={"model": str(model)})
+    return agent
 
 
 async def run_agent(
     user_message: str,
     deps: QaAgentDeps,
+    agent: Agent[QaAgentDeps, QaAuditResult],
     usage_limits: UsageLimits | None = None,
-    model: str | Model | None = None,
 ) -> QaAuditResult:
-    """Standard agent entry point. Called by the coordinator."""
-    resolved_model = model or deps.config.model
-    agent = _get_agent(resolved_model)
+    """Standard agent entry point. Called by the coordinator.
+
+    The agent instance is provided by the coordinator (from the registry).
+    """
 
     logger.info("QA agent invoked", extra={"message": user_message})
     result = await agent.run(user_message, deps=deps, usage_limits=usage_limits)
@@ -154,9 +154,9 @@ async def run_agent(
 async def run_agent_stream(
     user_message: str,
     deps: QaAgentDeps,
+    agent: Agent[QaAgentDeps, QaAuditResult],
     conversation_id: str | None = None,
     usage_limits: UsageLimits | None = None,
-    model: str | Model | None = None,
 ) -> AsyncGenerator[dict, None]:
     """Standard streaming entry point. Called by the coordinator.
 
@@ -175,8 +175,6 @@ async def run_agent_stream(
     deps.on_progress = lambda event: queue.put_nowait(event)
 
     async def _run():
-        resolved_model = model or deps.config.model
-        agent = _get_agent(resolved_model)
         logger.info("QA agent invoked (stream)", extra={"message": user_message, "conversation_id": conversation_id})
         result = await agent.run(user_message, deps=deps, usage_limits=usage_limits)
         return result.output
