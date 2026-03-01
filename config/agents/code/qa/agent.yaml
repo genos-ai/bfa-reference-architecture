@@ -3,13 +3,20 @@
 # =============================================================================
 # Available options:
 #   agent_name        - Unique agent identifier (string, format: category.name.agent)
+#   agent_type        - Agent type (string: vertical | horizontal)
 #   description       - Agent description for routing (string)
 #   enabled           - Enable/disable without code deployment (boolean)
 #   model             - LLM model identifier (string, provider:model format)
 #   keywords          - Keywords for rule-based routing (list of strings)
-#   tools             - Registered tool names (list of strings)
+#   tools             - Shared tool names (list of dotted strings, domain.action)
 #   max_input_length  - Maximum input character count (integer)
+#   max_budget_usd    - Maximum cost per invocation in USD (decimal)
 #   file_size_limit   - Maximum Python file line count (integer)
+#   execution         - Execution mode (object)
+#     mode            - Execution environment (string: local | container)
+#   scope             - Filesystem access control (object)
+#     read            - Paths the agent can read (list of strings)
+#     write           - Paths the agent can write (list of strings)
 #   rules             - Compliance rules to check (list of objects)
 #     id              - Rule identifier (string)
 #     description     - Human-readable rule description (string)
@@ -21,11 +28,16 @@
 # =============================================================================
 
 agent_name: code.qa.agent
+agent_type: vertical
 description: "Audits the codebase for compliance violations and fixes them"
 enabled: true
 model: anthropic:claude-haiku-4-5-20251001
 max_input_length: 2000
+max_budget_usd: 0.50
 file_size_limit: 1000
+
+execution:
+  mode: local
 keywords:
   - compliance
   - qa
@@ -35,16 +47,26 @@ keywords:
   - code review
   - rule check
 tools:
-  - scan_hardcoded_values
-  - scan_import_violations
-  - scan_datetime_violations
-  - scan_cli_options
-  - scan_file_sizes
-  - scan_config_files
-  - read_source_file
-  - list_python_files
-  - apply_fix
-  - run_tests
+  - filesystem.read_file
+  - filesystem.list_files
+  - compliance.scan_imports
+  - compliance.scan_datetime
+  - compliance.scan_hardcoded
+  - compliance.scan_file_sizes
+  - compliance.scan_cli_options
+  - compliance.scan_config_files
+  - code.apply_fix
+  - code.run_tests
+
+scope:
+  read:
+    - "modules/"
+    - "config/"
+    - "tests/"
+    - "*.py"
+  write:
+    - "modules/"
+    - "config/"
 
 rules:
   - id: no_hardcoded_values

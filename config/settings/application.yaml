@@ -22,8 +22,9 @@
 #     external_api  - External API call timeout (integer)
 #     background    - Background task timeout (integer)
 #   telegram        - Telegram bot settings (object)
-#     webhook_path  - Webhook URL path (string)
-#     authorized_users - Authorized user IDs (list of integers, empty = allow all)
+#     webhook_path       - Webhook URL path (string)
+#     authorized_users   - Authorized user IDs (list of integers, empty = deny all)
+#     max_message_length - Maximum message length (integer, default: 4096)
 # =============================================================================
 
 name: "BFF Application"
@@ -56,3 +57,4 @@ timeouts:
 telegram:
   webhook_path: "/webhook/telegram"
   authorized_users: []
+  max_message_length: 4096

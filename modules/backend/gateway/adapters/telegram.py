@@ -7,8 +7,10 @@ and middlewares are unchanged — this adapter translates between
 the gateway's standard message format and aiogram's native types.
 """
 
+import re
 from typing import TYPE_CHECKING
 
+from modules.backend.core.config import get_app_config
 from modules.backend.core.logging import get_logger
 from modules.backend.gateway.adapters import AgentResponse, ChannelAdapter
 
@@ -16,8 +18,6 @@ if TYPE_CHECKING:
     from aiogram import Bot
 
 logger = get_logger(__name__)
-
-TELEGRAM_MAX_MESSAGE_LENGTH = 4096
 
 
 class TelegramAdapter(ChannelAdapter):
@@ -37,7 +37,7 @@ class TelegramAdapter(ChannelAdapter):
 
     @property
     def max_message_length(self) -> int:
-        return TELEGRAM_MAX_MESSAGE_LENGTH
+        return get_app_config().application.telegram.max_message_length
 
     async def deliver_response(self, response: AgentResponse) -> bool:
         """
@@ -97,17 +97,14 @@ class TelegramAdapter(ChannelAdapter):
 
 def _convert_markdown_bold(text: str) -> str:
     """Convert **bold** to <b>bold</b>."""
-    import re
     return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
 
 
 def _convert_markdown_italic(text: str) -> str:
     """Convert *italic* to <i>italic</i> (single asterisks not preceded by another)."""
-    import re
     return re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<i>\1</i>", text)
 
 
 def _convert_markdown_code(text: str) -> str:
     """Convert `code` to <code>code</code>."""
-    import re
     return re.sub(r"`(.+?)`", r"<code>\1</code>", text)

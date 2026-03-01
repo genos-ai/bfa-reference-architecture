@@ -10,6 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from modules.backend.core.config_schema import DatabaseSchema
+from tests.test_config import get_test_database_config
+
 
 # =============================================================================
 # Database Mock Fixtures
@@ -130,18 +133,7 @@ def mock_app_config() -> MagicMock:
         "cors": {"origins": []},
         "telegram": {"webhook_path": "/webhook/telegram", "authorized_users": []},
     }
-    config.database = {
-        "host": "localhost",
-        "port": 5432,
-        "name": "test_db",
-        "user": "test_user",
-        "pool_size": 5,
-        "max_overflow": 10,
-        "pool_timeout": 30,
-        "pool_recycle": 1800,
-        "echo": False,
-        "redis": {"host": "localhost", "port": 6379, "db": 0},
-    }
+    config.database = DatabaseSchema(**get_test_database_config())
     config.logging = {
         "level": "DEBUG",
         "format": "console",

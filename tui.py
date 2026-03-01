@@ -21,10 +21,9 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import click
 import httpx
-import structlog
 
 from modules.backend.core.config import get_server_base_url, validate_project_root
-from modules.backend.core.logging import get_logger, setup_logging
+from modules.backend.core.logging import bind_context, get_logger, setup_logging
 from modules.backend.core.utils import utc_now
 
 from rich.text import Text
@@ -350,7 +349,7 @@ def main(verbose: bool, debug: bool) -> None:
     else:
         setup_logging(level="WARNING", format_type="console")
 
-    structlog.contextvars.bind_contextvars(source="tui")
+    bind_context(source="tui")
 
     logger = get_logger(__name__)
     logger.debug("Starting TUI", extra={"debug": debug, "verbose": verbose})

@@ -14,7 +14,7 @@ Each top-level class corresponds to one file in config/settings/:
     SecuritySchema     → security.yaml
 """
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class _StrictBase(BaseModel):
@@ -51,6 +51,7 @@ class TimeoutsSchema(_StrictBase):
 class TelegramAppSchema(_StrictBase):
     webhook_path: str
     authorized_users: list[int]
+    max_message_length: int = 4096
 
 
 class ApplicationSchema(_StrictBase):
@@ -208,12 +209,19 @@ class CorsEnforcementSchema(_StrictBase):
     allow_headers: list[str]
 
 
+class RoleSchema(_StrictBase):
+    level: int
+    description: str
+
+
 class SecuritySchema(_StrictBase):
     jwt: JwtSchema
     rate_limiting: RateLimitingSchema
     request_limits: RequestLimitsSchema
     headers: SecurityHeadersSchema
     secrets_validation: SecretsValidationSchema
+    roles: dict[str, RoleSchema] = Field(default_factory=dict)
+    user_roles: dict[str, str] = Field(default_factory=dict)
     cors: CorsEnforcementSchema
 
 

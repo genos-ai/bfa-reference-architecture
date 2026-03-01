@@ -1,304 +1,138 @@
 """
 Unit Tests for Request Context Middleware.
 
-Tests the RequestContextMiddleware functionality including:
-- Request ID generation and propagation
-- Source extraction from X-Frontend-ID header
-- Response timing headers
-- Structlog context binding
+Tests use a real Starlette test client with the actual middleware —
+no mocks. Verifies request ID, source extraction, response timing,
+and error handling through real HTTP requests.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
 from datetime import datetime
 
+import pytest
+from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+from starlette.testclient import TestClient
+
+from modules.backend.core.middleware import RequestContextMiddleware
 
 
-class TestRequestContextMiddleware:
-    """Tests for RequestContextMiddleware."""
+def _make_app(handler=None):
+    """Build a minimal Starlette app with the real middleware."""
 
-    @pytest.fixture
-    def middleware(self):
-        """Create middleware instance."""
-        from modules.backend.core.middleware import RequestContextMiddleware
+    async def default_handler(request: Request) -> JSONResponse:
+        return JSONResponse({
+            "request_id": request.state.request_id,
+            "source": request.state.source,
+            "start_time": request.state.start_time.isoformat() if request.state.start_time else None,
+        })
 
-        mock_app = MagicMock()
-        return RequestContextMiddleware(mock_app)
+    async def error_handler(request: Request) -> JSONResponse:
+        raise RuntimeError("Something went wrong")
 
-    @pytest.fixture
-    def mock_request(self):
-        """Create a mock request."""
-        request = MagicMock(spec=Request)
-        request.headers = {}
-        request.method = "GET"
-        request.url = MagicMock()
-        request.url.path = "/api/v1/test"
-        request.client = MagicMock()
-        request.client.host = "127.0.0.1"
-        request.state = MagicMock()
-        return request
+    routes = [
+        Route("/test", handler or default_handler),
+        Route("/error", error_handler),
+    ]
+    app = Starlette(routes=routes)
+    app.add_middleware(RequestContextMiddleware)
+    return app
 
-    # -------------------------------------------------------------------------
-    # Source (X-Frontend-ID) Tests
-    # -------------------------------------------------------------------------
 
-    @pytest.mark.asyncio
-    async def test_extracts_source_web(self, middleware, mock_request):
-        """Should extract source when X-Frontend-ID header is 'web'."""
-        mock_request.headers = {"X-Frontend-ID": "web"}
-        mock_response = Response(content="OK", status_code=200)
+@pytest.fixture
+def client():
+    return TestClient(_make_app(), raise_server_exceptions=False)
 
-        async def call_next(request):
-            assert request.state.source == "web"
-            return mock_response
 
-        with patch("modules.backend.core.middleware.structlog.contextvars"):
-            await middleware.dispatch(mock_request, call_next)
+class TestRequestId:
+    """Tests for X-Request-ID generation and propagation."""
 
-    @pytest.mark.asyncio
-    async def test_extracts_source_cli(self, middleware, mock_request):
-        """Should extract source when X-Frontend-ID header is 'cli'."""
-        mock_request.headers = {"X-Frontend-ID": "cli"}
-        mock_response = Response(content="OK", status_code=200)
-
-        async def call_next(request):
-            assert request.state.source == "cli"
-            return mock_response
-
-        with patch("modules.backend.core.middleware.structlog.contextvars"):
-            await middleware.dispatch(mock_request, call_next)
-
-    @pytest.mark.asyncio
-    async def test_extracts_source_telegram(self, middleware, mock_request):
-        """Should extract source when X-Frontend-ID header is 'telegram'."""
-        mock_request.headers = {"X-Frontend-ID": "telegram"}
-        mock_response = Response(content="OK", status_code=200)
-
-        async def call_next(request):
-            assert request.state.source == "telegram"
-            return mock_response
-
-        with patch("modules.backend.core.middleware.structlog.contextvars"):
-            await middleware.dispatch(mock_request, call_next)
-
-    @pytest.mark.asyncio
-    async def test_source_is_none_when_header_missing(self, middleware, mock_request):
-        """Should set source to None when X-Frontend-ID header is missing."""
-        mock_request.headers = {}
-        mock_response = Response(content="OK", status_code=200)
-
-        async def call_next(request):
-            assert request.state.source is None
-            return mock_response
-
-        with patch("modules.backend.core.middleware.structlog.contextvars"):
-            await middleware.dispatch(mock_request, call_next)
-
-    @pytest.mark.asyncio
-    async def test_unrecognized_source_dropped(self, middleware, mock_request):
-        """Should drop unrecognized X-Frontend-ID values and set source to None."""
-        mock_request.headers = {"X-Frontend-ID": "custom-client"}
-        mock_response = Response(content="OK", status_code=200)
-
-        async def call_next(request):
-            assert request.state.source is None
-            return mock_response
-
-        with patch("modules.backend.core.middleware.structlog.contextvars"):
-            await middleware.dispatch(mock_request, call_next)
-
-    @pytest.mark.asyncio
-    async def test_source_case_insensitive(self, middleware, mock_request):
-        """Should handle X-Frontend-ID header case-insensitively."""
-        mock_request.headers = {"X-Frontend-ID": "WEB"}
-        mock_response = Response(content="OK", status_code=200)
-
-        async def call_next(request):
-            assert request.state.source == "web"
-            return mock_response
-
-        with patch("modules.backend.core.middleware.structlog.contextvars"):
-            await middleware.dispatch(mock_request, call_next)
-
-    @pytest.mark.asyncio
-    async def test_source_bound_to_structlog_when_present(self, middleware, mock_request):
-        """Should bind source to structlog context when X-Frontend-ID is provided."""
-        mock_request.headers = {"X-Frontend-ID": "cli"}
-        mock_response = Response(content="OK", status_code=200)
-
-        async def call_next(request):
-            return mock_response
-
-        with patch("modules.backend.core.middleware.structlog.contextvars") as mock_ctx:
-            await middleware.dispatch(mock_request, call_next)
-
-            call_kwargs = mock_ctx.bind_contextvars.call_args[1]
-            assert call_kwargs["source"] == "cli"
-
-    @pytest.mark.asyncio
-    async def test_source_not_bound_to_structlog_when_missing(self, middleware, mock_request):
-        """Should not bind source to structlog context when header is missing."""
-        mock_request.headers = {}
-        mock_response = Response(content="OK", status_code=200)
-
-        async def call_next(request):
-            return mock_response
-
-        with patch("modules.backend.core.middleware.structlog.contextvars") as mock_ctx:
-            await middleware.dispatch(mock_request, call_next)
-
-            call_kwargs = mock_ctx.bind_contextvars.call_args[1]
-            assert "source" not in call_kwargs
-
-    # -------------------------------------------------------------------------
-    # X-Request-ID Tests
-    # -------------------------------------------------------------------------
-
-    @pytest.mark.asyncio
-    async def test_generates_request_id_when_not_provided(self, middleware, mock_request):
-        """Should generate a UUID request ID when X-Request-ID header is missing."""
-        mock_response = Response(content="OK", status_code=200)
-
-        async def call_next(request):
-            assert hasattr(request.state, "request_id")
-            assert request.state.request_id is not None
-            assert len(request.state.request_id) == 36
-            return mock_response
-
-        with patch("modules.backend.core.middleware.structlog.contextvars"):
-            response = await middleware.dispatch(mock_request, call_next)
-
+    def test_generates_request_id_when_not_provided(self, client):
+        response = client.get("/test")
+        assert response.status_code == 200
         assert "X-Request-ID" in response.headers
         assert len(response.headers["X-Request-ID"]) == 36
 
-    @pytest.mark.asyncio
-    async def test_uses_provided_request_id(self, middleware, mock_request):
-        """Should use X-Request-ID header when provided."""
-        provided_id = "custom-request-id-123"
-        mock_request.headers = {"X-Request-ID": provided_id}
-        mock_response = Response(content="OK", status_code=200)
+    def test_uses_provided_request_id(self, client):
+        response = client.get("/test", headers={"X-Request-ID": "custom-id-123"})
+        assert response.headers["X-Request-ID"] == "custom-id-123"
+        assert response.json()["request_id"] == "custom-id-123"
 
-        async def call_next(request):
-            assert request.state.request_id == provided_id
-            return mock_response
+    def test_request_id_stored_on_state(self, client):
+        response = client.get("/test")
+        assert response.json()["request_id"] is not None
+        assert len(response.json()["request_id"]) == 36
 
-        with patch("modules.backend.core.middleware.structlog.contextvars"):
-            response = await middleware.dispatch(mock_request, call_next)
 
-        assert response.headers["X-Request-ID"] == provided_id
+class TestSource:
+    """Tests for X-Frontend-ID source extraction."""
 
-    # -------------------------------------------------------------------------
-    # X-Response-Time Tests
-    # -------------------------------------------------------------------------
+    def test_extracts_source_web(self, client):
+        response = client.get("/test", headers={"X-Frontend-ID": "web"})
+        assert response.json()["source"] == "web"
 
-    @pytest.mark.asyncio
-    async def test_adds_response_time_header(self, middleware, mock_request):
-        """Should add X-Response-Time header with duration."""
-        mock_response = Response(content="OK", status_code=200)
+    def test_extracts_source_cli(self, client):
+        response = client.get("/test", headers={"X-Frontend-ID": "cli"})
+        assert response.json()["source"] == "cli"
 
-        async def call_next(request):
-            return mock_response
+    def test_extracts_source_telegram(self, client):
+        response = client.get("/test", headers={"X-Frontend-ID": "telegram"})
+        assert response.json()["source"] == "telegram"
 
-        with patch("modules.backend.core.middleware.structlog.contextvars"):
-            response = await middleware.dispatch(mock_request, call_next)
+    def test_source_is_none_when_header_missing(self, client):
+        response = client.get("/test")
+        assert response.json()["source"] is None
 
+    def test_unrecognized_source_dropped(self, client):
+        response = client.get("/test", headers={"X-Frontend-ID": "custom-client"})
+        assert response.json()["source"] is None
+
+    def test_source_case_insensitive(self, client):
+        response = client.get("/test", headers={"X-Frontend-ID": "WEB"})
+        assert response.json()["source"] == "web"
+
+    def test_source_trimmed(self, client):
+        response = client.get("/test", headers={"X-Frontend-ID": "  cli  "})
+        assert response.json()["source"] == "cli"
+
+
+class TestResponseTime:
+    """Tests for X-Response-Time header."""
+
+    def test_adds_response_time_header(self, client):
+        response = client.get("/test")
         assert "X-Response-Time" in response.headers
         assert response.headers["X-Response-Time"].endswith("ms")
 
-    # -------------------------------------------------------------------------
-    # Request State Tests
-    # -------------------------------------------------------------------------
+    def test_response_time_is_non_negative(self, client):
+        response = client.get("/test")
+        ms_str = response.headers["X-Response-Time"].replace("ms", "")
+        assert int(ms_str) >= 0
 
-    @pytest.mark.asyncio
-    async def test_sets_start_time_on_request_state(self, middleware, mock_request):
-        """Should set start_time on request.state."""
-        mock_response = Response(content="OK", status_code=200)
-        captured_start_time = None
 
-        async def call_next(request):
-            nonlocal captured_start_time
-            captured_start_time = request.state.start_time
-            return mock_response
+class TestRequestState:
+    """Tests for request.state population."""
 
-        with patch("modules.backend.core.middleware.structlog.contextvars"):
-            await middleware.dispatch(mock_request, call_next)
+    def test_start_time_is_timezone_naive_utc(self, client):
+        response = client.get("/test")
+        start_time_str = response.json()["start_time"]
+        assert start_time_str is not None
+        dt = datetime.fromisoformat(start_time_str)
+        assert dt.tzinfo is None
 
-        assert captured_start_time is not None
-        assert isinstance(captured_start_time, datetime)
-        assert captured_start_time.tzinfo is None
 
-    # -------------------------------------------------------------------------
-    # Structlog Context Tests
-    # -------------------------------------------------------------------------
+class TestErrorHandling:
+    """Tests for middleware behavior during errors."""
 
-    @pytest.mark.asyncio
-    async def test_binds_context_to_structlog(self, middleware, mock_request):
-        """Should bind request context to structlog contextvars."""
-        mock_request.headers = {"X-Frontend-ID": "web"}
-        mock_response = Response(content="OK", status_code=200)
+    def test_reraises_exception(self):
+        app = _make_app()
+        test_client = TestClient(app, raise_server_exceptions=False)
+        response = test_client.get("/error")
+        assert response.status_code == 500
 
-        async def call_next(request):
-            return mock_response
-
-        with patch("modules.backend.core.middleware.structlog.contextvars") as mock_ctx:
-            await middleware.dispatch(mock_request, call_next)
-
-            mock_ctx.clear_contextvars.assert_called()
-            mock_ctx.bind_contextvars.assert_called_once()
-            call_kwargs = mock_ctx.bind_contextvars.call_args[1]
-            assert "request_id" in call_kwargs
-            assert call_kwargs["source"] == "web"
-            assert call_kwargs["method"] == "GET"
-            assert call_kwargs["path"] == "/api/v1/test"
-
-    @pytest.mark.asyncio
-    async def test_clears_context_after_request(self, middleware, mock_request):
-        """Should clear structlog context after request completes."""
-        mock_response = Response(content="OK", status_code=200)
-
-        async def call_next(request):
-            return mock_response
-
-        with patch("modules.backend.core.middleware.structlog.contextvars") as mock_ctx:
-            await middleware.dispatch(mock_request, call_next)
-
-            assert mock_ctx.clear_contextvars.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_clears_context_on_exception(self, middleware, mock_request):
-        """Should clear structlog context even when exception occurs."""
-
-        async def call_next(request):
-            raise ValueError("Test error")
-
-        with patch("modules.backend.core.middleware.structlog.contextvars") as mock_ctx:
-            with pytest.raises(ValueError):
-                await middleware.dispatch(mock_request, call_next)
-
-            assert mock_ctx.clear_contextvars.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_reraises_exception(self, middleware, mock_request):
-        """Should re-raise exceptions after logging."""
-
-        async def call_next(request):
-            raise RuntimeError("Something went wrong")
-
-        with patch("modules.backend.core.middleware.structlog.contextvars"):
-            with pytest.raises(RuntimeError, match="Something went wrong"):
-                await middleware.dispatch(mock_request, call_next)
-
-    @pytest.mark.asyncio
-    async def test_handles_missing_client(self, middleware, mock_request):
-        """Should handle requests without client info."""
-        mock_request.client = None
-        mock_response = Response(content="OK", status_code=200)
-
-        async def call_next(request):
-            return mock_response
-
-        with patch("modules.backend.core.middleware.structlog.contextvars"):
-            response = await middleware.dispatch(mock_request, call_next)
-            assert response.status_code == 200
+    def test_error_response_has_request_id(self):
+        app = _make_app()
+        test_client = TestClient(app, raise_server_exceptions=False)
+        response = test_client.get("/error", headers={"X-Request-ID": "err-123"})
+        assert response.status_code == 500

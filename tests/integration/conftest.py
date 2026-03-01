@@ -14,6 +14,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from modules.backend.core.database import get_db_session
+from tests.test_config import get_test_database_config
 
 
 # =============================================================================
@@ -150,24 +151,7 @@ def _create_mock_app_config() -> Any:
                 timeouts={"database": 10, "external_api": 30, "background": 120},
                 telegram={"webhook_path": "/webhook/telegram", "authorized_users": []},
             )
-            self.database = DatabaseSchema(
-                host="localhost",
-                port=5432,
-                name="test_db",
-                user="test_user",
-                pool_size=5,
-                max_overflow=10,
-                pool_timeout=30,
-                pool_recycle=1800,
-                echo=False,
-                echo_pool=False,
-                redis={
-                    "host": "localhost",
-                    "port": 6379,
-                    "db": 0,
-                    "broker": {"queue_name": "test_tasks", "result_expiry_seconds": 3600},
-                },
-            )
+            self.database = DatabaseSchema(**get_test_database_config())
             self.logging = LoggingSchema(
                 level="WARNING",
                 format="console",

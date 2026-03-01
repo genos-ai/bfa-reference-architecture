@@ -1,7 +1,8 @@
 """
 Authentication Middleware.
 
-User ID whitelisting for Telegram bot access control.
+User ID whitelisting and role-based access control for the Telegram bot.
+Roles and user-to-role mappings are read from config/settings/security.yaml.
 Telegram user IDs are immutable integers that cannot be spoofed within the Telegram API.
 """
 
@@ -15,12 +16,33 @@ from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# User roles for authorization
-USER_ROLES = {
-    "admin": 3,    # Full access: kill switch, deploy, config changes
-    "trader": 2,   # Trade access: buy/sell within limits
-    "viewer": 1,   # Read-only: status commands only
-}
+
+def _get_role_hierarchy() -> dict[str, int]:
+    """Build a role-name -> level mapping from security config."""
+    security = get_app_config().security
+    return {name: role.level for name, role in security.roles.items()}
+
+
+def _get_user_roles_mapping() -> dict[int, str]:
+    """Build a user-ID -> role-name mapping from security config.
+
+    YAML stores keys as strings; convert to int for Telegram user IDs.
+    """
+    security = get_app_config().security
+    return {int(uid): role for uid, role in security.user_roles.items()}
+
+
+def _resolve_role(user_id: int, authorized_users: list[int]) -> str:
+    """Determine a user's role from explicit mapping or default rules.
+
+    Priority:
+        1. Explicit mapping in security.yaml user_roles
+        2. Default to 'viewer' for any authorized user without a mapping
+    """
+    explicit = _get_user_roles_mapping()
+    if user_id in explicit:
+        return explicit[user_id]
+    return "viewer"
 
 
 class AuthMiddleware(BaseMiddleware):
@@ -31,20 +53,17 @@ class AuthMiddleware(BaseMiddleware):
     Silently drops unauthorized requests to avoid revealing bot existence.
 
     Configuration:
-        Set TELEGRAM_AUTHORIZED_USERS in environment as comma-separated user IDs.
-        Example: TELEGRAM_AUTHORIZED_USERS=123456789,987654321
+        Set authorized_users in config/settings/application.yaml.
+        Set role mappings in config/settings/security.yaml under user_roles.
 
     Usage:
-        # In dispatcher setup
         dp.update.outer_middleware(AuthMiddleware())
 
-        # In handlers, access user role via data
         @router.message(Command("admin_command"))
         async def admin_handler(message: Message, user_role: str):
             if user_role != "admin":
                 await message.answer("Unauthorized")
                 return
-            # ... admin logic
     """
 
     async def __call__(
@@ -53,20 +72,9 @@ class AuthMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        """
-        Process the middleware.
-
-        Args:
-            handler: Next handler in the chain
-            event: Telegram event (Update)
-            data: Handler data dict
-
-        Returns:
-            Handler result or None if unauthorized
-        """
+        """Process the middleware."""
         app_config = get_app_config()
 
-        # Extract user from the event
         user = None
         chat_type = None
 
@@ -81,21 +89,18 @@ class AuthMiddleware(BaseMiddleware):
                 user = event.inline_query.from_user
 
         if not user:
-            # No user in event, allow (might be channel post, etc.)
             return await handler(event, data)
 
         user_id = user.id
 
-        # Check if user is authorized
         authorized_users = app_config.application.telegram.authorized_users
 
-        # If no authorized users configured, allow all (development mode)
         if not authorized_users:
             logger.debug(
                 "No authorized users configured, allowing all",
                 extra={"user_id": user_id},
             )
-            data["user_role"] = "admin"  # Default to admin in dev mode
+            data["user_role"] = "admin"
             data["telegram_user"] = user
             return await handler(event, data)
 
@@ -108,16 +113,9 @@ class AuthMiddleware(BaseMiddleware):
                     "chat_type": chat_type,
                 },
             )
-            # Silently drop - don't reveal bot exists to unauthorized users
             return None
 
-        # User is authorized - determine role
-        # Default implementation: first user in list is admin, rest are traders
-        # Override this with a proper role mapping in production
-        if user_id == authorized_users[0]:
-            role = "admin"
-        else:
-            role = "trader"
+        role = _resolve_role(user_id, authorized_users)
 
         data["user_role"] = role
         data["telegram_user"] = user
@@ -138,25 +136,25 @@ def require_role(min_role: str):
     """
     Decorator to require a minimum role for a handler.
 
+    Reads role hierarchy from config/settings/security.yaml.
+
     Args:
-        min_role: Minimum required role ("viewer", "trader", "admin")
+        min_role: Minimum required role name (e.g. "viewer", "trader", "admin")
 
     Usage:
         @router.message(Command("trade"))
         @require_role("trader")
         async def trade_handler(message: Message, user_role: str):
-            # Only traders and admins can access this
             pass
     """
-    min_level = USER_ROLES.get(min_role, 0)
-
     def decorator(func: Callable) -> Callable:
         async def wrapper(*args, **kwargs):
+            hierarchy = _get_role_hierarchy()
+            min_level = hierarchy.get(min_role, 0)
             user_role = kwargs.get("user_role", "viewer")
-            user_level = USER_ROLES.get(user_role, 0)
+            user_level = hierarchy.get(user_role, 0)
 
             if user_level < min_level:
-                # Get message from args (first positional arg is usually message)
                 message = args[0] if args else kwargs.get("message")
                 if message and hasattr(message, "answer"):
                     await message.answer("⛔ You don't have permission for this action.")

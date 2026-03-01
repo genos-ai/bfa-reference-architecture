@@ -1,0 +1,83 @@
+# =============================================================================
+# Agent Coordinator Configuration
+# =============================================================================
+# Available options:
+#   routing               - Routing configuration (object)
+#     strategy            - Routing strategy (string: rule | llm | hybrid)
+#     llm_model           - Model for LLM-based routing fallback (string)
+#     complex_request_agent - Agent for multi-step requests (string)
+#     fallback_agent      - Default agent when routing fails (string)
+#     max_routing_depth   - Maximum delegation depth (integer)
+#   model_pricing         - Cost per million tokens by model (object)
+#     {model_name}        - Model identifier (object)
+#       input             - Cost per 1M input tokens in USD (decimal)
+#       output            - Cost per 1M output tokens in USD (decimal)
+#     default             - Fallback pricing when model not listed (object)
+#   limits                - Budget and safety limits (object)
+#     max_requests_per_task    - Max LLM calls per task (integer)
+#     max_tool_calls_per_task  - Max tool invocations per task (integer)
+#     max_tokens_per_task      - Max tokens per task (integer)
+#     max_cost_per_plan        - Max USD per plan (decimal)
+#     max_cost_per_user_daily  - Max USD per user per day (decimal)
+#     task_timeout_seconds     - Wall-clock timeout per task (integer)
+#     plan_timeout_seconds     - Wall-clock timeout per plan (integer)
+#   guardrails            - Input validation settings (object)
+#     max_input_length    - Maximum input character count (integer)
+#     injection_patterns  - Regex patterns to block (list of strings)
+#   redis_ttl             - Redis key TTLs in seconds (object)
+#     session             - Session history TTL (integer)
+#     approval            - Pending approval TTL (integer)
+#     lock                - Distributed lock TTL (integer)
+#     result              - Async result TTL (integer)
+#   approval              - HITL approval settings (object)
+#     poll_interval_seconds - Polling interval (integer)
+#     timeout_seconds       - Max wait for approval (integer)
+# =============================================================================
+
+model_pricing:
+  "anthropic:claude-haiku-4-5-20251001":
+    input: 1.00
+    output: 5.00
+  "anthropic:claude-sonnet-4-20250514":
+    input: 3.00
+    output: 15.00
+  "anthropic:claude-opus-4-20250514":
+    input: 15.00
+    output: 75.00
+  default:
+    input: 1.00
+    output: 5.00
+
+routing:
+  strategy: hybrid
+  llm_model: anthropic:claude-haiku-4-5-20251001
+  complex_request_agent: horizontal.pm.agent
+  fallback_agent: system.health.agent
+  max_routing_depth: 3
+
+limits:
+  max_requests_per_task: 10
+  max_tool_calls_per_task: 25
+  max_tokens_per_task: 50000
+  max_cost_per_plan: 10.00
+  max_cost_per_user_daily: 50.00
+  task_timeout_seconds: 300
+  plan_timeout_seconds: 1800
+
+guardrails:
+  max_input_length: 32000
+  injection_patterns:
+    - "ignore (all |previous |prior )?instructions"
+    - "you are now"
+    - "system prompt:"
+    - "disregard (your |all )?previous"
+
+redis_ttl:
+  session: 3600
+  approval: 86400
+  lock: 30
+  result: 3600
+
+approval:
+  poll_interval_seconds: 2
+  timeout_seconds: 300

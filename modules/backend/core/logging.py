@@ -246,3 +246,17 @@ def log_with_source(logger: Any, source: str, level: str, message: str, **kwargs
     """
     log_method = getattr(logger, level.lower())
     log_method(message, source=source, **kwargs)
+
+
+def bind_context(**kwargs: Any) -> None:
+    """Bind key-value pairs to the structlog context for the current task.
+
+    Wraps structlog.contextvars.bind_contextvars() so entry scripts
+    do not need to import structlog directly.
+    """
+    structlog.contextvars.bind_contextvars(**kwargs)
+
+
+def clear_context() -> None:
+    """Clear all structlog context variables."""
+    structlog.contextvars.clear_contextvars()

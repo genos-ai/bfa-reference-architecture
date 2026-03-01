@@ -2,20 +2,33 @@
 # System Health Agent Configuration
 # =============================================================================
 # Available options:
-#   agent_name      - Unique agent identifier (string, format: category.name.agent)
-#   description     - Agent description for routing (string)
-#   enabled         - Enable/disable without code deployment (boolean)
-#   model           - LLM model identifier (string, provider:model format)
-#   keywords        - Keywords for rule-based routing (list of strings)
-#   tools           - Registered tool names (list of strings)
+#   agent_name       - Unique agent identifier (string, format: category.name.agent)
+#   agent_type       - Agent type (string: vertical | horizontal)
+#   description      - Agent description for routing (string)
+#   enabled          - Enable/disable without code deployment (boolean)
+#   model            - LLM model identifier (string, provider:model format)
+#   keywords         - Keywords for rule-based routing (list of strings)
+#   tools            - Shared tool names (list of dotted strings, domain.action)
 #   max_input_length - Maximum input character count (integer)
+#   max_budget_usd   - Maximum cost per invocation in USD (decimal)
+#   execution        - Execution mode (object)
+#     mode           - Execution environment (string: local | container)
+#   scope            - Filesystem access control (object)
+#     read           - Paths the agent can read (list of strings)
+#     write          - Paths the agent can write (list of strings)
 # =============================================================================
 
 agent_name: system.health.agent
+agent_type: vertical
 description: "Checks system health and provides diagnostic advice"
 enabled: true
 model: anthropic:claude-haiku-4-5-20251001
 max_input_length: 1000
+max_budget_usd: 0.10
+
+execution:
+  mode: local
+
 keywords:
   - health
   - status
@@ -23,5 +36,11 @@ keywords:
   - diagnostic
   - system check
 tools:
-  - check_system_health
-  - get_app_info
+  - system.check_system_health
+  - system.get_app_info
+
+scope:
+  read:
+    - "logs/"
+    - "config/"
+  write: []
