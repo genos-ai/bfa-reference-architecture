@@ -143,23 +143,10 @@ Agent architecture, session model, multi-channel delivery. Adopt for BFA project
 
 ## Core Philosophy
 
-### Backend-First Architecture
+The architecture is built on the principles defined in **01-core-principles.md**. The two most important:
 
-All business logic resides in the backend. Clients are presentation layers only. No business rules, validation logic, or data transformation occurs in clients.
-
-Benefits:
-- Single source of truth
-- Consistent behavior across all client types
-- Security logic centralized
-- Easier testing and debugging
-- New clients require only API consumption
-
-### Thin Client Mandate
-
-Clients perform three functions only:
-1. Present data received from the backend
-2. Capture user input and send to backend
-3. Handle client-specific UI/UX concerns
+- **P1: Backend Owns All Business Logic** — every rule, validation, calculation, and decision lives in the backend. Clients are presentation layers that present data, capture input, and handle UI concerns. See doc 01 for the full definition and business logic boundary.
+- **P3: Single Source of Truth Per Entity** — one authoritative write source per data type. Caches, replicas, and analytical copies derive from the source.
 
 Clients never:
 - Validate business rules

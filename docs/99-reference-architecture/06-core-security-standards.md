@@ -322,7 +322,9 @@ async def get_current_user(
 
 ### Rate Limiting
 
-Implement rate limiting at multiple levels:
+**Library**: `slowapi` (built on `limits`, integrates with FastAPI).
+**Storage**: Redis (same instance used for caching/tasks).
+**Algorithm**: Sliding window.
 
 | Level | Limit | Window | Action |
 |-------|-------|--------|--------|
@@ -331,6 +333,30 @@ Implement rate limiting at multiple levels:
 | Per User (authenticated) | 1,000 req | 1 minute | 429 Too Many Requests |
 | Login endpoint | 10 req | 1 minute | 429 + exponential backoff |
 | Password reset | 3 req | 1 hour | 429 + account lockout warning |
+
+**Implementation**:
+
+```python
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri="redis://localhost:6379/2",  # From config, not hardcoded
+)
+
+# Per-endpoint override
+@router.post("/auth/login")
+@limiter.limit("10/minute")
+async def login(request: Request, data: LoginSchema):
+    ...
+```
+
+**Response headers** (automatic with slowapi):
+- `X-RateLimit-Limit` — maximum requests allowed
+- `X-RateLimit-Remaining` — requests remaining in window
+- `X-RateLimit-Reset` — seconds until window resets
+- `Retry-After` — included on 429 responses
 
 ### Request Size Limits
 

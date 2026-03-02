@@ -103,16 +103,16 @@ Premium v3 (Pv3) is mandatory for production. It provides VNet integration, depl
 
 ### Worker Configuration
 
-Gunicorn worker count follows the formula: `(2 × vCPU) + 1` as a starting point. For I/O-bound applications where most time is spent waiting on external APIs, fewer workers with async handling is more efficient than many workers:
+The standard Gunicorn formula `(2 × vCPU) + 1` is designed for CPU-bound synchronous applications. This architecture uses async FastAPI with Uvicorn workers, where each worker handles hundreds of concurrent connections via asyncio. **Use the table below, not the formula.**
 
-| SKU | vCPU | Recommended Workers | Rationale |
-|-----|------|---------------------|-----------|
+| SKU | vCPU | Workers | Rationale |
+|-----|------|---------|-----------|
 | B1 | 1 | 2 | Development only |
 | P1v3 | 2 | 2–3 | Each worker handles many concurrent async requests |
 | P2v3 | 4 | 3–4 | Scale via async concurrency, not worker count |
 | P3v3 | 8 | 4–6 | Diminishing returns beyond this |
 
-Each Uvicorn worker handles hundreds of concurrent async connections. Do not over-allocate workers — each consumes memory for its own copy of the application.
+Do not over-allocate workers — each consumes memory for its own copy of the application.
 
 ### WebSocket Support
 

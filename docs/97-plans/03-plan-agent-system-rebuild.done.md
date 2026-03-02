@@ -165,7 +165,7 @@ Rebuilt the agent system from scratch following doc 47 conventions. Extracted sc
 | # | Criticality | Finding | Status |
 |---|-------------|---------|--------|
 | 1 | CRITICAL | Startup checks skip webhook_secret_min_length | Fixed + tested |
-| 2 | HIGH | API key via os.environ.setdefault | Open — needs PydanticAI provider research |
+| 2 | HIGH | API key via os.environ.setdefault | Fixed — `_build_model()` uses `AnthropicProvider(api_key=settings.anthropic_api_key)` via Pydantic Settings; no `os.environ` mutation |
 | 3 | HIGH | Raw yaml.safe_load without Pydantic validation | Open — needs agent config schema design |
 | 4 | HIGH | Guardrails dict subscript fails at runtime | Open — tied to #3 |
 | 5 | HIGH | Unused imports in coordinator.py | Fixed |
@@ -193,7 +193,7 @@ Rebuilt the agent system from scratch following doc 47 conventions. Extracted sc
 
 | # | Finding | Effort | Blocked By |
 |---|---------|--------|-----------|
-| 2 | API key injection pattern | Small | PydanticAI provider API research |
+| ~~2~~ | ~~API key injection pattern~~ | ~~Small~~ | ~~Fixed — `_build_model()` uses provider pattern~~ |
 | 3/4 | Pydantic schemas for agent configs | Medium | Schema design decision |
 | 7/21 | USER_ROLES to config + role mapping | Medium | Config schema extension |
 | 8 | Global singleton lifecycle | Large | Architectural decision |

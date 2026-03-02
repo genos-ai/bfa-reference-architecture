@@ -1,11 +1,12 @@
 # 21 - Event Architecture (Optional Module)
 
-*Version: 1.0.0*
+*Version: 1.1.0*
 *Author: Architecture Team*
 *Created: 2025-01-27*
 
 ## Changelog
 
+- 1.1.0 (2026-03-02): Added Session Events section (agent lifecycle events via Redis Pub/Sub); aligned naming conventions (D2 resolution); cross-reference to doc 46
 - 1.0.0 (2025-01-27): Initial generic event architecture standard
 
 ---
@@ -68,7 +69,7 @@ This architecture uses events for communication between services. Commands are i
 
 ### Standard: Redis Streams
 
-Redis Streams handles event delivery for moderate scale (thousands of events per second).
+Redis Streams handles event delivery for moderate scale (up to 10,000 events per second sustained).
 
 Rationale:
 - Already deployed for caching
@@ -77,20 +78,30 @@ Rationale:
 - Replay capability
 - No additional infrastructure
 
-### Channel Naming
+### Naming Conventions
 
-Format: `{domain}:{event-type}`
+Two naming conventions serve two purposes — do not mix them.
+
+**`event_type` field** (inside the event envelope): dot notation — `{domain}.{entity}.{action}`
+
+Examples: `notes.note.created`, `agent.response.chunk`, `plan.task.completed`
+
+**Redis Stream name** (the transport channel): colon + hyphens — `{domain}:{entity}-{action}`
 
 Examples:
-- `orders:order-placed`
+- `notes:note-created`
 - `users:user-created`
 - `payments:payment-processed`
+
+**Redis Pub/Sub channel** (ephemeral session events): `session:{session_id}`
+
+Session events use Redis Pub/Sub (not Streams) for sub-millisecond real-time delivery. See doc 46 (Event-Driven Session Architecture) for the full session event hierarchy.
 
 ### Consumer Groups
 
 Each consuming service creates a consumer group. Multiple instances of the same service share the consumer group (competing consumers pattern).
 
-Consumer group naming: `{service-name}-{purpose}`
+Consumer group naming: `{consuming-module}-{purpose}`
 
 ### Redis Streams Failure Modes
 
@@ -189,6 +200,56 @@ Breaking changes require new event type or major version increment.
 
 ---
 
+## Session Events (Agent Lifecycle)
+
+In addition to domain events (inter-module communication via Redis Streams), the platform defines **session events** — real-time agent lifecycle events delivered via Redis Pub/Sub. These two event systems serve different purposes and use different transports.
+
+| Aspect | Domain Events | Session Events |
+|--------|--------------|----------------|
+| **Purpose** | Inter-module communication | Real-time agent lifecycle within a session |
+| **Transport** | Redis Streams (durable, consumer groups) | Redis Pub/Sub (ephemeral, sub-millisecond) |
+| **Persistence** | Outbox → Stream → consumer acknowledges | Not persisted by the bus; session layer persists what matters |
+| **Base class** | `EventEnvelope` | `SessionEvent` |
+| **Channel** | `{domain}:{entity}-{action}` | `session:{session_id}` |
+| **Examples** | `notes.note.created`, `orders.order.placed` | `agent.response.chunk`, `plan.task.completed` |
+
+### SessionEvent Base
+
+All session events extend `SessionEvent` (not `EventEnvelope`):
+
+```python
+class SessionEvent(BaseModel):
+    event_id: UUID
+    event_type: str           # e.g. "agent.response.chunk"
+    session_id: UUID
+    timestamp: datetime
+    correlation_id: UUID | None = None
+    trace_id: str | None = None
+```
+
+### Session Event Categories
+
+| Category | Event Types | Description |
+|----------|-------------|-------------|
+| **User** | `user.message.sent`, `user.approval.granted` | Human inputs to the session |
+| **Agent** | `agent.thinking.started`, `agent.tool.called`, `agent.tool.returned`, `agent.response.chunk`, `agent.response.complete` | Agent execution lifecycle |
+| **Approval** | `agent.approval.requested`, `approval.response.received` | Human-in-the-loop gates |
+| **Plan** | `plan.created`, `plan.task.started`, `plan.task.completed`, `plan.task.failed`, `plan.revised` | Multi-step plan execution |
+| **Cost** | `session.cost.updated` | Token usage and budget tracking |
+
+### SessionEventBus
+
+The `SessionEventBus` class wraps Redis Pub/Sub for per-session event delivery:
+
+- `publish(session_id, event)` — serialize and publish to `session:{session_id}`
+- `subscribe(session_id)` — returns `AsyncIterator[SessionEvent]` for real-time consumption
+
+All channels (API, TUI, Telegram, MCP) consume the same event stream. The coordinator's `handle()` yields events to the caller AND publishes them to the session event bus.
+
+For the full session event hierarchy, typed event classes, and streaming coordinator integration, see **doc 46 (Event-Driven Session Architecture)**.
+
+---
+
 ## Transactional Outbox Pattern
 
 ### The Problem: Dual Write
@@ -257,7 +318,10 @@ async def publish_outbox_events():
     """)
     
     for event in events:
-        await redis.xadd(f"events:{event['event_type']}", event['event_payload'])
+        # Stream name: colon + hyphens (e.g. notes:note-created)
+        # Derived from event_type (e.g. notes.note.created) by replacing dots
+        stream = event['event_type'].replace('.', ':', 1).replace('.', '-')
+        await redis.xadd(stream, event['event_payload'])
         await db.execute(
             "UPDATE event_outbox SET published_at = NOW() WHERE id = $1",
             event['id']

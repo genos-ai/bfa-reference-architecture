@@ -530,10 +530,10 @@ After all changes are applied, verify:
 - [ ] `00-overview.md` adoption rule for doc 31 exists
 - [ ] `00-overview.md` Context paragraph lists "Event-Driven Sessions (31)"
 - [ ] `00-overview.md` Optional Scope includes event-driven session line
-- [ ] `21-event-architecture.md` has Session Events section referencing doc 31
+- [x] `21-event-architecture.md` has Session Events section referencing doc 46 (was doc 31)
 - [ ] `41-agentic-pydanticai.md` has Session-Aware Agent Invocation section with `run_stream()` and `handle()` patterns
 - [ ] `44-multi-channel-gateway.md` has Event-Driven Channel Adapters section with the architectural shift table
-- [ ] `AGENTS.md` has doc 31 row in reference table
+- [x] `AGENTS.md` has doc 46 row in reference table (was doc 31, already present)
 - [ ] `03-backend-architecture.md` has Interactive and Streaming Operations paragraph
 - [ ] `40-agentic-architecture.md` Related Documentation includes doc 31
 - [ ] `27-tui-architecture.md` Related Documentation includes doc 31

@@ -118,11 +118,14 @@ The key decision is that this structure applies from day one, even for small pro
 │   │   ├── core/
 │   │   │   ├── __init__.py
 │   │   │   ├── config.py           # Settings loader
+│   │   │   ├── config_schema.py    # Pydantic schemas for YAML config
 │   │   │   ├── database.py         # DB connection
 │   │   │   ├── dependencies.py     # FastAPI dependencies
 │   │   │   ├── exceptions.py       # Custom exceptions
 │   │   │   ├── logging.py          # Logging setup
-│   │   │   └── security.py         # Auth utilities
+│   │   │   ├── middleware.py        # Request context middleware
+│   │   │   ├── security.py         # Auth utilities
+│   │   │   └── utils.py            # Utilities (utc_now)
 │   │   ├── models/
 │   │   │   ├── __init__.py
 │   │   │   └── base.py             # SQLAlchemy base
@@ -134,8 +137,26 @@ The key decision is that this structure applies from day one, even for small pro
 │   │   │   └── base.py             # Base schemas
 │   │   ├── services/
 │   │   │   └── __init__.py
-│   │   └── tasks/
+│   │   ├── agents/                  # PydanticAI agents
+│   │   │   ├── coordinator/         # Agent routing, model construction
+│   │   │   ├── vertical/            # Domain-specific agents
+│   │   │   ├── deps/                # Shared dependency types
+│   │   │   └── tools/               # Shared tool implementations
+│   │   ├── gateway/                 # Channel adapter registry
+│   │   │   ├── adapters/
+│   │   │   └── security/            # Rate limiting, startup checks
+│   │   ├── tasks/                   # Background tasks (Taskiq)
+│   │   │   └── __init__.py
+│   │   └── cli/                     # CLI subcommand modules
 │   │       └── __init__.py
+│   │
+│   ├── telegram/                    # Telegram bot (client module)
+│   │   ├── handlers/
+│   │   ├── callbacks/
+│   │   ├── keyboards/
+│   │   ├── middlewares/
+│   │   ├── services/
+│   │   └── states/
 │   │
 │   └── frontend/
 │       ├── index.html
@@ -374,29 +395,7 @@ See **11-testing-standards.md** for complete testing guidance.
 
 ### Test Structure Convention
 
-```
-tests/
-├── conftest.py                      # Root fixtures
-├── unit/
-│   ├── conftest.py                  # Mock fixtures
-│   └── backend/
-│       ├── services/
-│       │   └── test_user_service.py
-│       ├── repositories/
-│       │   └── test_user_repository.py
-│       └── core/
-│           └── test_config.py
-├── integration/
-│   ├── conftest.py                  # Real DB fixtures
-│   └── backend/
-│       ├── api/
-│       │   └── test_user_endpoints.py
-│       └── workflows/
-│           └── test_user_registration.py
-└── e2e/
-    ├── conftest.py                  # E2E fixtures
-    └── test_user_journey.py
-```
+See **11-testing-standards.md** for the complete test directory structure, fixture hierarchy, and naming conventions. The template provides the base directories; doc 11 defines the rules.
 
 ---
 

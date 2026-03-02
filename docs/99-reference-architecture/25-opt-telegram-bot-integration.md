@@ -228,6 +228,41 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 ```
 
+### Function Stubs
+
+The following functions are referenced above but defined in the telegram module:
+
+```python
+# modules/telegram/bot.py
+async def setup_webhook(bot: Bot, webhook_url: str, secret_token: str) -> None:
+    """Register webhook URL with Telegram API. Called during FastAPI lifespan startup."""
+    await bot.set_webhook(url=webhook_url, secret_token=secret_token)
+
+async def cleanup_bot(bot: Bot) -> None:
+    """Delete webhook and close bot session. Called during FastAPI lifespan shutdown."""
+    await bot.delete_webhook()
+    await bot.session.close()
+
+# modules/telegram/webhook.py
+def get_webhook_router(bot: Bot, dp: Dispatcher) -> APIRouter:
+    """Create a FastAPI router that receives Telegram webhook updates.
+    Validates the X-Telegram-Bot-Api-Secret-Token header and feeds updates to the dispatcher."""
+    router = APIRouter()
+
+    @router.post(settings.telegram_webhook_path)
+    async def webhook_handler(request: Request):
+        update = Update.model_validate(await request.json())
+        await dp.feed_update(bot, update)
+        return {"ok": True}
+
+    return router
+
+# modules/telegram/services/__init__.py
+def get_notification_service() -> NotificationService:
+    """Factory for the notification service. Uses backend HTTP API to resolve recipients."""
+    return NotificationService(bot=get_bot_instance())
+```
+
 ---
 
 ## Handlers

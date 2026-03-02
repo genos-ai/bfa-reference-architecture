@@ -53,16 +53,23 @@ project/
 │   └── settings/
 │       └── *.yaml
 ├── modules/
-│   └── backend/
-│       ├── api/
-│       │   └── v1/
-│       │       └── endpoints/
-│       ├── core/
-│       ├── models/
-│       ├── repositories/
-│       ├── schemas/
-│       ├── services/
-│       └── main.py
+│   ├── backend/
+│   │   ├── main.py              # FastAPI entry point
+│   │   ├── api/
+│   │   │   ├── health.py
+│   │   │   └── v1/endpoints/
+│   │   ├── core/                # Config, middleware, exceptions, logging, security
+│   │   ├── models/
+│   │   ├── repositories/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   ├── agents/              # PydanticAI agents (coordinator, verticals)
+│   │   ├── gateway/             # Channel adapter registry, security
+│   │   ├── tasks/               # Background tasks (Taskiq broker)
+│   │   ├── cli/                 # CLI subcommands
+│   │   └── migrations/          # Alembic database migrations
+│   ├── telegram/                # Telegram bot (client module)
+│   └── frontend/                # React + Vite web UI (client module)
 ├── tests/
 ├── data/
 │   └── logs/
@@ -70,19 +77,72 @@ project/
 └── .project_root
 ```
 
+Domain separation within `modules/backend/` happens via file naming within layers (e.g., `services/user_service.py`, `services/note_service.py`). See doc 04 for the full module structure standard.
+
 ### Directory Purposes
 
 | Directory | Purpose |
 |-----------|---------|
-| config/ | Environment variables and YAML configuration |
+| config/ | Environment variables (.env) and YAML configuration |
 | modules/backend/api/ | HTTP endpoint handlers, versioned |
-| modules/backend/core/ | Shared utilities, configuration loading, middleware |
+| modules/backend/core/ | Shared utilities, configuration loading, middleware, security |
 | modules/backend/models/ | Database models (SQLAlchemy) |
 | modules/backend/repositories/ | Data access layer, queries |
 | modules/backend/schemas/ | Pydantic models for API request/response |
 | modules/backend/services/ | Business logic, orchestration |
-| tests/ | All test files |
-| logs/ | Application logs |
+| modules/backend/agents/ | PydanticAI agent coordinator and vertical agents |
+| modules/backend/gateway/ | Channel adapter registry and security |
+| modules/backend/tasks/ | Background task broker and task definitions |
+| modules/backend/cli/ | CLI subcommand modules |
+| modules/telegram/ | Telegram bot — communicates with backend via HTTP API |
+| modules/frontend/ | React web UI — communicates with backend via HTTP API |
+| tests/ | All test files (unit, integration, e2e) |
+| data/logs/ | Application logs |
+
+---
+
+## Configuration Loading
+
+All configuration flows through two mechanisms — do not add a third.
+
+### Secrets: `config/.env` via Pydantic Settings
+
+Passwords, tokens, API keys, and other sensitive values live in `config/.env` and are loaded by a flat `Settings` class in `modules/backend/core/config.py`:
+
+```python
+from modules.backend.core.config import get_settings
+settings = get_settings()  # Cached via @lru_cache
+settings.anthropic_api_key
+settings.db_password
+```
+
+`Settings` extends Pydantic's `BaseSettings`. Environment variables override `.env` values at runtime (for deployment).
+
+### Application Config: `config/settings/*.yaml` via `get_app_config()`
+
+Non-secret application settings (server, logging, agents, telegram, features) live in YAML files under `config/settings/` and are loaded by `get_app_config()`:
+
+```python
+from modules.backend.core.config import get_app_config
+config = get_app_config()  # Returns validated dict from YAML
+config.server["host"]
+config.agents["coordinator"]
+```
+
+YAML files are organized by concern (`application.yaml`, `agents/*.yaml`, `logging.yaml`). The `ConfigSchema` in `core/config_schema.py` validates the merged YAML at load time.
+
+### Precedence
+
+```
+Environment variables  >  config/.env  >  config/settings/*.yaml
+```
+
+### Rules
+
+- **No hardcoded fallbacks.** If a value is missing, fail at startup — never silently default.
+- **No `os.getenv()` with defaults.** Use `get_settings()` or `get_app_config()`.
+- **Secrets never in YAML.** YAML is for application settings only.
+- **YAML never in `.env`.** `.env` is for secrets only.
 
 ---
 
@@ -315,6 +375,12 @@ LIMIT 50;
 - Always include a tiebreaker column (usually `id`)
 - Sort order must be deterministic
 - Cursor encodes position, not page number
+
+### Interactive and Streaming Operations (AI-First Profile Only)
+
+> **Skip this section if using the Traditional Backend profile.** See `00-overview.md` for profile definitions.
+
+The request/response patterns above apply to stateless CRUD operations — the majority of API endpoints. For interactive operations involving conversations, agent streaming, multi-step plans, or approval gates, see `46-event-session-architecture.md` (AI-First Platform). That module introduces a session-and-event model where the coordinator returns `AsyncIterator[Event]` instead of a response object, and channels subscribe to session event streams. The service layer defined in this document remains the single source of business logic — the session model layers on top, it does not replace anything here.
 
 ---
 

@@ -552,12 +552,33 @@ Telegram actively monitors Client API usage. Accounts can be banned for:
 import random
 import asyncio
 
-async def human_delay():
-    """Add human-like delay between operations. Reads bounds from YAML config."""
+async def human_delay(
+    min_seconds: float | None = None,
+    max_seconds: float | None = None,
+) -> None:
+    """Delay with human-like timing. Uses config defaults if not overridden."""
     from modules.backend.core.config import get_app_config
     tc = get_app_config().application["telegram_client"]
-    delay = random.uniform(tc["human_delay_min"], tc["human_delay_max"])
-    await asyncio.sleep(delay)
+    min_s = min_seconds if min_seconds is not None else tc["human_delay_min"]
+    max_s = max_seconds if max_seconds is not None else tc["human_delay_max"]
+    await asyncio.sleep(random.uniform(min_s, max_s))
+
+
+async def queue_message_for_processing(message_data: dict) -> None:
+    """Queue a scraped message for backend processing via Redis Stream.
+    The backend module consumes these events through the service layer.
+    See 21-event-architecture.md for stream naming conventions."""
+    from modules.backend.core.config import get_app_config
+    redis = get_redis()  # From core.database or similar
+    await redis.xadd("telegram:message-scraped", message_data)
+
+
+async def get_cached_channel_data(channel: str) -> dict | None:
+    """Return cached channel metadata from Redis. Falls back to None if cache miss.
+    Used as fallback when live Telegram API call fails."""
+    redis = get_redis()
+    cached = await redis.get(f"telegram:channel:{channel}")
+    return json.loads(cached) if cached else None
 
 
 async def safe_join_channel(client: TelegramClient, channel: str):

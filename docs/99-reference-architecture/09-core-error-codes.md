@@ -28,25 +28,13 @@ This is a registry, not just a specification. New error codes must be registered
 
 ## Error Response Format
 
-All API errors return this structure:
+Error responses use the standard API envelope defined in **03-backend-architecture.md** (Response Format section). The `error` field contains:
 
-```json
-{
-  "success": false,
-  "data": null,
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Human-readable description",
-    "details": {
-      "field": "additional context"
-    }
-  },
-  "metadata": {
-    "timestamp": "2025-01-27T12:00:00Z",
-    "request_id": "uuid"
-  }
-}
-```
+| Field | Purpose |
+|-------|---------|
+| `code` | Machine-readable error code from the tables below |
+| `message` | Human-readable description |
+| `details` | Additional context (field-level errors, constraints violated) |
 
 ---
 

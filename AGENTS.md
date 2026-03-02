@@ -3,10 +3,16 @@
 This file tells AI coding assistants how to work with this codebase.
 For full details, see `docs/99-reference-architecture/`.
 
+## Design Principles
+
+- **AI-first, not human-first.** Agents are the primary consumers of this platform. Humans participate; agents drive.
+- **Tier 4 is the target.** Every decision must support long-running autonomous tasks (hours/days/weeks). No shortcuts that need retrofitting.
+- **The session is the primitive.** Not the request. Sessions outlive any individual request, connection, or server restart.
+- **Write code that never needs editing.** Black box modules, testable interfaces, replacement readiness.
+
 ## Project Overview
 
-BFF (Backend-for-Frontend) Python web application skeleton.
-FastAPI backend, React frontend, PostgreSQL, Redis, Taskiq.
+AI-first autonomous agent platform. FastAPI backend, PydanticAI agents, PostgreSQL, Redis, FastStream, Temporal.
 
 ## Critical Rules
 

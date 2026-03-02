@@ -35,6 +35,14 @@ Implications:
 - User permission checks happen server-side
 - Data transformations happen server-side
 
+### Business Logic Boundary
+
+**Backend (always):** data validation, authentication, authorization, data calculations, state transitions, external service calls, data persistence.
+
+**Client (only):** UI state (tab selection, modal open/closed), optimistic UI updates, input formatting (display only, not validation), navigation/routing, rendering/layout.
+
+**When uncertain, put it in the backend.** The cost of a client being too thin is a few extra API calls. The cost of a client being too thick is duplicated logic across every client type (web, CLI, Telegram, AI agent).
+
 ### P2: Clients Are Stateless Presentation Layers
 
 Clients maintain only UI state (which tab is selected, whether a modal is open). All application state comes from the backend via API calls or real-time connections.
@@ -44,13 +52,16 @@ Implications:
 - Switch clients (web to CLI), same data available
 - Client bugs cannot corrupt application state
 
-### P3: Single Database of Record
+### P3: Single Source of Truth Per Entity
 
-One authoritative data store per data type. No data synchronization between databases for the same entity. Read replicas are acceptable; multiple write sources are not.
+One authoritative **write** source per data type. Read replicas, caches, and analytical copies are acceptable — but they derive from the authoritative source, never the reverse.
 
 Implications:
-- User data lives in PostgreSQL only
-- Cache is ephemeral, not authoritative
+- User data writes go to PostgreSQL only
+- Redis caches are ephemeral and reconstructable — never the source of truth
+- DuckDB/Parquet are read-only analytical copies of data that originates in PostgreSQL
+- TimescaleDB is a PostgreSQL extension, not a separate database
+- Multiple technologies are fine; multiple write sources for the same entity are not
 
 ### P4: Explicit Over Implicit
 
@@ -166,7 +177,7 @@ Architecture decisions are documented. API contracts are specified. Database sch
 
 ### D3: Test Critical Paths
 
-Not everything requires tests. Critical paths require tests. A critical path is any operation where failure causes data loss, financial loss, or security breach.
+Not everything requires tests. Critical paths require tests. A critical path is any operation where failure causes data loss, financial loss, security breach, or service outage.
 
 ### D4: Version Everything
 

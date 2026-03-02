@@ -260,6 +260,66 @@ class Task:
 
 ---
 
+## Integration with Architecture Layers
+
+Once you've identified your primitive, it flows through the backend architecture layers (doc 03) as follows:
+
+```
+1. Model      → SQLAlchemy model with primitive fields (id, type, status, timestamps)
+2. Repository → CRUD operations on the primitive's table
+3. Service    → Business logic that transitions primitive states
+4. Schema     → Pydantic schemas for API request/response shapes
+5. API        → HTTP endpoints that expose primitive operations
+6. Events     → State changes publish events (e.g. task.task.created, task.task.completed)
+```
+
+### Worked Example: Task Primitive
+
+```python
+# 1. Model: modules/backend/models/task.py
+class Task(Base):
+    __tablename__ = "tasks"
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    title: Mapped[str]
+    status: Mapped[str] = mapped_column(default="pending")
+    created_at: Mapped[datetime]
+
+# 2. Repository: modules/backend/repositories/task_repository.py
+class TaskRepository:
+    async def create(self, task: Task) -> Task: ...
+    async def get_by_id(self, task_id: UUID) -> Task | None: ...
+    async def update_status(self, task_id: UUID, status: str) -> Task: ...
+
+# 3. Service: modules/backend/services/task_service.py
+class TaskService:
+    async def create_task(self, data: CreateTaskSchema) -> TaskSchema:
+        task = Task(**data.model_dump())
+        task = await self.repo.create(task)
+        # Publish event on state change
+        await self._publish_event("tasks.task.created", {"task_id": str(task.id)})
+        return TaskSchema.model_validate(task)
+
+# 4. Schema: modules/backend/schemas/task_schema.py
+class CreateTaskSchema(BaseModel):
+    title: str
+
+class TaskSchema(BaseModel):
+    id: UUID
+    title: str
+    status: str
+    created_at: datetime
+
+# 5. API: modules/backend/api/v1/endpoints/tasks.py
+@router.post("/tasks", response_model=TaskSchema)
+async def create_task(data: CreateTaskSchema, db: DbSession):
+    service = TaskService(db)
+    return await service.create_task(data)
+```
+
+Every domain entity in the project follows this exact flow. The primitive is the entity that appears at every layer.
+
+---
+
 ## Reference
 
 Based on Eskil Steenberg's Primitive Identification principle.

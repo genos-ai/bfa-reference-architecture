@@ -41,7 +41,9 @@ This principle should be reflected more explicitly throughout the documentation,
 
 ---
 
-## Issue 1: Project Structure Contradiction (Critical)
+## Issue 1: Project Structure Contradiction (Critical) — RESOLVED
+
+**Status: RESOLVED** (2026-03-02). D1 decided: Option B. Docs 03, 04, 13 updated to show single `modules/backend/` with layered directories. Doc 04 rewritten to define modules as top-level boundaries (backend, telegram, frontend) with domain separation via file naming within backend layers.
 
 ### Problem
 
@@ -150,42 +152,35 @@ modules/
 
 ---
 
-## Issue 2: Event Naming Conflict (Critical)
+## Issue 2: Event Naming Conflict (Critical) — RESOLVED
 
-### Problem
+**Status: RESOLVED** (2026-03-02). Docs 04 and 21 updated. Aligned with Plan 10 and doc 46.
 
-Doc 04 defines event naming as: `{module}.{entity}.{action}` — e.g., `users.user.created`
-Doc 06 defines channel naming as: `{domain}:{event-type}` — e.g., `orders:order-placed`
+### Resolution
 
-These use different separators (dots vs colons, hyphens vs dots) and appear incompatible.
+The conflict was that two naming conventions served two different purposes but this was never documented explicitly. The resolution formalizes this distinction:
 
-### Analysis
+| Concern | Convention | Format | Example |
+|---------|-----------|--------|---------|
+| **`event_type` field** (inside the envelope) | Dot notation | `{domain}.{entity}.{action}` | `notes.note.created` |
+| **Redis Stream name** (domain events) | Colon + hyphens | `{domain}:{entity}-{action}` | `notes:note-created` |
+| **Redis Pub/Sub channel** (session events) | Session-scoped | `session:{session_id}` | `session:abc-123` |
+| **Consumer group name** | Hyphenated | `{consuming-module}-{purpose}` | `notifications-user-welcome` |
 
-On closer reading, these actually serve different purposes:
-- **Redis stream name** (the channel): uses colons — `users:events` or `users:user-created`
-- **`event_type` field** inside the event envelope: uses dots — `users.user.created`
+**Decision**: One stream per event type (not per module). More granular, consumers subscribe to exactly the events they need.
 
-Doc 06 already uses dots for the `event_type` field in the envelope (line 161: `"event_type": "domain.entity.action"`). The conflict is that doc 06's *channel naming* section (line 82) uses a different convention (`orders:order-placed`) than what doc 04 describes.
-
-### Proposed Resolution
-
-Align both documents:
-- **Redis stream name**: `{module}:events` (one stream per module) — e.g., `users:events`, `orders:events`
-- **`event_type` field**: `{module}.{entity}.{action}` (dot notation) — e.g., `users.user.created`, `orders.order.placed`
-- **Consumer group name**: `{consuming-module}-{purpose}` — e.g., `notifications-user-welcome`
-
-> **DECISION NEEDED**: Is one stream per module correct, or should it be one stream per event type (e.g., `users:user-created`, `users:user-deleted`)? One-per-module is simpler but requires consumer-side filtering. One-per-event-type is more granular but creates more streams.
-
-### Files to Update
+### Files Updated
 
 | File | Change |
 |------|--------|
-| `04-module-structure.md` | Clarify that event naming = `event_type` field, add Redis stream naming |
-| `21-event-architecture.md` | Align channel naming section, add explicit distinction between stream name and event_type |
+| `04-module-structure.md` | Added Redis stream and Pub/Sub naming alongside `event_type` dot notation |
+| `21-event-architecture.md` | Replaced "Channel Naming" with "Naming Conventions" section covering all three patterns; fixed outbox relay code |
 
 ---
 
-## Issue 3: Worker Count Contradiction (Critical)
+## Issue 3: Worker Count Contradiction (Critical) — RESOLVED
+
+**Status: RESOLVED** (2026-03-02). Rewrote Worker Configuration section to explicitly state the formula applies to CPU-bound sync apps and direct the reader to use the async worker count table instead.
 
 ### Problem
 
@@ -222,7 +217,9 @@ handles hundreds of concurrent connections via asyncio. **Use the table below, n
 
 ---
 
-## Issue 4: Human Delay Function Signature Mismatch (Critical)
+## Issue 4: Human Delay Function Signature Mismatch (Critical) — RESOLVED
+
+**Status: RESOLVED** (2026-03-02). Fixed `human_delay()` to accept optional `min_seconds`/`max_seconds` overrides with config defaults as fallback.
 
 ### Problem
 
@@ -251,7 +248,9 @@ async def human_delay(
 
 ---
 
-## Issue 5: Configuration Loading Mechanism Never Defined (High)
+## Issue 5: Configuration Loading Mechanism Never Defined (High) — RESOLVED
+
+**Status: RESOLVED** (2026-03-02). Added "Configuration Loading" section to doc 03 documenting the two-mechanism approach: secrets via `.env`/Pydantic Settings, app config via YAML/`get_app_config()`. Includes precedence order, code examples, and rules.
 
 ### Problem
 
@@ -294,7 +293,9 @@ Precedence: Environment variables > .env file > YAML defaults
 
 ---
 
-## Issue 6: Primitive-to-Module Integration Undefined (High)
+## Issue 6: Primitive-to-Module Integration Undefined (High) — RESOLVED
+
+**Status: RESOLVED** (2026-03-02). Added "Integration with Architecture Layers" section to doc 02 with layer flow diagram and worked Task example showing Model → Repository → Service → Schema → API → Events.
 
 ### Problem
 
@@ -330,7 +331,9 @@ Include a concrete worked example: a `Task` primitive flowing from HTTP request 
 
 ---
 
-## Issue 7: P3 "Single Database" vs Multiple Databases (High)
+## Issue 7: P3 "Single Database" vs Multiple Databases (High) — RESOLVED
+
+**Status: RESOLVED** (2026-03-02). Rewritten P3 in doc 01 from "Single Database of Record" to "Single Source of Truth Per Entity". Clarified: one authoritative write source, read replicas/caches/analytical copies are fine.
 
 ### Problem
 
@@ -366,7 +369,9 @@ Implications:
 
 ---
 
-## Issue 8: Authorization Enforcement — No Concrete Pattern (High)
+## Issue 8: Authorization Enforcement — No Concrete Pattern (High) — RESOLVED
+
+**Status: RESOLVED** (2026-03-02). Replaced bullet-point description with complete code example showing the 3-layer pattern: `get_current_user` dependency → API handler passes `requesting_user` → service enforces permissions.
 
 ### Problem
 
@@ -411,7 +416,9 @@ This reinforces the guiding principle: clients just send a token; the backend ha
 
 ---
 
-## Issue 9: Rate Limiting — No Implementation (High)
+## Issue 9: Rate Limiting — No Implementation (High) — RESOLVED
+
+**Status: RESOLVED** (2026-03-02). Added implementation details to doc 06: slowapi library, Redis storage, sliding window algorithm, code example with per-endpoint override, response headers.
 
 ### Problem
 
@@ -474,7 +481,9 @@ Add a "Skeleton Implementation Status" section near the top of each document (af
 
 ---
 
-## Issue 11: Redundancy That Will Drift (Medium)
+## Issue 11: Redundancy That Will Drift (Medium) — RESOLVED
+
+**Status: RESOLVED** (2026-03-02). Fixed 3 of 5 redundancies (items 2 and 4 were not actually redundant): doc 09 error envelope → references doc 03; doc 13 test structure → references doc 11; doc 00 philosophy → references doc 01.
 
 ### Problem
 
@@ -520,7 +529,9 @@ document for the complete specification, error categories, and client handling g
 
 ---
 
-## Issue 12: Stale Cross-References (Medium)
+## Issue 12: Stale Cross-References (Medium) — RESOLVED
+
+**Status: RESOLVED** (2026-03-02). Verified: no stale `14-Deployment` references remain. All cross-references use current doc numbers. The "15-Deployment" references in doc 16 are correct.
 
 ### Problem
 
@@ -549,7 +560,9 @@ Full-text search all 25 documents for:
 
 ---
 
-## Issue 13: Undefined Thresholds (Medium)
+## Issue 13: Undefined Thresholds (Medium) — RESOLVED
+
+**Status: RESOLVED** (2026-03-02). Added concrete values: doc 21 "moderate scale" → "up to 10,000 events/sec sustained"; doc 20 "large datasets" → ">100MB or >1M rows", "basic PostgreSQL" → "single-table CRUD with standard indexes"; doc 01 "critical paths" → added "service outage". Git LFS 10-100MB threshold was already concrete.
 
 ### Problem
 
@@ -585,7 +598,9 @@ Add concrete thresholds:
 
 ---
 
-## Issue 14: Missing Function Implementations (Medium)
+## Issue 14: Missing Function Implementations (Medium) — RESOLVED
+
+**Status: RESOLVED** (2026-03-02). Added function stubs to doc 25 (`setup_webhook`, `cleanup_bot`, `get_webhook_router`, `get_notification_service`) and doc 26 (`queue_message_for_processing`, `get_cached_channel_data`).
 
 ### Problem
 
@@ -629,7 +644,9 @@ async def queue_message_for_processing(message_data: dict) -> None:
 
 ---
 
-## Issue 15: "Business Logic" Boundary Undefined (Medium)
+## Issue 15: "Business Logic" Boundary Undefined (Medium) — RESOLVED
+
+**Status: RESOLVED** (2026-03-02). Added "Business Logic Boundary" section under P1 in doc 01 with explicit backend-always vs client-only lists and the "when uncertain, put it in the backend" rule.
 
 ### Problem
 
@@ -750,11 +767,11 @@ This should be done *after* skeleton code exists.
 
 Before implementation can begin, the following decisions need to be made:
 
-| # | Decision | Options | Recommendation |
-|---|----------|---------|----------------|
-| D1 | Project structure | A (hybrid), B (single backend), C (flat modules) | A (hybrid) — cleanest separation, matches both 03 and 04 |
-| D2 | Event stream naming | One stream per module vs one stream per event type | One per module — simpler, fewer streams |
-| D3 | Config subsections | Per-module settings subsections vs one flat class | Subsections — `settings.telegram`, `settings.llm`, etc. |
-| D4 | Skeleton status markers | All docs, code-only docs, or defer | Defer until skeleton code exists |
-| D5 | Rate limiting library | `slowapi` vs custom Redis middleware | `slowapi` — simpler, well-known |
-| D6 | Thresholds | Are proposed values reasonable? | Review the table in Issue 13 |
+| # | Decision | Options | Resolution |
+|---|----------|---------|------------|
+| D1 | Project structure | A (hybrid), B (single backend), C (flat modules) | **RESOLVED**: Option B (single `modules/backend/` with layered directories). Matches current codebase. Domain separation via file naming within layers. Align docs 03, 04, 15 to match. |
+| D2 | Event stream naming | One stream per module vs one stream per event type | **RESOLVED**: One stream per event type (`{domain}:{entity}-{action}`). `event_type` field uses dots (`{domain}.{entity}.{action}`). Session events use Pub/Sub (`session:{session_id}`). Docs 04, 21 updated. Aligned with Plan 10 and doc 46. |
+| D3 | Config subsections | Per-module settings subsections vs one flat class | **RESOLVED**: Document what exists. Two mechanisms — secrets via `config/.env` + flat `Settings` class; app config via `config/settings/*.yaml` with per-module sections. No code changes needed. |
+| D4 | Skeleton status markers | All docs, code-only docs, or defer | **DEFERRED** until skeleton code exists. |
+| D5 | Rate limiting library | `slowapi` vs custom Redis middleware | **RESOLVED**: `slowapi` — integrates with FastAPI, built on `limits` library, minimal code. |
+| D6 | Thresholds | Are proposed values reasonable? | **RESOLVED**: All proposed values accepted as-is. Moderate scale = 10K events/sec, Large datasets = >100MB or >1M rows, Critical paths = data/financial/security/outage risk, Medium files = 10-100MB, Basic PostgreSQL = single-table CRUD with standard indexes. |

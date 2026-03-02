@@ -112,18 +112,41 @@ Resources belong to users or organizations. Authorization checks:
 
 ### Authorization Enforcement
 
-Authorization checked at service layer, not API layer.
+Authorization is checked at the **service layer**, not the API layer. This ensures rules are enforced regardless of how the service is called (HTTP endpoint, background task, agent tool, internal API).
 
-API layer:
-- Extracts user from token/key
-- Passes user to service
+```python
+# 1. API layer: extract user identity (thin — no authorization logic)
+@router.get("/orders/{order_id}")
+async def get_order(
+    order_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: DbSession,
+):
+    service = OrderService(db)
+    return await service.get_order(order_id, requesting_user=current_user)
 
-Service layer:
-- Checks user permissions
-- Checks resource ownership
-- Raises AuthorizationError if denied
+# 2. Service layer: enforce authorization (all logic here)
+class OrderService:
+    async def get_order(self, order_id: UUID, requesting_user: User) -> OrderSchema:
+        order = await self.repo.get(order_id)
+        if not order:
+            raise NotFoundError("Order not found")
+        if order.user_id != requesting_user.id and not requesting_user.has_role("admin"):
+            raise AuthorizationError("Not authorized to view this order")
+        return OrderSchema.model_validate(order)
 
-Never rely on API layer alone for authorization.
+# 3. get_current_user dependency: resolves token/API key to User object
+async def get_current_user(request: Request, db: DbSession) -> User:
+    """Extract API key or JWT, validate, return User.
+    This is the ONLY place auth tokens are parsed."""
+    ...
+```
+
+**Rules:**
+- API layer passes `requesting_user` to every service method that needs authorization
+- Service layer checks permissions and resource ownership
+- `AuthorizationError` raised in service, converted to 403 by exception handler
+- Never rely on API layer alone for authorization
 
 ---
 
