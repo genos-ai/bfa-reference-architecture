@@ -1,0 +1,24 @@
+# =============================================================================
+# Event Bus Configuration
+# =============================================================================
+#   Controls the FastStream event bus, stream sizing, and consumer behavior.
+#   Transport: "redis" for production, "memory" for testing.
+#
+#   Two event systems:
+#     Domain events (FastStream + Redis Streams): durable, consumer groups, DLQ
+#     Session events (Redis Pub/Sub): ephemeral, real-time agent lifecycle
+#
+#   Stream naming: {domain}:{entity}-{action} (e.g. notes:note-created)
+#   Channel naming: {channel_prefix}:{session_id} (e.g. session:<uuid>)
+
+transport: redis
+channel_prefix: session
+
+streams:
+  default:
+    maxlen: 10000
+    consumer_group: bfa-workers
+
+consumer_timeout_ms: 5000
+dlq_enabled: true
+dlq_prefix: dlq

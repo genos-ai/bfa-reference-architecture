@@ -70,6 +70,11 @@ security_headers_enabled: true
 security_cors_enforce_production: true
 
 # -----------------------------------------------------------------------------
+# Event Bus (doc 10)
+# -----------------------------------------------------------------------------
+events_publish_enabled: false
+
+# -----------------------------------------------------------------------------
 # Experimental (disabled by default)
 # -----------------------------------------------------------------------------
 experimental_background_tasks_enabled: true

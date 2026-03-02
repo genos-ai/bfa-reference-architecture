@@ -27,6 +27,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from modules.backend.core.config_schema import (
     ApplicationSchema,
     DatabaseSchema,
+    EventsSchema,
     FeaturesSchema,
     GatewaySchema,
     LoggingSchema,
@@ -98,6 +99,14 @@ def _load_validated(schema_cls: type, filename: str) -> Any:
         ) from e
 
 
+def _load_validated_optional(schema_cls: type, filename: str) -> Any:
+    """Load YAML if it exists, otherwise return schema defaults."""
+    try:
+        return _load_validated(schema_cls, filename)
+    except FileNotFoundError:
+        return schema_cls()
+
+
 class AppConfig:
     """
     Application configuration loaded from YAML files.
@@ -116,6 +125,7 @@ class AppConfig:
         self._features = _load_validated(FeaturesSchema, "features.yaml")
         self._security = _load_validated(SecuritySchema, "security.yaml")
         self._gateway = _load_validated(GatewaySchema, "gateway.yaml")
+        self._events = _load_validated_optional(EventsSchema, "events.yaml")
 
     @property
     def application(self) -> ApplicationSchema:
@@ -146,6 +156,11 @@ class AppConfig:
     def gateway(self) -> GatewaySchema:
         """Gateway settings."""
         return self._gateway
+
+    @property
+    def events(self) -> EventsSchema:
+        """Event bus settings."""
+        return self._events
 
 
 @lru_cache

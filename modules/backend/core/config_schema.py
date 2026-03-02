@@ -154,6 +154,7 @@ class FeaturesSchema(_StrictBase):
     security_headers_enabled: bool
     security_cors_enforce_production: bool
     experimental_background_tasks_enabled: bool
+    events_publish_enabled: bool
 
 
 # =============================================================================
@@ -237,3 +238,22 @@ class GatewayChannelSchema(_StrictBase):
 class GatewaySchema(_StrictBase):
     default_policy: str
     channels: dict[str, GatewayChannelSchema]
+
+
+# =============================================================================
+# events.yaml
+# =============================================================================
+
+
+class EventsStreamSchema(_StrictBase):
+    maxlen: int = 10000
+    consumer_group: str = "bfa-workers"
+
+
+class EventsSchema(_StrictBase):
+    transport: str = "redis"
+    channel_prefix: str = "session"
+    streams: dict[str, EventsStreamSchema] = Field(default_factory=dict)
+    consumer_timeout_ms: int = 5000
+    dlq_enabled: bool = True
+    dlq_prefix: str = "dlq"

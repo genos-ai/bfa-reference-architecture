@@ -1,8 +1,13 @@
 """
 Unit Test Fixtures.
 
-Fixtures for unit tests - all external dependencies are mocked.
-Unit tests should be fast and isolated, never touching real databases.
+Per P12: tests run against the live platform. Mock only what you don't operate.
+Unit tests connect to real PostgreSQL and Redis. Write operations use
+transaction rollback so tests don't pollute data.
+
+TODO: Migrate remaining mock fixtures below to real infrastructure.
+Legacy mock_db_session, mock_redis, etc. exist for existing tests that
+haven't been migrated yet. New tests MUST use real connections.
 """
 
 from typing import Any

@@ -58,3 +58,25 @@ def get_test_database_config() -> dict[str, Any]:
     if not db:
         raise ValueError("config/settings/test.yaml must define 'database' section")
     return db
+
+
+def get_test_redis_url() -> str:
+    """
+    Get the test Redis URL.
+
+    Uses TEST_REDIS_URL env if set, otherwise redis_url from
+    config/settings/test.yaml (no hardcoded fallbacks).
+    """
+    import os
+
+    url = os.environ.get("TEST_REDIS_URL")
+    if url:
+        return url
+    config = load_test_config()
+    url = config.get("redis_url")
+    if not url:
+        raise ValueError(
+            "config/settings/test.yaml must define 'redis_url' "
+            "(or set TEST_REDIS_URL env)"
+        )
+    return url

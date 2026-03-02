@@ -17,7 +17,7 @@ class TestValidSources:
         """Should contain all recognized log source values."""
         from modules.backend.core.logging import VALID_SOURCES
 
-        expected = frozenset({"web", "cli", "tui", "mobile", "telegram", "api", "tasks", "internal"})
+        expected = frozenset({"web", "cli", "tui", "mobile", "telegram", "api", "tasks", "internal", "events"})
         assert VALID_SOURCES == expected
 
     def test_valid_sources_is_frozenset(self):

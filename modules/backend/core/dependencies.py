@@ -22,3 +22,17 @@ async def get_request_id(x_request_id: str | None = Header(None)) -> str:
 
 
 RequestId = Annotated[str, Depends(get_request_id)]
+
+
+async def get_event_bus():
+    """FastAPI dependency for session event bus."""
+    from redis.asyncio import Redis as AsyncRedis
+
+    from modules.backend.core.config import get_redis_url
+    from modules.backend.events.bus import SessionEventBus
+
+    redis = AsyncRedis.from_url(get_redis_url())
+    try:
+        yield SessionEventBus(redis)
+    finally:
+        await redis.close()

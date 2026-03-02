@@ -35,13 +35,13 @@ from modules.backend.cli.worker import run_worker
 from modules.backend.core.config import validate_project_root
 from modules.backend.core.logging import bind_context, get_logger, setup_logging
 
-LONG_RUNNING_SERVICES = frozenset({"server", "worker", "scheduler", "telegram-poll"})
+LONG_RUNNING_SERVICES = frozenset({"server", "worker", "scheduler", "telegram-poll", "event-worker"})
 
 
 @click.command()
 @click.option(
     "--service", "-s",
-    type=click.Choice(["server", "worker", "scheduler", "health", "config", "test", "info", "migrate", "telegram-poll"]),
+    type=click.Choice(["server", "worker", "scheduler", "health", "config", "test", "info", "migrate", "telegram-poll", "event-worker"]),
     default="info",
     help="Service or command to run.",
 )
@@ -197,6 +197,9 @@ def main(
         run_migrations(logger, migrate_action, revision, message)
     elif service == "telegram-poll":
         run_telegram_poll(logger)
+    elif service == "event-worker":
+        from modules.backend.cli.event_worker import run_event_worker
+        run_event_worker(logger)
 
 
 if __name__ == "__main__":

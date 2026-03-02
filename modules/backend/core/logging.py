@@ -57,6 +57,7 @@ VALID_SOURCES = frozenset({
     "api",
     "tasks",
     "internal",
+    "events",
 })
 """
 Recognized log source values — for documentation and validation.

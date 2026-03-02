@@ -26,8 +26,11 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import StaticPool
 
+from redis.asyncio import Redis as AsyncRedis
+
 from modules.backend.models.base import Base
 from tests.test_config import get_test_database_url as _get_test_database_url
+from tests.test_config import get_test_redis_url as _get_test_redis_url
 
 
 # =============================================================================
@@ -176,6 +179,38 @@ async def db_session_committed(
     async with db_session_factory() as session:
         yield session
         await session.commit()
+
+
+# =============================================================================
+# Redis Fixtures
+# =============================================================================
+
+
+def get_test_redis_url() -> str:
+    """Get test Redis URL from env or config/settings/test.yaml."""
+    return _get_test_redis_url()
+
+
+@pytest.fixture
+async def redis() -> AsyncGenerator[AsyncRedis, None]:
+    """
+    Real Redis connection for a single test.
+
+    Creates a fresh connection per test (function-scoped) to avoid
+    event loop conflicts with session-scoped fixtures. Uses db 1
+    (from test.yaml) to isolate test data from development.
+
+    Flushes the test database after each test for isolation.
+    """
+    url = get_test_redis_url()
+    client = AsyncRedis.from_url(url, decode_responses=False)
+    try:
+        await client.ping()
+    except Exception as exc:
+        pytest.skip(f"Redis not available: {exc}")
+    yield client
+    await client.flushdb()
+    await client.close()
 
 
 # =============================================================================
