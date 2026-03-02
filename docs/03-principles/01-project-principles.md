@@ -152,3 +152,20 @@ This means:
 - Tests are fast, deterministic, and free.
 - Every agent test uses `TestModel(call_tools=[...])` to simulate specific tool sequences.
 - Flaky tests from LLM variability don't exist.
+
+---
+
+## P12: Test Against Real Infrastructure
+
+**Tests run against the live platform. Mock only what you don't operate.**
+
+A test that mocks the database proves your mock works, not your code. Tests connect to real PostgreSQL, real Redis, real FastStream, and real Temporal. Write operations use transaction rollback so tests don't pollute data, but every query, constraint, and subscription exercises the real system.
+
+This means:
+- Service tests call real repositories against real PostgreSQL. No mocked sessions, no mocked repos.
+- Event bus tests publish and subscribe on real Redis. No `AsyncMock(return_value=1)`.
+- Temporal tests use the real Temporal test server, not mocked workflow execution.
+- The only mocks are for external services you don't operate: LLM providers (TestModel per P11), Telegram API, third-party webhooks.
+- Tests that pass against mocks but fail against real infrastructure are worthless — they hide bugs instead of catching them.
+
+**Test:** If you remove all mocks from a test and it breaks, was it testing your code or testing your mocks?
