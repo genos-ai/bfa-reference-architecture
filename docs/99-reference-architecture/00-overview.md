@@ -6,6 +6,7 @@
 
 ## Changelog
 
+- 3.2.0 (2026-03-03): Added Technology Stack Quick Reference — definitive technology choices across all docs for quick agent/developer lookup
 - 3.1.0 (2026-02-26): Added 47-agent-module-organization.md for agent system layout, naming conventions, agent types, shared tool architecture, layered prompt system, access control model
 - 3.0.0 (2026-02-26): Renumbered all docs into clean groups — Core Foundation (01-09), Core Operations (10-16), Optional Platform (20-28), AI-First Platform (40-46); added Architecture Profiles; removed cross-contamination (core docs no longer reference AI docs); dependency flows one way (AI→core, never core→AI)
 - 2.4.0 (2026-02-26): Added 46-event-session-architecture.md (was 31) for event-driven sessions, streaming coordinator, plan management, memory architecture, approval gates
@@ -161,6 +162,142 @@ Prefer boring, proven solutions over novel approaches. Code should be readable b
 ### AI-Assisted Development
 
 Architecture choices favor technologies with extensive AI training data. This maximizes effectiveness of AI coding assistants and reduces development friction.
+
+---
+
+## Technology Stack Quick Reference
+
+Definitive technology choices across all docs. When building or modifying code, use these — no alternatives, no substitutions.
+
+### Backend
+
+| Concern | Technology | Doc |
+|---------|-----------|-----|
+| Language | **Python 3.12+** | 03 |
+| Web framework | **FastAPI** (async-native, Pydantic integration, OpenAPI) | 03 |
+| ASGI server (dev) | **uvicorn** with `--reload` | 03 |
+| ASGI server (prod) | **gunicorn** + `UvicornWorker` | 15, 16 |
+| Validation / schemas | **Pydantic v2** (request/response schemas, config validation) | 03 |
+| Configuration (secrets) | **Pydantic Settings** (`config/.env` → `get_settings()`) | 03 |
+| Configuration (app) | **YAML files** (`config/settings/*.yaml` → `get_app_config()`) | 03 |
+| CLI | **Click** (`@click.command()` with `--options`, no subcommands) | 28 |
+| Logging | **structlog** (JSON output, structured context binding) | 10 |
+| Code formatting | **black** | 08 |
+| Import sorting | **isort** | 08 |
+| Linting | **flake8** | 08 |
+| Type checking | **mypy** (strict mode) | 08 |
+| Rate limiting | **slowapi** (sliding window, Redis-backed) | 06 |
+| Password hashing | **bcrypt** (work factor 12+) or **Argon2id** | 06 |
+| Pre-commit | **pre-commit** framework | 12 |
+
+### Database & Storage
+
+| Concern | Technology | Doc |
+|---------|-----------|-----|
+| Primary database | **PostgreSQL 16+** (single source of truth) | 03, 20 |
+| ORM | **SQLAlchemy 2.0** (async, mapped_column style) | 20 |
+| Migrations | **Alembic** (upgrade + downgrade scripts) | 20 |
+| Cache / pub-sub / queues | **Redis** (caching, rate limiting, Taskiq broker, session events) | 14, 20, 21 |
+| Time-series (optional) | **TimescaleDB** (PostgreSQL extension, hypertables) | 20 |
+| Analytics (optional) | **DuckDB** (embedded, queries Parquet directly) | 20 |
+| Analytical file format | **Parquet** (columnar, compressed) | 20 |
+
+### Events & Messaging
+
+| Concern | Technology | Doc |
+|---------|-----------|-----|
+| Event bus framework | **FastStream** (unified API over Redis/Kafka/NATS) | 21, Plan 10 |
+| Domain events (durable) | **Redis Streams** via FastStream (consumer groups, DLQ) | 21 |
+| Session events (ephemeral) | **Redis Pub/Sub** via FastStream (sub-millisecond, real-time) | 21, 46 |
+| Background tasks | **Taskiq** with Redis broker (async-native, cron scheduling) | 14 |
+| Long-running workflows (Tier 4) | **Temporal** (durable execution, crash recovery, multi-day tasks) | 46 |
+
+### Frontend (Web)
+
+| Concern | Technology | Doc |
+|---------|-----------|-----|
+| Framework | **React** (latest stable) | 22 |
+| Build tool | **Vite** (HMR, fast builds) | 22 |
+| Language | **TypeScript** (strict mode) | 23 |
+| Styling | **Tailwind CSS** (only approved styling approach) | 22 |
+| UI components | **shadcn/ui** | 22 |
+| Server state | **TanStack Query** (caching, refetching, stale-while-revalidate) | 22 |
+| Client state | **Zustand** (minimal, granular subscriptions) | 22 |
+| Forms | **react-hook-form** + **zod** | 22 |
+| Tables | **TanStack Table** | 22 |
+| Charts | **Recharts** | 22 |
+| Icons | **Lucide React** | 22 |
+| E2E / AI debugging | **Playwright** (MCP-compatible, accessibility tree) | 22 |
+| Browser logging | **Pino** (structured JSON) | 22 |
+
+### Terminal Interfaces
+
+| Concern | Technology | Doc |
+|---------|-----------|-----|
+| TUI framework | **Textual** (60 FPS, keyboard-first, SSH-compatible) | 27 |
+| TUI in browser | **Textual Web** (same code, WebSocket, zero changes) | 27 |
+| Rich text rendering | **Rich** (Textual dependency) | 27 |
+| CLI framework | **Click** (`--options` only, no subcommands) | 28 |
+
+### Telegram
+
+| Concern | Technology | Doc |
+|---------|-----------|-----|
+| Bot API (user interaction) | **aiogram v3** (async, Pydantic v2, FSM, middleware) | 25 |
+| Client API (data acquisition) | **Telethon** or **Pyrogram** (MTProto, channel scraping) | 26 |
+
+### AI / Agents (AI-First Profile)
+
+| Concern | Technology | Doc |
+|---------|-----------|-----|
+| Agent framework | **PydanticAI** (v1.61+, `RunContext`, `output_type`, `TestModel`) | 41 |
+| LLM provider (primary) | **Anthropic Claude** (Tier 1 tool calling, 200K context) | 24 |
+| LLM testing | PydanticAI **TestModel** / **FunctionModel** (`ALLOW_MODEL_REQUESTS = False`) | 41 |
+| Agent-to-tool protocol | **MCP** (Model Context Protocol, `mcp` SDK v1.26+) | 42 |
+| Agent-to-agent protocol | **A2A** (Agent-to-Agent Protocol, `a2a-sdk`) | 42 |
+| Vector store (Phase 3) | **pgvector** (PostgreSQL extension) | 41 |
+
+### Deployment
+
+| Concern | Technology | Doc |
+|---------|-----------|-----|
+| OS (bare metal) | **Ubuntu LTS** (22.04+) | 15 |
+| Process management | **systemd** | 15 |
+| Reverse proxy / TLS | **nginx** + **Let's Encrypt** (certbot) | 15 |
+| Cloud (Azure) | **App Service** (Linux, native Python, no containers) | 16 |
+| Azure database | **Azure Database for PostgreSQL Flexible Server** | 16 |
+| Azure cache | **Azure Cache for Redis** (Premium, private endpoint) | 16 |
+| Azure secrets | **Azure Key Vault** (RBAC, managed identity) | 16 |
+| Azure frontend | **Azure Static Web Apps** | 16 |
+| Azure monitoring | **Application Insights** + **Log Analytics** | 16 |
+| Azure IaC | **Terraform** (Azure provider, state in Storage Account) | 16 |
+| CI/CD | **GitHub Actions** (bare metal) or **Azure DevOps Pipelines** (Azure) | 12, 16 |
+
+### Observability (Production)
+
+| Concern | Technology | Doc |
+|---------|-----------|-----|
+| Metrics | **Prometheus** | 10 |
+| Log aggregation | **Loki** (+ Promtail for shipping) | 10 |
+| Dashboards / alerting | **Grafana** | 10 |
+
+### Python Environment
+
+| Project Type | Tool | Doc |
+|-------------|------|-----|
+| Web apps / APIs | **uv** (10-100x faster than pip, lockfiles) | 12 |
+| Data / ML | **conda** (MKL-optimized numpy, CUDA/cuDNN pre-built) | 12 |
+
+### Testing
+
+| Concern | Technology | Doc |
+|---------|-----------|-----|
+| Test runner | **pytest** (async, markers, fixtures) | 11 |
+| HTTP test client | **httpx** (`AsyncClient` + `ASGITransport`) | 11 |
+| Coverage | **pytest-cov** | 11 |
+| Mocking (external only) | **unittest.mock** / **AsyncMock** (only for services you don't operate) | 11 |
+| Time mocking | **freezegun** | 11 |
+| Security scanning | **bandit** (SAST), **pip-audit** / **safety** (deps), **detect-secrets** | 06 |
 
 ---
 
