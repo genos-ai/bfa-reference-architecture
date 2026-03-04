@@ -10,7 +10,7 @@ import yaml
 
 from modules.backend.agents.config_schema import (
     AgentConfigSchema,
-    CoordinatorConfigSchema,
+    MissionControlConfigSchema,
 )
 from modules.backend.core.config import find_project_root
 
@@ -72,24 +72,24 @@ class TestAgentConfigSchema:
         assert dumped["agent_name"] == "code.qa.agent"
 
 
-class TestCoordinatorConfigSchema:
-    """Tests for coordinator YAML schema validation."""
+class TestMissionControlConfigSchema:
+    """Tests for mission control YAML schema validation."""
 
-    def test_coordinator_config_validates(self):
-        path = find_project_root() / "config" / "agents" / "coordinator.yaml"
+    def test_mission_control_config_validates(self):
+        path = find_project_root() / "config" / "agents" / "mission_control.yaml"
         with open(path) as f:
             raw = yaml.safe_load(f)
-        config = CoordinatorConfigSchema(**raw)
+        config = MissionControlConfigSchema(**raw)
         assert config.routing.strategy == "hybrid"
         assert config.limits.max_requests_per_task > 0
         assert config.guardrails.max_input_length > 0
         assert len(config.model_pricing) > 0
 
     def test_pricing_rates_accessible(self):
-        path = find_project_root() / "config" / "agents" / "coordinator.yaml"
+        path = find_project_root() / "config" / "agents" / "mission_control.yaml"
         with open(path) as f:
             raw = yaml.safe_load(f)
-        config = CoordinatorConfigSchema(**raw)
+        config = MissionControlConfigSchema(**raw)
         default_rates = config.model_pricing.get("default")
         assert default_rates is not None
         assert default_rates.input > 0
@@ -99,7 +99,7 @@ class TestCoordinatorConfigSchema:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError, match="extra"):
-            CoordinatorConfigSchema(
+            MissionControlConfigSchema(
                 model_pricing={},
                 routing={
                     "strategy": "rule",

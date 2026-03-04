@@ -8,7 +8,7 @@ import textwrap
 
 import pytest
 
-from modules.backend.agents.coordinator.registry import get_registry
+from modules.backend.agents.mission_control.registry import get_registry
 from modules.backend.services.compliance import ComplianceScannerService
 
 

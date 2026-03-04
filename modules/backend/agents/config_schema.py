@@ -1,13 +1,13 @@
 """
 Agent Configuration Schemas.
 
-Pydantic models defining the expected structure of agent and coordinator
+Pydantic models defining the expected structure of agent and mission control
 YAML config files. Used by AgentRegistry and middleware to validate
 configuration at load time.
 
 Each top-level class corresponds to one config file:
-    AgentConfigSchema       -> config/agents/**/agent.yaml
-    CoordinatorConfigSchema -> config/agents/coordinator.yaml
+    AgentConfigSchema              -> config/agents/**/agent.yaml
+    MissionControlConfigSchema     -> config/agents/mission_control.yaml
 """
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -78,7 +78,7 @@ class AgentConfigSchema(_StrictBase):
 
 
 # =============================================================================
-# Coordinator config schema (config/agents/coordinator.yaml)
+# Mission Control config schema (config/agents/mission_control.yaml)
 # =============================================================================
 
 
@@ -99,7 +99,7 @@ class RoutingSchema(_StrictBase):
     max_routing_depth: int
 
 
-class CoordinatorLimitsSchema(_StrictBase):
+class MissionControlLimitsSchema(_StrictBase):
     """Budget and safety limits."""
 
     max_requests_per_task: int
@@ -134,12 +134,12 @@ class ApprovalSchema(_StrictBase):
     timeout_seconds: int
 
 
-class CoordinatorConfigSchema(_StrictBase):
+class MissionControlConfigSchema(_StrictBase):
     """Schema for config/agents/coordinator.yaml."""
 
     model_pricing: dict[str, ModelPricingRateSchema]
     routing: RoutingSchema
-    limits: CoordinatorLimitsSchema
+    limits: MissionControlLimitsSchema
     guardrails: GuardrailsSchema
     redis_ttl: RedisTtlSchema
     approval: ApprovalSchema

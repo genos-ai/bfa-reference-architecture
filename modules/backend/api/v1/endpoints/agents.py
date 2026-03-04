@@ -68,10 +68,10 @@ async def agent_chat(
 ) -> ApiResponse[ChatResponse]:
     """Send a message to an agent (routed or direct)."""
     if data.agent:
-        from modules.backend.agents.coordinator.coordinator import handle_direct
+        from modules.backend.agents.mission_control.mission_control import handle_direct
         result = await handle_direct(data.agent, data.message)
     else:
-        from modules.backend.agents.coordinator.coordinator import handle
+        from modules.backend.agents.mission_control.mission_control import handle
         result = await handle(data.message)
 
     return ApiResponse(
@@ -91,11 +91,11 @@ async def agent_chat(
 )
 async def agent_chat_stream(data: ChatRequest) -> StreamingResponse:
     """Stream agent progress events as SSE."""
-    from modules.backend.agents.coordinator.coordinator import handle_direct_stream
+    from modules.backend.agents.mission_control.mission_control import handle_direct_stream
 
     agent_name = data.agent
     if not agent_name:
-        from modules.backend.agents.coordinator.coordinator import route
+        from modules.backend.agents.mission_control.mission_control import route
         agent_name = route(data.message)
 
     async def generate():
@@ -115,7 +115,7 @@ async def agent_registry(
     request_id: RequestId,
 ) -> ApiResponse[list[AgentInfo]]:
     """List all available agents."""
-    from modules.backend.agents.coordinator.coordinator import list_agents
+    from modules.backend.agents.mission_control.mission_control import list_agents
 
     agents = list_agents()
     return ApiResponse(

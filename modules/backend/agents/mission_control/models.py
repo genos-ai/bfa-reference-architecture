@@ -1,9 +1,9 @@
 """
-Coordinator request and response models.
+Mission Control request and response models.
 
-Typed models for all coordinator interactions. Every entry point
-(API, CLI, Telegram, TUI) constructs a CoordinatorRequest and
-receives a CoordinatorResponse.
+Typed models for all mission control interactions. Every entry point
+(API, CLI, Telegram, TUI) constructs a MissionControlRequest and
+receives a MissionControlResponse.
 """
 
 from dataclasses import dataclass, field
@@ -11,8 +11,8 @@ from typing import Any
 
 
 @dataclass
-class CoordinatorRequest:
-    """Typed request for all coordinator interactions."""
+class MissionControlRequest:
+    """Typed request for all mission control interactions."""
 
     user_input: str
     agent: str | None = None
@@ -27,10 +27,10 @@ class CoordinatorRequest:
 
 
 @dataclass
-class CoordinatorResponse:
-    """Standard response from the coordinator.
+class MissionControlResponse:
+    """Standard response from mission control.
 
-    Every public coordinator function returns data in this shape.
+    Every public mission control function returns data in this shape.
     agent_name identifies who handled the request, output is the
     primary text result, and metadata carries agent-specific payload
     (violations, components, advice, etc.).

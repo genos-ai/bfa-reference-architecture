@@ -29,7 +29,7 @@ from modules.backend.core.logging import bind_context, get_logger, setup_logging
 
 
 async def send_message(base_url: str, timeout: float, message: str, agent: str | None, raw: bool, verbose: bool) -> int:
-    """Send a message to the agent coordinator and display the response."""
+    """Send a message to mission control and display the response."""
     import httpx
 
     payload: dict = {"message": message}

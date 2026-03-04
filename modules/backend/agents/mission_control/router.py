@@ -2,11 +2,11 @@
 Rule-Based Router.
 
 Matches user input against agent keywords for fast, deterministic routing.
-Returns None when no rule matches (future: LLM fallback via coordinator agent).
+Returns None when no rule matches (future: LLM fallback via mission control).
 """
 
-from modules.backend.agents.coordinator.models import CoordinatorRequest
-from modules.backend.agents.coordinator.registry import AgentRegistry
+from modules.backend.agents.mission_control.models import MissionControlRequest
+from modules.backend.agents.mission_control.registry import AgentRegistry
 from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -18,7 +18,7 @@ class RuleBasedRouter:
     def __init__(self, registry: AgentRegistry) -> None:
         self._registry = registry
 
-    def route(self, request: CoordinatorRequest) -> str | None:
+    def route(self, request: MissionControlRequest) -> str | None:
         """Return agent_name if a keyword matches, else None.
 
         When the request specifies an agent directly, that takes

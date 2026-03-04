@@ -1,5 +1,5 @@
 """
-Unit Tests for coordinator, registry, router, and middleware.
+Unit Tests for mission control, registry, router, and middleware.
 
 Tests exercise real config loading, registry discovery, keyword routing,
 and guardrail enforcement.
@@ -7,13 +7,13 @@ and guardrail enforcement.
 
 import pytest
 
-from modules.backend.agents.coordinator.middleware import (
-    _load_coordinator_config,
+from modules.backend.agents.mission_control.middleware import (
+    _load_mission_control_config,
     compute_cost_usd,
 )
-from modules.backend.agents.coordinator.models import CoordinatorRequest, CoordinatorResponse
-from modules.backend.agents.coordinator.registry import AgentRegistry, get_registry
-from modules.backend.agents.coordinator.router import RuleBasedRouter
+from modules.backend.agents.mission_control.models import MissionControlRequest, MissionControlResponse
+from modules.backend.agents.mission_control.registry import AgentRegistry, get_registry
+from modules.backend.agents.mission_control.router import RuleBasedRouter
 
 
 class TestAgentRegistry:
@@ -84,42 +84,42 @@ class TestRuleBasedRouter:
     def test_routes_by_keyword(self):
         registry = get_registry()
         router = RuleBasedRouter(registry)
-        request = CoordinatorRequest(user_input="run compliance audit")
+        request = MissionControlRequest(user_input="run compliance audit")
         assert router.route(request) == "code.qa.agent"
 
     def test_routes_health_keywords(self):
         registry = get_registry()
         router = RuleBasedRouter(registry)
-        request = CoordinatorRequest(user_input="check system health status")
+        request = MissionControlRequest(user_input="check system health status")
         assert router.route(request) == "system.health.agent"
 
     def test_returns_none_for_no_match(self):
         registry = get_registry()
         router = RuleBasedRouter(registry)
-        request = CoordinatorRequest(user_input="make me a sandwich")
+        request = MissionControlRequest(user_input="make me a sandwich")
         assert router.route(request) is None
 
     def test_direct_agent_takes_priority(self):
         registry = get_registry()
         router = RuleBasedRouter(registry)
-        request = CoordinatorRequest(
+        request = MissionControlRequest(
             user_input="check health",
             agent="code.qa.agent",
         )
         assert router.route(request) == "code.qa.agent"
 
 
-class TestCoordinatorModels:
+class TestMissionControlModels:
     """Tests for typed request/response models."""
 
     def test_request_defaults(self):
-        req = CoordinatorRequest(user_input="hello")
+        req = MissionControlRequest(user_input="hello")
         assert req.agent is None
         assert req.conversation_id is None
         assert req.channel == "api"
 
     def test_response_structure(self):
-        resp = CoordinatorResponse(
+        resp = MissionControlResponse(
             agent_name="code.qa.agent",
             output="Found 3 violations",
             metadata={"total_violations": 3},
@@ -131,11 +131,11 @@ class TestCoordinatorModels:
 class TestMiddleware:
     """Tests for middleware configuration and cost computation."""
 
-    def test_coordinator_config_loads(self):
-        from modules.backend.agents.config_schema import CoordinatorConfigSchema
+    def test_mission_control_config_loads(self):
+        from modules.backend.agents.config_schema import MissionControlConfigSchema
 
-        config = _load_coordinator_config()
-        assert isinstance(config, CoordinatorConfigSchema)
+        config = _load_mission_control_config()
+        assert isinstance(config, MissionControlConfigSchema)
         assert config.routing is not None
         assert config.limits is not None
         assert config.guardrails is not None

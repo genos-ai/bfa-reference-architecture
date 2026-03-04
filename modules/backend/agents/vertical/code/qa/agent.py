@@ -4,7 +4,7 @@ QA Compliance Agent (code.qa.agent).
 Thin wrapper over shared tool implementations and ComplianceScannerService.
 All scanning logic lives in services/compliance.py. All tool implementations
 live in agents/tools/. This file registers tools, receives config from the
-coordinator, and exposes the standard run_agent() / run_agent_stream() interface.
+mission control, and exposes the standard run_agent() / run_agent_stream() interface.
 """
 
 from collections.abc import AsyncGenerator
@@ -12,7 +12,7 @@ from collections.abc import AsyncGenerator
 from pydantic_ai import Agent, RunContext, UsageLimits
 from pydantic_ai.models import Model
 
-from modules.backend.agents.coordinator.coordinator import assemble_instructions
+from modules.backend.agents.mission_control.mission_control import assemble_instructions
 from modules.backend.agents.deps.base import QaAgentDeps
 from modules.backend.agents.schemas import QaAuditResult
 from modules.backend.agents.tools import code, compliance, filesystem

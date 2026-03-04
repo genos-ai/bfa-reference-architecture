@@ -1,5 +1,5 @@
 """
-Agent Coordinator.
+Mission Control.
 
 Routes user requests to the appropriate vertical agent. Assembles
 layered prompt instructions, builds agent deps from YAML config,
@@ -8,7 +8,7 @@ middleware around every execution.
 
 No agent-specific code in this file. Adding a new agent requires only
 a YAML config and an agent.py with run_agent() / run_agent_stream()
-— no coordinator changes needed.
+— no mission control changes needed.
 
 Public interface:
     handle(user_input) -> dict
@@ -25,13 +25,13 @@ from pydantic_ai import UsageLimits
 from pydantic_ai.models import Model
 
 from modules.backend.agents.config_schema import AgentConfigSchema
-from modules.backend.agents.coordinator.middleware import (
-    _load_coordinator_config,
+from modules.backend.agents.mission_control.middleware import (
+    _load_mission_control_config,
     with_cost_tracking,
     with_guardrails,
 )
-from modules.backend.agents.coordinator.registry import get_registry
-from modules.backend.agents.coordinator.router import RuleBasedRouter
+from modules.backend.agents.mission_control.registry import get_registry
+from modules.backend.agents.mission_control.router import RuleBasedRouter
 from modules.backend.agents.deps.base import (
     BaseAgentDeps,
     FileScope,
@@ -132,8 +132,8 @@ def _build_agent_deps(agent_name: str, agent_config: AgentConfigSchema) -> BaseA
 
 
 def _get_usage_limits() -> UsageLimits:
-    """Build UsageLimits from coordinator.yaml."""
-    config = _load_coordinator_config()
+    """Build UsageLimits from mission_control.yaml."""
+    config = _load_mission_control_config()
     return UsageLimits(
         request_limit=config.limits.max_requests_per_task,
         total_tokens_limit=config.limits.max_tokens_per_task,
@@ -152,13 +152,13 @@ def _import_agent_module(agent_name: str) -> Any:
     return importlib.import_module(module_path)
 
 
-def _format_response(agent_name: str, result: Any) -> "CoordinatorResponse":
-    """Format an agent result into a standard CoordinatorResponse.
+def _format_response(agent_name: str, result: Any) -> "MissionControlResponse":
+    """Format an agent result into a standard MissionControlResponse.
 
     Every agent returns a Pydantic BaseModel. We extract the summary as
     the output string and pack the full model data into metadata.
     """
-    from modules.backend.agents.coordinator.models import CoordinatorResponse
+    from modules.backend.agents.mission_control.models import MissionControlResponse
 
     if hasattr(result, "model_dump"):
         data = result.model_dump()
@@ -167,7 +167,7 @@ def _format_response(agent_name: str, result: Any) -> "CoordinatorResponse":
 
     output = data.pop("summary", str(result))
 
-    return CoordinatorResponse(
+    return MissionControlResponse(
         agent_name=agent_name,
         output=output,
         metadata=data,
@@ -184,7 +184,7 @@ async def _execute_agent(
     1. Import the agent module from registry
     2. Build deps from config
     3. Call agent_module.run_agent(user_input, deps, usage_limits)
-    4. Format into standard CoordinatorResponse and return as dict
+    4. Format into standard MissionControlResponse and return as dict
 
     Returns dict for backward compatibility with API endpoints.
     The dict is a flattened CoordinatorResponse: {agent_name, output, **metadata}.
@@ -224,17 +224,17 @@ async def handle(user_input: str) -> dict[str, Any]:
     Raises:
         ValueError: If no agent matches and no fallback is configured.
     """
-    from modules.backend.agents.coordinator.models import CoordinatorRequest
+    from modules.backend.agents.mission_control.models import MissionControlRequest
 
     registry = get_registry()
     router = RuleBasedRouter(registry)
-    request = CoordinatorRequest(user_input=user_input)
+    request = MissionControlRequest(user_input=user_input)
 
     agent_name = router.route(request)
 
     if agent_name is None:
-        coordinator_config = _load_coordinator_config()
-        fallback = coordinator_config.routing.fallback_agent
+        mc_config = _load_mission_control_config()
+        fallback = mc_config.routing.fallback_agent
         if fallback and registry.has(fallback):
             agent_name = fallback
             logger.debug("Using fallback agent", extra={"agent_name": fallback})
@@ -313,16 +313,16 @@ async def handle_direct_stream(
 
 def route(user_input: str) -> str:
     """Route user input to an agent name. Public — used by API streaming endpoint."""
-    from modules.backend.agents.coordinator.models import CoordinatorRequest
+    from modules.backend.agents.mission_control.models import MissionControlRequest
 
     registry = get_registry()
     router = RuleBasedRouter(registry)
-    request = CoordinatorRequest(user_input=user_input)
+    request = MissionControlRequest(user_input=user_input)
 
     agent_name = router.route(request)
     if agent_name is None:
-        coordinator_config = _load_coordinator_config()
-        fallback = coordinator_config.routing.fallback_agent
+        mc_config = _load_mission_control_config()
+        fallback = mc_config.routing.fallback_agent
         if fallback and registry.has(fallback):
             return fallback
         available = ", ".join(c["agent_name"] for c in registry.list_all()) or "none"

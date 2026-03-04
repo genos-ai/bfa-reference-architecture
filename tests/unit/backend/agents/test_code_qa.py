@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from modules.backend.agents.coordinator.registry import get_registry
+from modules.backend.agents.mission_control.registry import get_registry
 from modules.backend.agents.deps.base import FileScope
 from modules.backend.agents.schemas import QaAuditResult, Violation
 from modules.backend.services.compliance import ComplianceScannerService

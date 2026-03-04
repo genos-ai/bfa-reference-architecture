@@ -14,7 +14,7 @@ from typing import Any
 
 import yaml
 
-from modules.backend.agents.config_schema import AgentConfigSchema, CoordinatorConfigSchema
+from modules.backend.agents.config_schema import AgentConfigSchema, MissionControlConfigSchema
 from modules.backend.core.config import find_project_root
 from modules.backend.core.logging import get_logger
 
@@ -22,12 +22,12 @@ logger = get_logger(__name__)
 
 
 @lru_cache(maxsize=1)
-def _load_coordinator_config() -> CoordinatorConfigSchema:
-    """Load, validate, and cache coordinator configuration from YAML."""
-    config_path = find_project_root() / "config" / "agents" / "coordinator.yaml"
+def _load_mission_control_config() -> MissionControlConfigSchema:
+    """Load, validate, and cache mission control configuration from YAML."""
+    config_path = find_project_root() / "config" / "agents" / "mission_control.yaml"
     with open(config_path) as f:
         raw = yaml.safe_load(f)
-    return CoordinatorConfigSchema(**raw)
+    return MissionControlConfigSchema(**raw)
 
 
 def compute_cost_usd(
@@ -36,7 +36,7 @@ def compute_cost_usd(
     model: str | None = None,
 ) -> float:
     """Compute dollar cost from token counts and model pricing config."""
-    config = _load_coordinator_config()
+    config = _load_mission_control_config()
     default_rates = config.model_pricing.get("default")
     rates = config.model_pricing.get(model or "", default_rates)
     if rates is None:
@@ -49,7 +49,7 @@ def compute_cost_usd(
 def with_guardrails(agent_config: AgentConfigSchema | None = None):
     """Block unsafe input before any LLM call is made.
 
-    Checks coordinator-level injection patterns and respects
+    Checks mission control-level injection patterns and respects
     the agent-specific max_input_length when provided.
 
     Also enforces per-agent max_budget_usd when configured.
@@ -57,18 +57,18 @@ def with_guardrails(agent_config: AgentConfigSchema | None = None):
     def decorator(func):
         @functools.wraps(func)
         async def wrapper(user_input: str, *args, **kwargs):
-            coordinator_config = _load_coordinator_config()
+            mc_config = _load_mission_control_config()
 
-            coordinator_max = coordinator_config.guardrails.max_input_length
+            mc_max = mc_config.guardrails.max_input_length
             agent_max = agent_config.max_input_length if agent_config else None
-            max_length = agent_max if agent_max is not None else coordinator_max
+            max_length = agent_max if agent_max is not None else mc_max
 
             if len(user_input) > max_length:
                 raise ValueError(
                     f"Input exceeds maximum length ({len(user_input)} > {max_length})"
                 )
 
-            patterns = coordinator_config.guardrails.injection_patterns
+            patterns = mc_config.guardrails.injection_patterns
             text_lower = user_input.lower()
             for pattern in patterns:
                 if re.search(pattern, text_lower):
@@ -86,7 +86,7 @@ def with_guardrails(agent_config: AgentConfigSchema | None = None):
 def with_cost_tracking(func):
     """Track token usage, compute dollar cost, and enforce budget limits.
 
-    Reads max_cost_per_plan and max_cost_per_user_daily from coordinator.yaml.
+    Reads max_cost_per_plan and max_cost_per_user_daily from mission_control.yaml.
     Extracts usage data from the agent result dict (_usage key) when present.
     Logs tokens, cost, and duration. Raises ValueError if cost exceeds limits.
     """
@@ -112,9 +112,9 @@ def with_cost_tracking(func):
                 log_extra["cost_usd"] = cost_usd
                 log_extra["model"] = model
 
-        coordinator_config = _load_coordinator_config()
+        mc_config = _load_mission_control_config()
 
-        max_cost_plan = coordinator_config.limits.max_cost_per_plan
+        max_cost_plan = mc_config.limits.max_cost_per_plan
         if max_cost_plan and cost_usd > max_cost_plan:
             logger.error(
                 "Cost limit exceeded",

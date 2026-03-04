@@ -20,7 +20,7 @@ from modules.backend.core.config import find_project_root, get_app_config
 @pytest.fixture
 def qa_deps():
     """Build QaAgentDeps for testing with a permissive scope."""
-    from modules.backend.agents.coordinator.registry import get_registry
+    from modules.backend.agents.mission_control.registry import get_registry
 
     config = get_registry().get("code.qa.agent")
     return QaAgentDeps(
@@ -33,7 +33,7 @@ def qa_deps():
 @pytest.fixture
 def health_deps():
     """Build HealthAgentDeps for testing."""
-    from modules.backend.agents.coordinator.registry import get_registry
+    from modules.backend.agents.mission_control.registry import get_registry
 
     config = get_registry().get("system.health.agent")
     return HealthAgentDeps(
@@ -47,7 +47,7 @@ def health_deps():
 @pytest.fixture(autouse=True)
 def _reset_agent_instances():
     """Clear registry agent cache before each test so TestModel can be used."""
-    from modules.backend.agents.coordinator.registry import get_registry
+    from modules.backend.agents.mission_control.registry import get_registry
 
     get_registry().reset()
     yield

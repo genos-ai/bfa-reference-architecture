@@ -24,7 +24,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from modules.backend.core.config import find_project_root
 from modules.backend.core.logging import get_logger, setup_logging
-from modules.backend.agents.coordinator.registry import get_registry
+from modules.backend.agents.mission_control.registry import get_registry
 from modules.backend.services.compliance import ComplianceScannerService
 
 
