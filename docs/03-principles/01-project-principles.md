@@ -4,7 +4,21 @@ Guiding principles for all architectural decisions, plans, and implementation wo
 
 ---
 
-## P1: Infrastructure Before Agents
+## Context
+
+These are **project-specific principles** for the BFA agentic platform. They build on top of the **reference architecture core principles** defined in `docs/99-reference-architecture/01-core-principles.md` (P1–P8: Backend Owns Logic, Stateless Clients, Single Source of Truth, Explicit Over Implicit, Fail Fast, Idempotency, No Hardcoded Values, Secure by Default).
+
+The reference architecture principles are universal software engineering rules. The principles below are specific to how *this project* builds its agentic platform — platform structure, agent behavior, and development process.
+
+**Numbering note:** This document uses P1–P12. The reference architecture also uses P1–P8 for different principles. When referencing principles from this document in plans or code, include the name (e.g., "P12: Test Against Real Infrastructure") to avoid ambiguity with reference architecture P-numbers.
+
+---
+
+## Platform Architecture
+
+*How the system is built — structural decisions about infrastructure, coordination, state management, and layering.*
+
+### P1: Infrastructure Before Agents
 
 **Build the platform first. Agents are cheap to add on top of solid infrastructure.**
 
@@ -19,7 +33,63 @@ This means:
 
 ---
 
-## P2: Deterministic Over Non-Deterministic
+### P5: Streaming Is the Default Path
+
+**Every agent interaction produces a typed event stream. Synchronous responses are the degraded case.**
+
+The coordinator's `handle()` returns `AsyncIterator[SessionEvent]`. Every channel (API, TUI, Telegram, MCP, A2A) consumes the same event stream. Callers that need a synchronous result call `collect()` which drains the iterator.
+
+This means:
+- There is no separate synchronous execution path. One code path, always.
+- Events are both yielded to the caller AND published to the session event bus.
+- Error handling yields error events instead of throwing — the stream always terminates cleanly.
+
+---
+
+### P6: The Coordinator Is Infrastructure, Not Intelligence
+
+**The coordinator routes, enforces, tracks, and yields events. It does not reason, plan, or make domain decisions.**
+
+The coordinator is a state machine. It applies middleware (cost tracking, guardrails, budget enforcement), routes to agents, and manages the event stream. Domain intelligence belongs in agents. Strategic intelligence belongs in horizontal agents. The coordinator never calls an LLM.
+
+This means:
+- All delegation goes through the coordinator, ensuring middleware always applies.
+- Adding a new concern (logging, tracing, rate limiting) happens in coordinator middleware, not in agent code.
+- Horizontal agents (like the PM agent) are the ones that reason about which agent to call — but they delegate through the coordinator, never directly.
+
+---
+
+### P9: Temporal Owns Orchestration, PostgreSQL Owns Domain
+
+**Never mix durable execution state with business data.**
+
+Temporal manages workflow position, retry counts, signal queues, and durable timers. PostgreSQL manages conversations, plans, decisions, and domain entities. Activities bridge between them by reading/writing PostgreSQL and reporting results to Temporal.
+
+This means:
+- No large data in Temporal event history — Activities pass IDs, not objects.
+- ORM objects never cross the Temporal boundary — serializable dataclasses (DTOs) do.
+- The system works without Temporal (Tiers 1-3). Temporal activates only for Tier 4.
+
+---
+
+### P10: Every Phase Is an Expansion, Not a Rewrite
+
+**New capabilities layer on top of existing ones. Existing patterns remain unchanged.**
+
+Stateless CRUD endpoints continue to work without sessions. Simple agent calls work without plan management. Sessions work without Temporal. Each tier of complexity is opt-in.
+
+This means:
+- `GET /api/v1/notes` never creates a session or touches the event bus.
+- A one-shot agent call can auto-create an ephemeral session transparently.
+- The graduated complexity model: Tier 1 (CRUD) → Tier 2 (stateless agent) → Tier 3 (interactive session) → Tier 4 (long-running autonomous).
+
+---
+
+## Agent Design
+
+*How agents behave — design rules for agent capabilities, tool usage, and failure handling.*
+
+### P2: Deterministic Over Non-Deterministic
 
 **Never use an agent where a tool will do the job faster, cheaper, and better.**
 
@@ -36,21 +106,7 @@ This means:
 
 ---
 
-## P3: Breaking Changes Are Free (During Dev)
-
-**We are in dev mode. We have not shipped to production. We do not carry backward-compatibility debt.**
-
-This means:
-- Refactor in-place. No shims, no `_legacy` aliases, no deprecation wrappers.
-- Delete what's replaced. Don't comment it out or re-export unused symbols.
-- Rename freely when the new name is clearer.
-- Tests that break because of interface changes get rewritten, not patched around.
-
-**Expires:** When we ship the first production deployment, this principle is replaced by a versioning and migration strategy.
-
----
-
-## P4: Scope Is Configuration, Not Code
+### P4: Scope Is Configuration, Not Code
 
 **What an agent can do is defined in YAML. How it does it is defined in Python.**
 
@@ -64,33 +120,7 @@ This means:
 
 ---
 
-## P5: Streaming Is the Default Path
-
-**Every agent interaction produces a typed event stream. Synchronous responses are the degraded case.**
-
-The coordinator's `handle()` returns `AsyncIterator[SessionEvent]`. Every channel (API, TUI, Telegram, MCP, A2A) consumes the same event stream. Callers that need a synchronous result call `collect()` which drains the iterator.
-
-This means:
-- There is no separate synchronous execution path. One code path, always.
-- Events are both yielded to the caller AND published to the session event bus.
-- Error handling yields error events instead of throwing — the stream always terminates cleanly.
-
----
-
-## P6: The Coordinator Is Infrastructure, Not Intelligence
-
-**The coordinator routes, enforces, tracks, and yields events. It does not reason, plan, or make domain decisions.**
-
-The coordinator is a state machine. It applies middleware (cost tracking, guardrails, budget enforcement), routes to agents, and manages the event stream. Domain intelligence belongs in agents. Strategic intelligence belongs in horizontal agents. The coordinator never calls an LLM.
-
-This means:
-- All delegation goes through the coordinator, ensuring middleware always applies.
-- Adding a new concern (logging, tracing, rate limiting) happens in coordinator middleware, not in agent code.
-- Horizontal agents (like the PM agent) are the ones that reason about which agent to call — but they delegate through the coordinator, never directly.
-
----
-
-## P7: Separate Implementation from Registration
+### P7: Separate Implementation from Registration
 
 **Tool implementations are pure functions. Tool registrations are thin wrappers.**
 
@@ -103,7 +133,23 @@ This means:
 
 ---
 
-## P8: Plan Revision Over Replanning
+### P13: No Agent Self-Evaluation
+
+**No agent should be judge and jury of its own work.**
+
+The agent that produces output must not be the agent that evaluates it. Self-assessment is unreliable — LLMs are biased toward their own output and will consistently rate it higher than an independent reviewer would. Quality gates, compliance checks, and acceptance criteria are evaluated by a different agent, a deterministic tool, or a human.
+
+This means:
+- A coding agent does not review its own code. A QA agent or compliance scanner does.
+- A planning agent does not approve its own plan. The PM agent or a human does.
+- A summarization agent does not judge summary quality. A validation step (deterministic or separate agent) does.
+- Self-correction loops (agent retrying its own failed output) are acceptable for mechanical errors (syntax, format). Judgment calls (quality, correctness, completeness) require an external evaluator.
+
+**Test:** If the same agent produces and approves an artifact, who catches its blind spots?
+
+---
+
+### P8: Plan Revision Over Replanning
 
 **When a task fails, modify the remaining plan. Don't throw away completed work.**
 
@@ -116,33 +162,11 @@ This means:
 
 ---
 
-## P9: Temporal Owns Orchestration, PostgreSQL Owns Domain
+## Development Process
 
-**Never mix durable execution state with business data.**
+*How we work — testing, CI, and development workflow rules.*
 
-Temporal manages workflow position, retry counts, signal queues, and durable timers. PostgreSQL manages conversations, plans, decisions, and domain entities. Activities bridge between them by reading/writing PostgreSQL and reporting results to Temporal.
-
-This means:
-- No large data in Temporal event history — Activities pass IDs, not objects.
-- ORM objects never cross the Temporal boundary — serializable dataclasses (DTOs) do.
-- The system works without Temporal (Tiers 1-3). Temporal activates only for Tier 4.
-
----
-
-## P10: Every Phase Is an Expansion, Not a Rewrite
-
-**New capabilities layer on top of existing ones. Existing patterns remain unchanged.**
-
-Stateless CRUD endpoints continue to work without sessions. Simple agent calls work without plan management. Sessions work without Temporal. Each tier of complexity is opt-in.
-
-This means:
-- `GET /api/v1/notes` never creates a session or touches the event bus.
-- A one-shot agent call can auto-create an ephemeral session transparently.
-- The graduated complexity model: Tier 1 (CRUD) → Tier 2 (stateless agent) → Tier 3 (interactive session) → Tier 4 (long-running autonomous).
-
----
-
-## P11: Test Without LLMs
+### P11: Test Without LLMs
 
 **CI never makes a real LLM call. Tests use deterministic fixtures.**
 
@@ -155,7 +179,7 @@ This means:
 
 ---
 
-## P12: Test Against Real Infrastructure
+### P12: Test Against Real Infrastructure
 
 **Tests run against the live platform. Mock only what you don't operate.**
 
@@ -169,3 +193,21 @@ This means:
 - Tests that pass against mocks but fail against real infrastructure are worthless — they hide bugs instead of catching them.
 
 **Test:** If you remove all mocks from a test and it breaks, was it testing your code or testing your mocks?
+
+---
+
+## Temporary Principles
+
+*These principles have explicit expiration conditions and will be replaced.*
+
+### P3: Breaking Changes Are Free (During Dev)
+
+**We are in dev mode. We have not shipped to production. We do not carry backward-compatibility debt.**
+
+This means:
+- Refactor in-place. No shims, no `_legacy` aliases, no deprecation wrappers.
+- Delete what's replaced. Don't comment it out or re-export unused symbols.
+- Rename freely when the new name is clearer.
+- Tests that break because of interface changes get rewritten, not patched around.
+
+**Expires:** When we ship the first production deployment, this principle is replaced by a versioning and migration strategy.
