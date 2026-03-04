@@ -131,6 +131,7 @@ def _create_mock_app_config() -> Any:
         GatewaySchema,
         LoggingSchema,
         SecuritySchema,
+        SessionsSchema,
     )
 
     class TestAppConfig:
@@ -187,6 +188,7 @@ def _create_mock_app_config() -> Any:
                 security_headers_enabled=False,
                 security_cors_enforce_production=False,
                 experimental_background_tasks_enabled=False,
+                events_publish_enabled=False,
             )
             self.security = SecuritySchema(
                 jwt={
@@ -223,6 +225,7 @@ def _create_mock_app_config() -> Any:
                 default_policy="allow_all",
                 channels={"telegram": {"allowlist": []}},
             )
+            self.sessions = SessionsSchema()
 
     return TestAppConfig()
 

@@ -1,0 +1,12 @@
+# =============================================================================
+# Session Configuration
+# =============================================================================
+#   Controls session lifecycle, TTLs, cost budgets, and cleanup intervals.
+#   Sessions are the platform primitive — they outlive any request or connection.
+
+default_ttl_hours: 24
+max_ttl_hours: 168
+default_cost_budget_usd: 50.00
+max_cost_budget_usd: 500.00
+cleanup_interval_minutes: 60
+budget_warning_threshold: 0.80

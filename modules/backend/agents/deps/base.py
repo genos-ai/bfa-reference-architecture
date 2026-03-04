@@ -57,6 +57,7 @@ class BaseAgentDeps:
     project_root: Path
     scope: FileScope
     config: AgentConfigSchema | None = None
+    session_id: str | None = None  # Set when running within a session (Phase 3+)
 
 
 @dataclass

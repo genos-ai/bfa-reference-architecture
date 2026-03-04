@@ -64,6 +64,20 @@ class RateLimitError(ApplicationError):
         super().__init__(message, code="RATE_LIMITED")
 
 
+class BudgetExceededError(ApplicationError):
+    """Raised when a session's cost budget is exceeded."""
+
+    def __init__(
+        self,
+        message: str = "Cost budget exceeded",
+        current_cost: float = 0.0,
+        budget: float = 0.0,
+    ) -> None:
+        self.current_cost = current_cost
+        self.budget = budget
+        super().__init__(message, code="COST_BUDGET_EXCEEDED")
+
+
 class DatabaseError(ApplicationError):
     """Raised when a database operation fails."""
 

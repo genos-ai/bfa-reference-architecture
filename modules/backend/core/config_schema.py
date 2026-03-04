@@ -257,3 +257,17 @@ class EventsSchema(_StrictBase):
     consumer_timeout_ms: int = 5000
     dlq_enabled: bool = True
     dlq_prefix: str = "dlq"
+
+
+# =============================================================================
+# sessions.yaml
+# =============================================================================
+
+
+class SessionsSchema(_StrictBase):
+    default_ttl_hours: int = 24
+    max_ttl_hours: int = 168
+    default_cost_budget_usd: float = 50.00
+    max_cost_budget_usd: float = 500.00
+    cleanup_interval_minutes: int = 60
+    budget_warning_threshold: float = 0.80

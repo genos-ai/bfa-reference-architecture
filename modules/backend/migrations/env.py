@@ -20,6 +20,7 @@ from modules.backend.models.base import Base
 # Import all models here so Alembic can detect them
 # Add new model imports as you create them
 from modules.backend.models.note import Note  # noqa: F401
+from modules.backend.models.session import Session, SessionChannel, SessionMessage  # noqa: F401
 
 # Alembic Config object
 config = context.config

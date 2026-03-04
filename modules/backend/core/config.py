@@ -32,6 +32,7 @@ from modules.backend.core.config_schema import (
     GatewaySchema,
     LoggingSchema,
     SecuritySchema,
+    SessionsSchema,
 )
 
 
@@ -126,6 +127,7 @@ class AppConfig:
         self._security = _load_validated(SecuritySchema, "security.yaml")
         self._gateway = _load_validated(GatewaySchema, "gateway.yaml")
         self._events = _load_validated_optional(EventsSchema, "events.yaml")
+        self._sessions = _load_validated_optional(SessionsSchema, "sessions.yaml")
 
     @property
     def application(self) -> ApplicationSchema:
@@ -161,6 +163,11 @@ class AppConfig:
     def events(self) -> EventsSchema:
         """Event bus settings."""
         return self._events
+
+    @property
+    def sessions(self) -> SessionsSchema:
+        """Session settings."""
+        return self._sessions
 
 
 @lru_cache
