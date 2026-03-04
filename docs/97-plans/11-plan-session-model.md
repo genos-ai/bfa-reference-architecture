@@ -112,17 +112,7 @@ def sessions(self) -> SessionsSchema:
     return self._sessions
 ```
 
-**Note:** Use `_load_validated_optional()` — if `sessions.yaml` doesn't exist, return `SessionsSchema()` with defaults. This keeps sessions config optional for projects that don't use sessions. Add this helper function:
-
-```python
-def _load_validated_optional(schema_cls: type, filename: str):
-    """Load YAML and validate against schema. Returns defaults if file missing."""
-    try:
-        raw = load_yaml_config(filename)
-        return schema_cls(**raw)
-    except FileNotFoundError:
-        return schema_cls()
-```
+**Note:** Use the existing `_load_validated_optional()` helper (already in `config.py` line 102) — if `sessions.yaml` doesn't exist, it returns `SessionsSchema()` with defaults. This keeps sessions config optional for projects that don't use sessions. Do NOT add a duplicate helper.
 
 **File:** `config/settings/sessions.yaml` (NEW)
 
@@ -182,7 +172,7 @@ Three models: `Session`, `SessionChannel`, `SessionMessage`. All follow the exis
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Index, Integer, JSON, String, Text, Boolean
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from modules.backend.core.utils import utc_now
@@ -285,7 +275,7 @@ class SessionChannel(UUIDMixin, Base):
     __tablename__ = "session_channels"
 
     session_id: Mapped[str] = mapped_column(
-        String(36), nullable=False, index=True
+        String(36), ForeignKey("sessions.id"), nullable=False, index=True
     )
     channel_type: Mapped[str] = mapped_column(
         String(50), nullable=False
@@ -318,7 +308,7 @@ class SessionMessage(UUIDMixin, Base):
     __tablename__ = "session_messages"
 
     session_id: Mapped[str] = mapped_column(
-        String(36), nullable=False, index=True
+        String(36), ForeignKey("sessions.id"), nullable=False, index=True
     )
     role: Mapped[str] = mapped_column(
         String(20), nullable=False
@@ -358,9 +348,10 @@ class SessionMessage(UUIDMixin, Base):
 - `session_metadata` NOT `metadata` (avoids shadowing `Base.metadata`)
 - String UUIDs via `UUIDMixin` (matches existing `Note` model)
 - `SessionMessage` uses only `created_at` (no `TimestampMixin`) because messages are immutable
+- `SessionChannel` uses `bound_at` (no `TimestampMixin`). Known limitation: no `updated_at` means we can't track *when* a binding was deactivated. If debugging channel rebinding becomes an issue, add an `unbound_at: datetime | None` column later.
 - `channels` relationship uses `lazy="selectin"` (always loaded with session — channels are small)
 - `messages` relationship uses `lazy="noload"` (never auto-loaded — messages can be large, load explicitly)
-- Foreign keys are implicit via string column matching (no SQLAlchemy `ForeignKey` — keeps SQLite test compatibility). If using PostgreSQL-only, add `ForeignKey("sessions.id")` to `session_id` columns.
+- Foreign keys use `ForeignKey("sessions.id")` on `session_id` columns — required for SQLAlchemy `relationship()` to determine join conditions. SQLite supports ForeignKey constraints without issue.
 
 ---
 
@@ -368,15 +359,7 @@ class SessionMessage(UUIDMixin, Base):
 
 **File:** `modules/backend/models/__init__.py`
 
-Add the new models so Alembic can detect them:
-
-```python
-# Database models package
-from modules.backend.models.base import Base
-from modules.backend.models.session import Session, SessionChannel, SessionMessage
-
-__all__ = ["Base", "Session", "SessionChannel", "SessionMessage"]
-```
+No changes needed — the existing pattern keeps `__init__.py` minimal (exports only `Base`). Individual models are imported directly where needed (services, repositories) and registered with Alembic via `env.py` (see Step 10).
 
 ---
 
@@ -610,13 +593,15 @@ class SessionRepository(BaseRepository[Session]):
 
     async def get_by_user(
         self,
-        user_id: str,
+        user_id: str | None = None,
         status_filter: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Session]:
-        """Get sessions for a user, optionally filtered by status."""
-        stmt = select(Session).where(Session.user_id == user_id)
+        """Get sessions, optionally filtered by user and/or status."""
+        stmt = select(Session)
+        if user_id is not None:
+            stmt = stmt.where(Session.user_id == user_id)
         if status_filter:
             stmt = stmt.where(Session.status == status_filter)
         stmt = stmt.order_by(Session.last_activity_at.desc()).limit(limit).offset(offset)
@@ -625,11 +610,13 @@ class SessionRepository(BaseRepository[Session]):
 
     async def count_by_user(
         self,
-        user_id: str,
+        user_id: str | None = None,
         status_filter: str | None = None,
     ) -> int:
-        """Count sessions for a user, optionally filtered by status."""
-        stmt = select(func.count()).select_from(Session).where(Session.user_id == user_id)
+        """Count sessions, optionally filtered by user and/or status."""
+        stmt = select(func.count()).select_from(Session)
+        if user_id is not None:
+            stmt = stmt.where(Session.user_id == user_id)
         if status_filter:
             stmt = stmt.where(Session.status == status_filter)
         result = await self.session.execute(stmt)
@@ -789,7 +776,7 @@ from modules.backend.core.config import get_app_config
 from modules.backend.core.exceptions import BudgetExceededError, NotFoundError, ValidationError
 from modules.backend.core.logging import get_logger
 from modules.backend.core.utils import utc_now
-from modules.backend.models.session import Session, SessionStatus, VALID_TRANSITIONS
+from modules.backend.models.session import Session, SessionChannel, SessionStatus, VALID_TRANSITIONS
 from modules.backend.repositories.session import SessionRepository
 from modules.backend.schemas.session import (
     SessionCreate,
@@ -877,18 +864,18 @@ class SessionService(BaseService):
         )
         return session
 
-    async def list_user_sessions(
+    async def list_sessions(
         self,
-        user_id: str,
+        user_id: str | None = None,
         status_filter: str | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> tuple[list[Session], int]:
-        """List sessions for a user with pagination."""
+        """List sessions with optional user and status filters. Pagination included."""
         sessions = await self.repo.get_by_user(
-            user_id, status_filter=status_filter, limit=limit, offset=offset
+            user_id=user_id, status_filter=status_filter, limit=limit, offset=offset
         )
-        total = await self.repo.count_by_user(user_id, status_filter=status_filter)
+        total = await self.repo.count_by_user(user_id=user_id, status_filter=status_filter)
         return sessions, total
 
     # --- State Transitions ---
@@ -1037,10 +1024,10 @@ class SessionService(BaseService):
         session_id: str,
         channel_type: str,
         channel_id: str,
-    ) -> None:
+    ) -> SessionChannel:
         """Bind a channel to a session. Deactivates any previous binding for this channel."""
         await self.repo.get_by_id(session_id)  # Verify session exists
-        await self._execute_db_operation(
+        binding = await self._execute_db_operation(
             "bind_channel",
             self.repo.bind_channel(session_id, channel_type, channel_id),
         )
@@ -1050,6 +1037,7 @@ class SessionService(BaseService):
             channel_type=channel_type,
             channel_id=channel_id,
         )
+        return binding
 
     async def unbind_channel(
         self,
@@ -1199,6 +1187,11 @@ Follow the existing `notes.py` endpoint pattern: `APIRouter`, `DbSession`, `Requ
 from fastapi import APIRouter, Depends, Query
 
 from modules.backend.core.dependencies import DbSession, RequestId
+from modules.backend.core.pagination import (
+    PaginationParams,
+    create_paginated_response,
+    get_pagination_params,
+)
 from modules.backend.schemas.base import ApiResponse
 from modules.backend.schemas.session import (
     ChannelBindRequest,
@@ -1239,9 +1232,10 @@ async def create_session(
     data: SessionCreate,
     db: DbSession,
     request_id: RequestId,
+    user_id: str | None = Query(default=None, description="Owner user ID (temporary — will come from auth context)"),
 ) -> ApiResponse[SessionResponse]:
     service = SessionService(db)
-    session = await service.create_session(data)
+    session = await service.create_session(data, user_id=user_id)
     return ApiResponse(data=_to_response(session))
 
 
@@ -1286,25 +1280,23 @@ async def update_session(
 async def list_sessions(
     db: DbSession,
     request_id: RequestId,
+    pagination: PaginationParams = Depends(get_pagination_params),
     user_id: str | None = Query(default=None, description="Filter by user ID"),
     status: str | None = Query(default=None, description="Filter by status"),
-    limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
 ) -> dict:
     service = SessionService(db)
-    sessions, total = await service.list_user_sessions(
-        user_id=user_id or "",
+    sessions, total = await service.list_sessions(
+        user_id=user_id,
         status_filter=status,
-        limit=limit,
-        offset=offset,
+        limit=pagination.limit,
+        offset=pagination.offset,
     )
-    from modules.backend.schemas.base import create_paginated_response
     return create_paginated_response(
         items=sessions,
         item_schema=SessionListResponse,
         total=total,
-        limit=limit,
-        offset=offset,
+        limit=pagination.limit,
+        offset=pagination.offset,
         request_id=request_id,
     )
 
@@ -1320,9 +1312,9 @@ async def list_sessions(
 )
 async def suspend_session(
     session_id: str,
+    db: DbSession,
+    request_id: RequestId,
     reason: str = Query(..., description="Reason for suspension"),
-    db: DbSession = Depends(),
-    request_id: RequestId = Depends(),
 ) -> ApiResponse[SessionResponse]:
     service = SessionService(db)
     session = await service.suspend_session(session_id, reason)
@@ -1378,13 +1370,7 @@ async def bind_channel(
     request_id: RequestId,
 ) -> ApiResponse[ChannelResponse]:
     service = SessionService(db)
-    await service.bind_channel(session_id, data.channel_type, data.channel_id)
-    # Re-fetch to get the binding
-    session = await service.get_session(session_id)
-    binding = next(
-        (c for c in session.channels if c.channel_type == data.channel_type and c.channel_id == data.channel_id and c.is_active),
-        None,
-    )
+    binding = await service.bind_channel(session_id, data.channel_type, data.channel_id)
     return ApiResponse(data=ChannelResponse.model_validate(binding))
 
 
@@ -1434,23 +1420,23 @@ async def get_messages(
     session_id: str,
     db: DbSession,
     request_id: RequestId,
-    limit: int = Query(default=100, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
+    pagination: PaginationParams = Depends(get_pagination_params),
 ) -> dict:
     service = SessionService(db)
-    messages, total = await service.get_messages(session_id, limit=limit, offset=offset)
-    from modules.backend.schemas.base import create_paginated_response
+    messages, total = await service.get_messages(
+        session_id, limit=pagination.limit, offset=pagination.offset
+    )
     return create_paginated_response(
         items=messages,
         item_schema=SessionMessageResponse,
         total=total,
-        limit=limit,
-        offset=offset,
+        limit=pagination.limit,
+        offset=pagination.offset,
         request_id=request_id,
     )
 ```
 
-**Note:** The `list_sessions` and `get_messages` endpoints use `create_paginated_response` from `schemas.base` — same pattern as the existing notes list endpoint. The `user_id` query parameter is temporary — in production, this will come from the authenticated user context.
+**Note:** The `list_sessions` and `get_messages` endpoints use `PaginationParams` and `create_paginated_response` from `modules.backend.core.pagination` — same pattern as the existing notes list endpoint. The `user_id` query parameter is temporary — in production, this will come from the authenticated user context.
 
 ---
 
@@ -1535,7 +1521,24 @@ Update all subclasses (`QaAgentDeps`, `HealthAgentDeps`, `HorizontalAgentDeps`) 
 
 ---
 
-### Step 13: Write tests
+### Step 13: Fix integration test conftest
+
+**File:** `tests/integration/conftest.py`
+
+The `_create_mock_app_config` function constructs `FeaturesSchema(...)` without `events_publish_enabled`. Since `SessionService._publish_session_event()` checks `get_app_config().features.events_publish_enabled`, integration tests will fail with a `ValidationError` at schema instantiation. Add the missing field:
+
+```python
+self.features = FeaturesSchema(
+    # ... existing fields ...
+    events_publish_enabled=False,
+)
+```
+
+Add `events_publish_enabled=False` to the `FeaturesSchema(...)` constructor in `_create_mock_app_config()`. This ensures integration tests don't attempt event publishing.
+
+---
+
+### Step 14: Write tests
 
 **File:** `tests/unit/backend/sessions/__init__.py` (NEW, empty)
 
@@ -1553,7 +1556,7 @@ Test session models and state machine:
 
 **File:** `tests/unit/backend/sessions/test_service.py` (NEW, ~200 lines)
 
-Test session service with mock database session (follow `test_note_service.py` pattern):
+Test session service against real PostgreSQL (P12). Use the `db_session` fixture backed by a real database connection with transaction rollback. No mocked sessions, no mocked repos:
 
 - `test_create_session_defaults` — session created with config defaults for TTL and budget
 - `test_create_session_custom_budget` — custom budget used, clamped to max
@@ -1604,7 +1607,7 @@ Test session config loading:
 
 **File:** `tests/unit/backend/sessions/test_repository.py` (NEW, ~100 lines)
 
-Test repository queries with mock database session:
+Test repository queries against real PostgreSQL (P12). Use the `db_session` fixture with transaction rollback — every query, constraint, and join exercises the real database:
 
 - `test_get_active_by_user` — returns only ACTIVE and SUSPENDED sessions
 - `test_get_by_user_with_status_filter` — filters by status correctly
@@ -1638,7 +1641,7 @@ Integration tests for session API endpoints (follow `test_notes_api.py` pattern)
 
 ---
 
-### Step 14: Verify existing tests pass
+### Step 15: Verify existing tests pass
 
 Run the full test suite to confirm no regressions:
 
@@ -1650,7 +1653,7 @@ All existing tests plus new session tests must pass.
 
 ---
 
-### Step 15: Cleanup and review
+### Step 16: Cleanup and review
 
 - Verify no hardcoded values (all config from YAML or `SessionsSchema` defaults)
 - Verify all imports are absolute (`from modules.backend.services...`)
@@ -1674,7 +1677,6 @@ All existing tests plus new session tests must pass.
 | Config YAML | `config/settings/sessions.yaml` | New | ~15 |
 | Exceptions | `modules/backend/core/exceptions.py` | Modify | +10 |
 | Models | `modules/backend/models/session.py` | New | ~130 |
-| Models init | `modules/backend/models/__init__.py` | Modify | +3 |
 | Schemas | `modules/backend/schemas/session.py` | New | ~120 |
 | Repository | `modules/backend/repositories/session.py` | New | ~140 |
 | Service | `modules/backend/services/session.py` | New | ~280 |
@@ -1683,6 +1685,7 @@ All existing tests plus new session tests must pass.
 | Alembic env | `modules/backend/migrations/env.py` | Modify | +1 |
 | Alembic migration | `modules/backend/migrations/versions/xxx_add_sessions.py` | New (generated) | ~80 |
 | Agent deps | `modules/backend/agents/deps/base.py` | Modify | +1 |
+| Test conftest | `tests/integration/conftest.py` | Modify | +1 |
 | Tests - models | `tests/unit/backend/sessions/test_models.py` | New | ~80 |
 | Tests - service | `tests/unit/backend/sessions/test_service.py` | New | ~200 |
 | Tests - schemas | `tests/unit/backend/sessions/test_schemas.py` | New | ~60 |

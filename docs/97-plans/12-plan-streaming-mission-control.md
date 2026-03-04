@@ -1,8 +1,9 @@
-# Implementation Plan: Streaming Coordinator
+# Implementation Plan: Streaming Mission Control
 
 *Created: 2026-03-02*
+*Updated: 2026-03-04 — Renamed coordinator → mission control per research doc 11*
 *Status: Not Started*
-*Phase: 3 of 6 (AI-First Platform Build)*
+*Phase: 3 of 8 (AI-First Platform Build)*
 *Depends on: Phase 1 (Event Bus), Phase 2 (Session Model)*
 *Blocked by: Phase 2*
 
@@ -10,38 +11,44 @@
 
 ## Summary
 
-Replace the coordinator's entry point so that `handle()` returns `AsyncIterator[SessionEvent]`. Streaming is the default and only path. Every channel (REST/SSE, WebSocket, Telegram, TUI, CLI) consumes the same event stream and renders in its native format. Synchronous callers collect the iterator to completion via `collect()`.
+Rename `coordinator` to `mission_control` throughout the codebase. Replace mission control's entry point so that `handle()` returns `AsyncIterator[SessionEvent]`. Streaming is the default and only path. Every channel (REST/SSE, WebSocket, Telegram, TUI, CLI) consumes the same event stream and renders in its native format. Synchronous callers collect the iterator to completion via `collect()`.
 
-The coordinator is infrastructure, not intelligence. It routes messages to agents, enforces cost budgets, manages approval gates, and yields events. It does not have a personality, make domain decisions, or call LLMs. It is a state machine.
+Additionally, introduce the agent contract schema (`AgentInterfaceSchema`, `AgentModelSchema`) as the foundation for typed agent I/O contracts and model pinning — prerequisites for the Mission Control dispatch loop in Plan 13.
 
-**Dev mode: breaking changes allowed.** The old `handle()`, `handle_direct()`, and `handle_direct_stream()` are replaced. All agent interactions go through sessions. The `/agents/chat` endpoint auto-creates an ephemeral session when no `session_id` is provided. No backward-compatibility shims.
+Mission control is infrastructure, not intelligence (P6). It routes messages to agents, enforces cost budgets, manages approval gates, and yields events. It does not have a personality, make domain decisions, or call LLMs. It is a state machine.
+
+**Dev mode: breaking changes allowed.** The old `handle()`, `handle_direct()`, and `handle_direct_stream()` are replaced. The entire `mission_control/` directory is renamed to `mission_control/`. All agent interactions go through sessions. The `/agents/chat` endpoint auto-creates an ephemeral session when no `session_id` is provided. No backward-compatibility shims.
 
 ## Context
 
 - Reference architecture: BFF doc 35 (Section 3: Streaming Coordinator)
+- Research doc: `docs/98-research/11-bfa-workflow-architecture-specification.md` — Mission Control execution model, agent contracts, model pinning
 - Local doc: `docs/99-reference-architecture/46-event-session-architecture.md` (Section 3)
-- Current coordinator: `modules/backend/agents/coordinator/coordinator.py` — returns `dict`, no sessions, no events
+- Project principles: `docs/03-principles/01-project-principles.md` — P6 (Mission Control Is Infrastructure), P3 (Breaking Changes Are Free), P5 (Streaming Is Default)
+- Current state: `modules/backend/agents/coordinator/coordinator.py` — returns `dict`, no sessions, no events (to be renamed to `mission_control/mission_control.py`)
 - Current middleware: `middleware.py` has `with_guardrails()`, `with_cost_tracking()`, `compute_cost_usd()`
 - Current router: `RuleBasedRouter` matches keywords, returns agent_name or None
 - Current registry: `AgentRegistry` discovers YAML configs, resolves module paths, caches agent instances
 - Current agent execution: `_execute_agent()` imports module, builds deps, calls `run_agent()`
-- Axiom A3: Streaming is the default path
-- Axiom A4: The coordinator is infrastructure, not intelligence
 - Tier 4: `handle()` will be called from inside Temporal Activities — accepts service objects as parameters, not global state
 
 ## What to Build
 
-- Refactor `modules/backend/agents/coordinator/coordinator.py` — replace `handle()` signature to yield `AsyncIterator[SessionEvent]`, remove old `handle_direct()` and `handle_direct_stream()`
-- `modules/backend/agents/coordinator/cost.py` — extract cost calculation from middleware
-- `modules/backend/agents/coordinator/history.py` — convert session_messages ↔ PydanticAI ModelMessage format
-- Refactor `modules/backend/agents/coordinator/middleware.py` — remove `compute_cost_usd` (moved to cost.py), remove `with_cost_tracking` (cost tracking now in handle() via SessionService)
+- **Rename `coordinator` → `mission_control`** — directory, files, classes, configs, imports, tests, docs
+- **Agent contract schema** — `AgentInterfaceSchema` (typed I/O), `AgentModelSchema` (pinned model config), `version` field on `AgentConfigSchema`
+- Refactor `modules/backend/agents/mission_control/mission_control.py` — replace `handle()` signature to yield `AsyncIterator[SessionEvent]`, remove old `handle_direct()` and `handle_direct_stream()`
+- `modules/backend/agents/mission_control/cost.py` — extract cost calculation from middleware
+- `modules/backend/agents/mission_control/history.py` — convert session_messages ↔ PydanticAI ModelMessage format
+- Refactor `modules/backend/agents/mission_control/middleware.py` — remove `compute_cost_usd` (moved to cost.py), remove `with_cost_tracking` (cost tracking now in handle() via SessionService)
 - Update `modules/backend/api/v1/endpoints/sessions.py` — SSE message endpoint (`POST /{id}/messages`), SSE live event feed (`GET /{id}/events`)
 - Refactor `modules/backend/api/v1/endpoints/agents.py` — all chat goes through sessions, auto-create ephemeral session when no session_id
 - Update `modules/backend/agents/deps/base.py` — add `on_event` callback
-- Update all existing tests to use new coordinator signatures
+- Update all existing tests to use new mission control signatures
 
 ## Key Design Decisions
 
+- **Rename coordinator → mission_control.** Per research doc 11, the coordinator evolves into mission control. This is the natural break point — Plan 12 already rewrites the `handle()` interface. Directory, files, classes, configs, imports, and tests all rename. P3 (Breaking Changes Are Free) applies.
+- **Agent contracts (typed I/O).** `AgentInterfaceSchema` defines typed input/output fields per agent. `AgentModelSchema` pins model name, temperature, and max_tokens as immutable properties. These are optional on existing agents (backward-compatible) but required for agents participating in Mission Control dispatch (Plan 13). Model upgrades are agent version bumps.
 - **Sessions are mandatory.** Every agent interaction happens within a session. For quick one-off calls, the API auto-creates an ephemeral session.
 - `handle()` is the only entry point — `handle_direct()` and `handle_direct_stream()` are removed
 - The function yields events as the agent works: `UserMessageEvent` → `AgentThinkingEvent` → `AgentToolCallEvent` → `AgentToolResultEvent` → `AgentResponseChunkEvent` → `AgentResponseCompleteEvent` → `CostUpdateEvent`
@@ -58,6 +65,12 @@ The coordinator is infrastructure, not intelligence. It routes messages to agent
 
 ## Success Criteria
 
+- [ ] `mission_control/` directory renamed to `mission_control/` with all references updated
+- [ ] `CoordinatorRequest/Response` renamed to `MissionControlRequest/Response`
+- [ ] `config/agents/mission_control.yaml` renamed to `config/agents/mission_control.yaml`
+- [ ] All import paths updated (~15 locations across 8+ source files)
+- [ ] `AgentInterfaceSchema` and `AgentModelSchema` added to `config_schema.py`
+- [ ] Existing agent YAMLs work with optional `interface` field
 - [ ] `handle()` returns an async iterator of typed `SessionEvent` objects
 - [ ] Old `handle_direct()` and `handle_direct_stream()` are removed
 - [ ] SSE endpoint streams events for a session message
@@ -71,6 +84,8 @@ The coordinator is infrastructure, not intelligence. It routes messages to agent
 - [ ] `/api/v1/sessions/{id}/messages` streams SSE events
 - [ ] `collect()` helper returns full response text from the event stream
 - [ ] Error events are yielded (not thrown) — the stream always terminates cleanly
+- [ ] All 65+ existing tests still pass
+- [ ] Docs updated: P6 title, doc 46 Section 3, doc 47 glossary
 
 ---
 
@@ -81,24 +96,153 @@ The coordinator is infrastructure, not intelligence. It routes messages to agent
 | # | Task | Command/Notes |
 |---|------|---------------|
 | 0.1 | Commit any uncommitted work | `git status`, then commit if needed |
-| 0.2 | Create feature branch | `git checkout -b feature/streaming-coordinator` |
+| 0.2 | Create feature branch | `git checkout -b feature/streaming-mission-control` |
 
 ---
 
-### Step 1: Create `coordinator/cost.py`
+### Step 0.5: Rename coordinator → mission_control
 
-**File:** `modules/backend/agents/coordinator/cost.py` (NEW, ~60 lines)
+**This is a mechanical rename. Do it first, commit, then proceed with functional changes.**
+
+**Directory rename:**
+- `modules/backend/agents/mission_control/` → `modules/backend/agents/mission_control/`
+
+**File renames within the directory:**
+- `coordinator.py` → `mission_control.py`
+- All other files (`middleware.py`, `router.py`, `registry.py`, `models.py`, `__init__.py`) keep their names
+
+**Config file rename:**
+- `config/agents/mission_control.yaml` → `config/agents/mission_control.yaml`
+
+**Class renames:**
+- `CoordinatorRequest` → `MissionControlRequest` (in `models.py`)
+- `CoordinatorResponse` → `MissionControlResponse` (in `models.py`)
+- `CoordinatorConfigSchema` → `MissionControlConfigSchema` (in `config_schema.py`)
+- `CoordinatorLimitsSchema` → `MissionControlLimitsSchema` (in `config_schema.py`)
+
+**Function renames:**
+- `_load_mission_control_config()` → `_load_mission_control_config()` (in `middleware.py`)
+
+**Import path updates (all files importing from `agents.mission_control`):**
+- `modules/backend/agents/mission_control/mission_control.py` — internal imports
+- `modules/backend/agents/mission_control/middleware.py` — config path string
+- `modules/backend/agents/mission_control/router.py` — internal imports
+- `modules/backend/agents/mission_control/__init__.py` — exports
+- `modules/backend/agents/__init__.py` — comment update
+- `modules/backend/agents/deps/base.py` — comment update
+- `modules/backend/agents/config_schema.py` — class renames
+- `modules/backend/agents/vertical/code/qa/agent.py` — `assemble_instructions` import
+- `modules/backend/agents/vertical/system/health/agent.py` — `assemble_instructions` import
+- `modules/backend/api/v1/endpoints/agents.py` — all coordinator imports
+- `scripts/compliance_checker.py` — `get_registry` import
+- `chat.py` — comments only
+- `tui.py` — comments only
+
+**Test file renames:**
+- `tests/unit/backend/agents/test_coordinator.py` → `tests/unit/backend/agents/test_mission_control.py`
+- Update imports in `test_config_schema.py`, `test_agent_testmodel.py`, `test_compliance.py`
+
+**Config path update in middleware.py:**
+```python
+config_path = find_project_root() / "config" / "agents" / "mission_control.yaml"
+```
+
+**Verification:** `python -m pytest tests/` — all 65+ existing tests must pass after rename.
+
+---
+
+### Step 0.5b: Agent Contract Schema
+
+**File:** `modules/backend/agents/config_schema.py` (MODIFY)
+
+Add typed I/O contracts and structured model configuration:
+
+```python
+class AgentInterfaceSchema(_StrictBase):
+    """Typed input/output contract for an agent.
+
+    Defines the fields an agent expects as input and produces as output.
+    Used by Mission Control for Tier 1 structural validation (Plan 14)
+    and by the Planning Agent for input compatibility checks (Plan 13).
+    """
+
+    input: dict[str, str] = Field(
+        default_factory=dict,
+        description="Input fields: field_name → type_name",
+    )
+    output: dict[str, str] = Field(
+        default_factory=dict,
+        description="Output fields: field_name → type_name",
+    )
+
+
+class AgentModelSchema(_StrictBase):
+    """Pinned model configuration. Immutable at runtime.
+
+    Models are pinned to agents as non-overridable properties (research doc 11).
+    Model upgrades are agent version bumps: create agent_v2 with new model,
+    validate, then update roster. No runtime model override path exists.
+    """
+
+    name: str = Field(
+        ...,
+        description="Model identifier, e.g. 'anthropic:claude-sonnet-4-20250514'",
+    )
+    temperature: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=2.0,
+        description="Temperature. Pinned, non-overridable.",
+    )
+    max_tokens: int = Field(
+        default=4096,
+        ge=1,
+        description="Max output tokens. Pinned, non-overridable.",
+    )
+```
+
+Update `AgentConfigSchema`:
+
+```python
+class AgentConfigSchema(_StrictBase):
+    # ... existing fields ...
+    model: str | AgentModelSchema  # Accept both flat string and structured schema
+    interface: AgentInterfaceSchema | None = None  # Optional until Plan 13 makes it required for roster agents
+    version: str = "1.0.0"  # Semantic versioning, used by roster validation
+```
+
+**Migration note:** Existing agent YAMLs use `model: "anthropic:claude-sonnet-4-20250514"` (flat string). This continues to work. New agents and roster agents should use the structured `AgentModelSchema` format. Add a validator that normalizes flat strings to `AgentModelSchema(name=value)`.
+
+**Verification:** Existing agent YAML configs load without changes. New `interface` and `version` fields have sensible defaults.
+
+---
+
+### Step 0.5c: Documentation Alignment
+
+Update reference docs to reflect the rename:
+
+- `docs/99-reference-architecture/46-agentic-event-session-architecture.md` — Section 3 heading: "Streaming Mission Control"
+- `docs/99-reference-architecture/47-agentic-module-organization.md` — Glossary: "Mission Control" entry, directory references `agents/mission_control/`
+- `docs/03-principles/01-project-principles.md` — Already updated (P6 title)
+
+**Note:** Doc 40 (Agentic Architecture) uses "orchestrator" generically and does not need updating.
+
+---
+
+### Step 1: Create `mission_control/cost.py`
+
+**File:** `modules/backend/agents/mission_control/cost.py` (NEW, ~60 lines)
 
 Extract cost calculation from `middleware.py` into its own module.
 
 ```python
 """Cost calculation for agent executions.
 
-Pricing comes from coordinator.yaml model_pricing config.
+Pricing comes from mission_control.yaml model_pricing config.
 Budget enforcement lives in SessionService — this module only computes costs.
 """
 
-from modules.backend.agents.coordinator.middleware import _load_coordinator_config
+from modules.backend.agents.mission_control.middleware import _load_mission_control_config
 from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -110,7 +254,7 @@ def compute_cost_usd(
     model: str | None = None,
 ) -> float:
     """Compute dollar cost from token counts and model pricing config."""
-    config = _load_coordinator_config()
+    config = _load_mission_control_config()
     default_rates = config.model_pricing.get("default")
     rates = config.model_pricing.get(model or "", default_rates)
     if rates is None:
@@ -133,27 +277,27 @@ def estimate_cost(
 
 ---
 
-### Step 2: Refactor `coordinator/middleware.py`
+### Step 2: Refactor `mission_control/middleware.py`
 
-**File:** `modules/backend/agents/coordinator/middleware.py` (MODIFY)
+**File:** `modules/backend/agents/mission_control/middleware.py` (MODIFY)
 
 Remove `compute_cost_usd` (moved to `cost.py`). Remove `with_cost_tracking` decorator (cost tracking now happens in `handle()` via `SessionService.update_cost()`).
 
 **Keep:**
-- `_load_coordinator_config()` — still needed by cost.py, handler, and guardrails
+- `_load_mission_control_config()` — still needed by cost.py, handler, and guardrails
 - `with_guardrails()` — still used by `handle()` for input validation
 
 **Remove:**
 - `compute_cost_usd()` function body — replaced by `cost.py`
 - `with_cost_tracking()` decorator — replaced by session-based cost tracking in `handle()`
 
-Update all callers of `compute_cost_usd` to import from `modules.backend.agents.coordinator.cost`.
+Update all callers of `compute_cost_usd` to import from `modules.backend.agents.mission_control.cost`.
 
 ---
 
-### Step 3: Create `coordinator/history.py`
+### Step 3: Create `mission_control/history.py`
 
-**File:** `modules/backend/agents/coordinator/history.py` (NEW, ~120 lines)
+**File:** `modules/backend/agents/mission_control/history.py` (NEW, ~120 lines)
 
 Converts between session_messages (our persistence format) and PydanticAI's ModelMessage format.
 
@@ -173,9 +317,9 @@ Converts between session_messages (our persistence format) and PydanticAI's Mode
 
 ---
 
-### Step 4: Refactor `coordinator/coordinator.py`
+### Step 4: Rewrite `mission_control/mission_control.py`
 
-**File:** `modules/backend/agents/coordinator/coordinator.py` (REWRITE, ~300 lines)
+**File:** `modules/backend/agents/mission_control/mission_control.py` (REWRITE, ~300 lines)
 
 This is the core change. Replace the entire public interface. Keep the reusable internals (`_build_model`, `assemble_instructions`, `build_deps_from_config`, `_build_agent_deps`).
 
@@ -208,7 +352,7 @@ async def handle(
     channel: str = "api",
     sender_id: str | None = None,
 ) -> AsyncIterator[SessionEvent]:
-    """Universal streaming coordinator entry point.
+    """Universal streaming mission control entry point.
 
     All channels call this function:
     - REST/SSE: stream events directly
@@ -235,7 +379,7 @@ async def collect(session_id: str, message: str, **kwargs) -> dict:
    → If exceeded: yield CostUpdateEvent with budget.exceeded, return
 3. Create and yield UserMessageEvent (+ publish to event bus)
 4. Resolve agent: session.agent_id > keyword routing > fallback
-5. Apply guardrails (input length, injection patterns from coordinator.yaml)
+5. Apply guardrails (input length, injection patterns from mission_control.yaml)
 6. Yield AgentThinkingEvent (+ publish)
 7. Build agent deps with session_id, load model, get agent instance
 8. Load conversation history: get_messages() → session_messages_to_model_history()
@@ -314,7 +458,7 @@ async def agent_chat(
     request_id: RequestId,
 ) -> ApiResponse[ChatResponse]:
     """Send a message to an agent. Auto-creates a session if none provided."""
-    from modules.backend.agents.coordinator.coordinator import collect
+    from modules.backend.agents.mission_control.mission_control import collect
     from modules.backend.services.session import SessionService
     from modules.backend.schemas.session import SessionCreate
 
@@ -349,7 +493,7 @@ async def agent_chat_stream(
     db: DbSession,
 ) -> StreamingResponse:
     """Stream agent progress events as SSE."""
-    from modules.backend.agents.coordinator.coordinator import handle
+    from modules.backend.agents.mission_control.mission_control import handle
     from modules.backend.services.session import SessionService
     from modules.backend.schemas.session import SessionCreate
 
@@ -403,16 +547,16 @@ Add two new endpoints to the sessions router (Phase 2):
 
 ---
 
-### Step 8: Update `coordinator/__init__.py`
+### Step 8: Update `mission_control/__init__.py`
 
-**File:** `modules/backend/agents/coordinator/__init__.py` (MODIFY)
+**File:** `modules/backend/agents/mission_control/__init__.py` (MODIFY)
 
 Clean exports — no aliased imports needed since there's only one `handle` now:
 
 ```python
-"""Agent coordinator — routes, executes, and streams agent interactions."""
+"""Mission control — routes, executes, and streams agent interactions."""
 
-from modules.backend.agents.coordinator.coordinator import (
+from modules.backend.agents.mission_control.mission_control import (
     handle,
     collect,
     list_agents,
@@ -423,15 +567,18 @@ __all__ = ["handle", "collect", "list_agents"]
 
 ---
 
-### Step 9: Update existing coordinator tests
+### Step 9: Update existing mission control tests
 
-**File:** `tests/unit/backend/agents/coordinator/` (MODIFY existing tests)
+**File:** `tests/unit/backend/agents/mission_control/` (MODIFY existing tests)
 
-Existing coordinator tests reference the old `handle()` signature (`handle(user_input) -> dict`). These must be rewritten to use the new signature.
+Existing mission control tests reference the old `handle()` signature (`handle(user_input) -> dict`). These must be rewritten to use the new signature.
 
-**Strategy:** Replace all existing coordinator test calls with the new pattern:
-- Create a mock `SessionService` with mock session
-- Call `handle(session_id, message, session_service=mock_service)`
+**Strategy (P12):** Replace all existing mission control test calls with the new pattern using real infrastructure:
+- Use real `SessionService` backed by real PostgreSQL (via `db_session` fixture with transaction rollback)
+- Use real `SessionEventBus` backed by real Redis (via `redis` fixture)
+- Use real agent registry loaded from real config YAML
+- Use `TestModel` (PydanticAI) for LLM calls — the only acceptable mock per P12 (we don't operate LLM providers)
+- Call `handle(session_id, message, session_service=real_service, event_bus=real_bus)`
 - Collect events and assert on them instead of asserting on dict keys
 
 If existing tests are tightly coupled to the old interface, delete and rewrite them. We're in dev mode.
@@ -440,7 +587,7 @@ If existing tests are tightly coupled to the old interface, delete and rewrite t
 
 ### Step 10: Write new tests
 
-**File:** `tests/unit/backend/coordinator/test_handler.py` (NEW, ~200 lines)
+**File:** `tests/unit/backend/mission_control/test_handler.py` (NEW, ~200 lines)
 
 Test the streaming handler:
 
@@ -461,20 +608,21 @@ Test the streaming handler:
 - `test_handle_error_does_not_crash_stream` — exception yields partial result
 - `test_handle_without_event_bus` — works when event_bus is None
 
-**Mocking strategy:**
-- Mock `agent.run_stream()` — async context manager yielding text chunks
-- Mock `SessionService` methods via `AsyncMock`
-- Mock `SessionEventBus.publish()` to track events
-- Mock `get_registry()` for test agent config
+**Testing strategy (P12 — test against real infrastructure, mock only what you don't operate):**
+- Use `TestModel` (PydanticAI) for agent execution — the only mock (we don't operate LLM providers per P11)
+- Use real `SessionService` with real PostgreSQL (via `db_session` fixture with transaction rollback)
+- Use real `SessionEventBus` with real Redis (via `redis` fixture) — subscribe to verify published events
+- Use real agent registry loaded from real config YAML files
+- Create a real session in the database before each test, assert events and session state after
 
-**File:** `tests/unit/backend/coordinator/test_cost.py` (NEW, ~40 lines)
+**File:** `tests/unit/backend/mission_control/test_cost.py` (NEW, ~40 lines)
 
 - `test_compute_cost_usd_known_model`
 - `test_compute_cost_usd_unknown_model_uses_default`
 - `test_compute_cost_usd_no_pricing`
 - `test_estimate_cost`
 
-**File:** `tests/unit/backend/coordinator/test_history.py` (NEW, ~100 lines)
+**File:** `tests/unit/backend/mission_control/test_history.py` (NEW, ~100 lines)
 
 - `test_user_message_to_model_request`
 - `test_assistant_message_to_model_response`
@@ -486,14 +634,14 @@ Test the streaming handler:
 - `test_cost_attached_to_last_assistant`
 - `test_empty_messages`
 
-**File:** `tests/unit/backend/coordinator/test_collect.py` (NEW, ~40 lines)
+**File:** `tests/unit/backend/mission_control/test_collect.py` (NEW, ~40 lines)
 
 - `test_collect_returns_full_response`
 - `test_collect_returns_agent_name`
 - `test_collect_returns_cost`
 - `test_collect_empty_stream`
 
-**File:** `tests/integration/backend/coordinator/test_session_chat.py` (NEW, ~100 lines)
+**File:** `tests/integration/backend/mission_control/test_session_chat.py` (NEW, ~100 lines)
 
 - `test_send_message_sse_stream` — POST /sessions/{id}/messages returns SSE
 - `test_sse_events_have_correct_format`
@@ -522,29 +670,29 @@ Test the streaming handler:
 
 | Category | File | Action | Est. Lines |
 |----------|------|--------|-----------|
-| Cost | `modules/backend/agents/coordinator/cost.py` | New | ~60 |
-| History | `modules/backend/agents/coordinator/history.py` | New | ~120 |
-| Coordinator | `modules/backend/agents/coordinator/coordinator.py` | Rewrite | ~300 (was ~330) |
-| Middleware | `modules/backend/agents/coordinator/middleware.py` | Modify | ~50 (was ~130, remove cost tracking) |
-| Coordinator init | `modules/backend/agents/coordinator/__init__.py` | Modify | ~10 |
+| Cost | `modules/backend/agents/mission_control/cost.py` | New | ~60 |
+| History | `modules/backend/agents/mission_control/history.py` | New | ~120 |
+| Mission Control | `modules/backend/agents/mission_control/mission_control.py` | Rewrite | ~300 (was ~330) |
+| Middleware | `modules/backend/agents/mission_control/middleware.py` | Modify | ~50 (was ~130, remove cost tracking) |
+| Coordinator init | `modules/backend/agents/mission_control/__init__.py` | Modify | ~10 |
 | Agent deps | `modules/backend/agents/deps/base.py` | Modify | +2 |
 | Sessions API | `modules/backend/api/v1/endpoints/sessions.py` | Modify | +80 |
 | Agents API | `modules/backend/api/v1/endpoints/agents.py` | Rewrite | ~100 (was ~124) |
-| Tests - existing | `tests/unit/backend/agents/coordinator/` | Rewrite | varies |
-| Tests - handler | `tests/unit/backend/coordinator/test_handler.py` | New | ~200 |
-| Tests - cost | `tests/unit/backend/coordinator/test_cost.py` | New | ~40 |
-| Tests - history | `tests/unit/backend/coordinator/test_history.py` | New | ~100 |
-| Tests - collect | `tests/unit/backend/coordinator/test_collect.py` | New | ~40 |
-| Tests - integration | `tests/integration/backend/coordinator/test_session_chat.py` | New | ~100 |
+| Tests - existing | `tests/unit/backend/agents/mission_control/` | Rewrite | varies |
+| Tests - handler | `tests/unit/backend/mission_control/test_handler.py` | New | ~200 |
+| Tests - cost | `tests/unit/backend/mission_control/test_cost.py` | New | ~40 |
+| Tests - history | `tests/unit/backend/mission_control/test_history.py` | New | ~100 |
+| Tests - collect | `tests/unit/backend/mission_control/test_collect.py` | New | ~40 |
+| Tests - integration | `tests/integration/backend/mission_control/test_session_chat.py` | New | ~100 |
 | **Total** | **14 files** | **5 new, 9 modified/rewritten** | **~1,200** |
 
 ---
 
 ## Anti-Patterns (Do NOT)
 
-- Do not put business logic in the coordinator. The coordinator routes and yields events. Domain decisions live in agents and services.
+- Do not put business logic in mission control. Mission control routes and yields events. Domain decisions live in agents and services.
 - Do not call `agent.run()` (non-streaming). Always use `agent.run_stream()`. Synchronous callers use `collect()`.
-- Do not let channels call agents directly, bypassing the coordinator. All operations go through `handle()`.
+- Do not let channels call agents directly, bypassing mission control. All operations go through `handle()`.
 - Do not use global state in `handle()`. Accept services as parameters — Temporal ready.
 - Do not make event publishing or message persistence critical. Both are wrapped in try/except.
 - Do not keep dead code. Remove `handle_direct()`, `handle_direct_stream()`, `with_cost_tracking`, `_execute_agent()`, `_format_response()` completely.

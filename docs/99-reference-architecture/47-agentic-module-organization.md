@@ -42,7 +42,8 @@ These decisions are not revisited per agent. They are structural — set once, f
 |------|-----------|
 | **Vertical agent** | A domain-specialist agent scoped to a single bounded area (e.g., code quality, system health). Executes tasks directly using domain-specific tools. |
 | **Horizontal agent** | A cross-domain supervisory agent that reasons across categories, makes strategic decisions, and delegates to vertical agents. Uses capable models. |
-| **Coordinator** | Application code (not an agent) that routes requests, composes middleware, enforces budgets, and yields events. The entry point for all agent interactions. |
+| **Mission Control** | Application code (not an agent) that routes requests, composes middleware, enforces budgets, and yields events. The entry point for all agent interactions. |
+| **Objective** | Required metadata on a Playbook definition declaring the strategic business outcome. Fields: `statement`, `category`, `owner`, `priority`, `regulatory_reference`. Used for playbook discovery, audit enrichment, and structured log context. Not an execution layer. |
 | **Middleware** | Python decorators that wrap agent execution (guardrails, cost tracking, memory, output formatting). Cross-cutting concerns applied to every agent run. |
 | **Shared tool** | A tool implementation in `agents/tools/` that multiple agents can register. Pure function with no PydanticAI dependency. |
 | **Agent-specific tool** | A tool implementation that only one agent uses, co-located with that agent's code. |

@@ -158,8 +158,13 @@ Every JSON log record contains:
 | `lineno` | Line number in source file | Always |
 | `source` | Origin context (web, cli, tui, telegram, api, tasks, internal) | When set explicitly |
 | `request_id` | Request correlation ID | In HTTP request context |
+| `objective_category` | Playbook objective classification (e.g., `compliance`, `security`, `research`) | In playbook/mission execution context |
+| `objective_priority` | Playbook objective priority (`critical`, `high`, `normal`, `low`) | In playbook/mission execution context |
+| `objective_owner` | Accountable person or role for the playbook objective | In playbook/mission execution context |
+| `playbook_name` | Name of the executing playbook | In playbook/mission execution context |
+| `mission_id` | Current mission identifier | In mission execution context |
 
-Additional fields are added by callers via extra kwargs or structlog context binding.
+Additional fields are added by callers via extra kwargs or structlog context binding. For playbook and mission execution, the Playbook layer binds `objective_category`, `objective_priority`, `objective_owner`, `playbook_name`, and `mission_id` to the structlog context at span entry. This enables filtering and grouping logs by business domain, priority, and accountability without modifying individual log call sites.
 
 #### Source Values
 

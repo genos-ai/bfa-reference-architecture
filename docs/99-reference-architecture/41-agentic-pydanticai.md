@@ -34,6 +34,7 @@ This module is the **implementation companion** to **[40-agentic-architecture.md
 | **Agent context** | The runtime data passed into an agent run: conversation history, session state, dependencies (service instances, credentials). |
 | **Checkpoint** | A serialised snapshot of agent execution state written to PostgreSQL, enabling resume after interruption. |
 | **Human-in-the-loop (HITL) gate** | A pause point in agent execution that suspends the run, stores a pending approval record, and resumes only after an authorised actor approves via API. |
+| **Objective** | Strategic business outcome carried as required metadata on a Playbook definition. Contains statement, category, owner, priority, and optional regulatory reference. Not an execution layer — metadata for audit, observability, and discovery. |
 | **Capability declaration** | A structured metadata object attached to each vertical agent that the coordinator uses to make routing decisions. |
 
 ---

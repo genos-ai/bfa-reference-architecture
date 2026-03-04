@@ -1490,8 +1490,9 @@ temporal:
 | **Session** | A persistent bidirectional context carrying conversation history, active agents, cost tracking, and channel bindings. Outlives any individual request or connection. |
 | **Event** | A typed, timestamped record of an action within a session. Published to the event bus and consumed by channel adapters. |
 | **Event Bus** | Redis Pub/Sub transport for real-time event delivery within the application. Not durable — use Temporal for crash recovery. |
-| **Coordinator** | The `handle()` function that routes messages to agents, enforces budgets, manages approvals, and yields events. Infrastructure, not intelligence. |
-| **Plan** | A mutable DAG of tasks stored in PostgreSQL. Decomposed from a goal by the coordinator agent. Versioned and auditable. |
+| **Mission Control** | The `handle()` function that routes messages to agents, enforces budgets, manages approvals, and yields events. Infrastructure, not intelligence. |
+| **Objective** | Strategic business outcome metadata on a Playbook. Contains statement, category, owner, priority, and optional regulatory reference. Propagates into session context and structured logs for observability. Not an execution layer. |
+| **TaskPlan** | A frozen DAG of tasks produced by the Planning Agent and executed by Mission Control. Stored as JSON in mission records for audit. |
 | **Rolling Summary** | A compressed representation of conversation history, anchored to a message index, updated incrementally. Preserves intent, actions, artifacts, and identifiers. |
 | **Unified Responder** | Pattern where approval requests accept responses from humans, AI agents, or automated rules identically. The architecture does not care about the source. |
 | **Tier** | One of four graduated complexity levels: stateless CRUD, stateless agent call, interactive session, long-running autonomous. |

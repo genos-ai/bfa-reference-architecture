@@ -10,7 +10,7 @@ These are **project-specific principles** for the BFA agentic platform. They bui
 
 The reference architecture principles are universal software engineering rules. The principles below are specific to how *this project* builds its agentic platform — platform structure, agent behavior, and development process.
 
-**Numbering note:** This document uses P1–P12. The reference architecture also uses P1–P8 for different principles. When referencing principles from this document in plans or code, include the name (e.g., "P12: Test Against Real Infrastructure") to avoid ambiguity with reference architecture P-numbers.
+**Numbering note:** This document uses P1–P13. The reference architecture also uses P1–P8 for different principles. When referencing principles from this document in plans or code, include the name (e.g., "P12: Test Against Real Infrastructure") to avoid ambiguity with reference architecture P-numbers.
 
 ---
 
@@ -22,14 +22,14 @@ The reference architecture principles are universal software engineering rules. 
 
 **Build the platform first. Agents are cheap to add on top of solid infrastructure.**
 
-We invest upfront in sessions, event streaming, the coordinator, plan management, and delegation — so that adding a new agent is a YAML file and a thin Python module, not a refactoring project. The cost of retrofitting infrastructure under existing agents is always higher than building it right once.
+We invest upfront in sessions, event streaming, mission control, plan management, and verification — so that adding a new agent is a YAML file and a thin Python module, not a refactoring project. The cost of retrofitting infrastructure under existing agents is always higher than building it right once.
 
 This means:
-- Plans 10-15 (event bus, sessions, streaming coordinator, delegation, plan management, Temporal) are the foundation. They ship before we build more vertical agents.
+- Plans 10-17 (event bus, sessions, streaming mission control, dispatch + planning, verification pipeline, plan persistence, Temporal, playbooks) are the foundation. They ship before we build more vertical agents.
 - When choosing between "build an agent now and adapt infrastructure later" vs. "build infrastructure now and agents drop in later" — choose infrastructure.
 - A new agent should require: one YAML config, one `agent.py` with `create_agent()` / `run_agent()`, and optionally shared tool wrappers. Nothing else.
 
-**Test:** Can a developer add a fully functional agent in under an hour without touching coordinator, session, or infrastructure code? If not, the platform isn't ready.
+**Test:** Can a developer add a fully functional agent in under an hour without touching mission control, session, or infrastructure code? If not, the platform isn't ready.
 
 ---
 
@@ -37,7 +37,7 @@ This means:
 
 **Every agent interaction produces a typed event stream. Synchronous responses are the degraded case.**
 
-The coordinator's `handle()` returns `AsyncIterator[SessionEvent]`. Every channel (API, TUI, Telegram, MCP, A2A) consumes the same event stream. Callers that need a synchronous result call `collect()` which drains the iterator.
+Mission control's `handle()` returns `AsyncIterator[SessionEvent]`. Every channel (API, TUI, Telegram, MCP, A2A) consumes the same event stream. Callers that need a synchronous result call `collect()` which drains the iterator.
 
 This means:
 - There is no separate synchronous execution path. One code path, always.
@@ -46,16 +46,17 @@ This means:
 
 ---
 
-### P6: The Coordinator Is Infrastructure, Not Intelligence
+### P6: Mission Control Is Infrastructure, Not Intelligence
 
-**The coordinator routes, enforces, tracks, and yields events. It does not reason, plan, or make domain decisions.**
+**Mission control routes, enforces, tracks, and yields events. It does not reason, plan, or make domain decisions.**
 
-The coordinator is a state machine. It applies middleware (cost tracking, guardrails, budget enforcement), routes to agents, and manages the event stream. Domain intelligence belongs in agents. Strategic intelligence belongs in horizontal agents. The coordinator never calls an LLM.
+Mission control is a state machine. It applies middleware (cost tracking, guardrails, budget enforcement), routes to agents, and manages the event stream. Domain intelligence belongs in agents. Strategic intelligence belongs in the Planning Agent (which mission control invokes at bounded points). Mission control never calls an LLM directly — it delegates to the Planning Agent for task decomposition and to the Verification Agent for quality evaluation.
 
 This means:
-- All delegation goes through the coordinator, ensuring middleware always applies.
-- Adding a new concern (logging, tracing, rate limiting) happens in coordinator middleware, not in agent code.
-- Horizontal agents (like the PM agent) are the ones that reason about which agent to call — but they delegate through the coordinator, never directly.
+- All agent dispatch goes through mission control, ensuring middleware always applies.
+- Adding a new concern (logging, tracing, rate limiting) happens in mission control middleware, not in agent code.
+- The Planning Agent reasons about task decomposition — but mission control validates the plan, dispatches agents, and enforces budgets deterministically.
+- Mission control is not an astronaut. It does not do the work. It orchestrates, monitors, and makes go/no-go decisions. The agents are the astronauts.
 
 ---
 
