@@ -1,17 +1,16 @@
 """
 Agent Endpoints.
 
-REST API for agent interaction: chat, direct invocation, streaming, and registry listing.
+REST API for agent interaction: chat, streaming, and registry listing.
+All chat goes through sessions. Auto-creates ephemeral session when none provided.
 """
-
-import json
 
 from pydantic import BaseModel, Field
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
-from modules.backend.core.dependencies import RequestId
+from modules.backend.core.dependencies import DbSession, RequestId
 from modules.backend.core.logging import get_logger
 from modules.backend.schemas.base import ApiResponse
 
@@ -32,9 +31,9 @@ class ChatRequest(BaseModel):
         default=None,
         description="Target a specific agent by name, bypassing routing.",
     )
-    conversation_id: str | None = Field(
+    session_id: str | None = Field(
         default=None,
-        description="Continue a previous conversation by ID.",
+        description="Session ID. Auto-created if omitted.",
     )
 
 
@@ -43,8 +42,7 @@ class ChatResponse(BaseModel):
 
     agent_name: str
     output: str
-    components: dict[str, str] | None = None
-    advice: str | None = None
+    session_id: str | None = None
 
 
 class AgentInfo(BaseModel):
@@ -60,26 +58,38 @@ class AgentInfo(BaseModel):
     "/chat",
     response_model=ApiResponse[ChatResponse],
     summary="Chat with an agent",
-    description="Send a message to the agent coordinator. Optionally target a specific agent with the 'agent' field.",
+    description="Send a message to mission control. Auto-creates a session if none provided.",
 )
 async def agent_chat(
     data: ChatRequest,
+    db: DbSession,
     request_id: RequestId,
 ) -> ApiResponse[ChatResponse]:
-    """Send a message to an agent (routed or direct)."""
-    if data.agent:
-        from modules.backend.agents.mission_control.mission_control import handle_direct
-        result = await handle_direct(data.agent, data.message)
-    else:
-        from modules.backend.agents.mission_control.mission_control import handle
-        result = await handle(data.message)
+    """Send a message to an agent. Auto-creates ephemeral session when no session_id provided."""
+    from modules.backend.agents.mission_control.mission_control import collect
+    from modules.backend.services.session import SessionService
+    from modules.backend.schemas.session import SessionCreate
+
+    service = SessionService(db)
+
+    session_id = data.session_id
+    if not session_id:
+        session = await service.create_session(
+            SessionCreate(agent_id=data.agent, goal=data.message[:200]),
+        )
+        session_id = session.id
+
+    result = await collect(
+        session_id,
+        data.message,
+        session_service=service,
+    )
 
     return ApiResponse(
         data=ChatResponse(
-            agent_name=result["agent_name"],
-            output=result["output"],
-            components=result.get("components"),
-            advice=result.get("advice"),
+            agent_name=result.get("agent_name", ""),
+            output=result.get("output", ""),
+            session_id=session_id,
         ),
     )
 
@@ -89,20 +99,38 @@ async def agent_chat(
     summary="Chat with an agent (streaming SSE)",
     description="Send a message to an agent and receive progress events via Server-Sent Events.",
 )
-async def agent_chat_stream(data: ChatRequest) -> StreamingResponse:
+async def agent_chat_stream(
+    data: ChatRequest,
+    db: DbSession,
+) -> StreamingResponse:
     """Stream agent progress events as SSE."""
-    from modules.backend.agents.mission_control.mission_control import handle_direct_stream
+    from modules.backend.agents.mission_control.mission_control import handle
+    from modules.backend.services.session import SessionService
+    from modules.backend.schemas.session import SessionCreate
 
-    agent_name = data.agent
-    if not agent_name:
-        from modules.backend.agents.mission_control.mission_control import route
-        agent_name = route(data.message)
+    service = SessionService(db)
+
+    session_id = data.session_id
+    if not session_id:
+        session = await service.create_session(
+            SessionCreate(agent_id=data.agent, goal=data.message[:200]),
+        )
+        session_id = session.id
 
     async def generate():
-        async for event in handle_direct_stream(agent_name, data.message, data.conversation_id):
-            yield f"data: {json.dumps(event)}\n\n"
+        async for event in handle(session_id, data.message, session_service=service):
+            yield f"event: {event.event_type}\ndata: {event.model_dump_json()}\n\n"
+        yield "event: done\ndata: {}\n\n"
 
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get(

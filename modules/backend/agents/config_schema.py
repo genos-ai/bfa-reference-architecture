@@ -10,7 +10,7 @@ Each top-level class corresponds to one config file:
     MissionControlConfigSchema     -> config/agents/mission_control.yaml
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class _StrictBase(BaseModel):
@@ -53,6 +53,49 @@ class ExclusionsSchema(_StrictBase):
     patterns: list[str] = Field(default_factory=list)
 
 
+class AgentInterfaceSchema(_StrictBase):
+    """Typed input/output contract for an agent.
+
+    Defines the fields an agent expects as input and produces as output.
+    Used by Mission Control for Tier 1 structural validation (Plan 14)
+    and by the Planning Agent for input compatibility checks (Plan 13).
+    """
+
+    input: dict[str, str] = Field(
+        default_factory=dict,
+        description="Input fields: field_name → type_name",
+    )
+    output: dict[str, str] = Field(
+        default_factory=dict,
+        description="Output fields: field_name → type_name",
+    )
+
+
+class AgentModelSchema(_StrictBase):
+    """Pinned model configuration. Immutable at runtime.
+
+    Models are pinned to agents as non-overridable properties (research doc 11).
+    Model upgrades are agent version bumps: create agent_v2 with new model,
+    validate, then update roster. No runtime model override path exists.
+    """
+
+    name: str = Field(
+        ...,
+        description="Model identifier, e.g. 'anthropic:claude-sonnet-4-20250514'",
+    )
+    temperature: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=2.0,
+        description="Temperature. Pinned, non-overridable.",
+    )
+    max_tokens: int = Field(
+        default=4096,
+        ge=1,
+        description="Max output tokens. Pinned, non-overridable.",
+    )
+
+
 class AgentConfigSchema(_StrictBase):
     """Schema for config/agents/**/agent.yaml files.
 
@@ -64,17 +107,25 @@ class AgentConfigSchema(_StrictBase):
     agent_type: str
     description: str
     enabled: bool
-    model: str
+    model: str | AgentModelSchema
     keywords: list[str] = Field(default_factory=list)
     tools: list[str] = Field(default_factory=list)
     max_input_length: int
     max_budget_usd: float
     execution: ExecutionSchema
     scope: FileScopeConfigSchema = Field(default_factory=FileScopeConfigSchema)
+    interface: AgentInterfaceSchema | None = None
+    version: str = "1.0.0"
 
     file_size_limit: int | None = None
     rules: list[ComplianceRuleSchema] | None = None
     exclusions: ExclusionsSchema | None = None
+
+    @field_validator("model", mode="before")
+    @classmethod
+    def _normalize_model(cls, v: str | dict) -> str | dict:
+        """Accept flat string model specs as-is; dicts become AgentModelSchema."""
+        return v
 
 
 # =============================================================================
@@ -135,7 +186,7 @@ class ApprovalSchema(_StrictBase):
 
 
 class MissionControlConfigSchema(_StrictBase):
-    """Schema for config/agents/coordinator.yaml."""
+    """Schema for config/agents/mission_control.yaml."""
 
     model_pricing: dict[str, ModelPricingRateSchema]
     routing: RoutingSchema

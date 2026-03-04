@@ -57,7 +57,8 @@ class BaseAgentDeps:
     project_root: Path
     scope: FileScope
     config: AgentConfigSchema | None = None
-    session_id: str | None = None  # Set when running within a session (Phase 3+)
+    session_id: str | None = None       # Set when running within a session
+    on_event: Any = None                # Callable[[SessionEvent], Awaitable[None]] | None
 
 
 @dataclass
@@ -85,4 +86,4 @@ class HorizontalAgentDeps(BaseAgentDeps):
 
     allowed_agents: set[str] = field(default_factory=set)
     max_delegation_depth: int = 0
-    coordinator: Any = None
+    mission_control: Any = None

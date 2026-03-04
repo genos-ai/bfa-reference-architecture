@@ -1,6 +1,7 @@
 """Session management REST endpoints."""
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 
 from modules.backend.core.dependencies import DbSession, RequestId
 from modules.backend.core.pagination import (
@@ -249,4 +250,43 @@ async def get_messages(
         limit=pagination.limit,
         offset=pagination.offset,
         request_id=request_id,
+    )
+
+
+# --- Streaming ---
+
+
+@router.post(
+    "/{session_id}/messages",
+    summary="Send message and stream events",
+    description="Send a message to the session and stream agent progress events as SSE.",
+)
+async def send_message_stream(
+    session_id: str,
+    data: SessionMessageCreate,
+    db: DbSession,
+) -> StreamingResponse:
+    """Send a message to a session and stream events as SSE."""
+    from modules.backend.agents.mission_control.mission_control import handle
+
+    service = SessionService(db)
+
+    async def generate():
+        async for event in handle(
+            session_id,
+            data.content,
+            session_service=service,
+            sender_id=data.sender_id,
+        ):
+            yield f"event: {event.event_type}\ndata: {event.model_dump_json()}\n\n"
+        yield "event: done\ndata: {}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )

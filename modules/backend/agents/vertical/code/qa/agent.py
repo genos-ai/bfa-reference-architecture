@@ -127,9 +127,9 @@ async def run_agent(
     agent: Agent[QaAgentDeps, QaAuditResult],
     usage_limits: UsageLimits | None = None,
 ) -> QaAuditResult:
-    """Standard agent entry point. Called by the coordinator.
+    """Standard agent entry point. Called by mission control.
 
-    The agent instance is provided by the coordinator (from the registry).
+    The agent instance is provided by mission control (from the registry).
     """
 
     logger.info("QA agent invoked", extra={"message": user_message})
@@ -158,7 +158,7 @@ async def run_agent_stream(
     conversation_id: str | None = None,
     usage_limits: UsageLimits | None = None,
 ) -> AsyncGenerator[dict, None]:
-    """Standard streaming entry point. Called by the coordinator.
+    """Standard streaming entry point. Called by mission control.
 
     Stateless — each call is a fresh conversation. Conversation
     persistence will be added when doc 46 session model is implemented.

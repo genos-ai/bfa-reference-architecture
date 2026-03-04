@@ -57,9 +57,9 @@ async def run_agent(
     agent: Agent[HealthAgentDeps, HealthCheckResult],
     usage_limits: UsageLimits | None = None,
 ) -> HealthCheckResult:
-    """Standard agent entry point. Called by the coordinator.
+    """Standard agent entry point. Called by mission control.
 
-    The agent instance is provided by the coordinator (from the registry).
+    The agent instance is provided by mission control (from the registry).
     """
 
     logger.info("Health agent invoked", extra={"message": user_message})
@@ -86,7 +86,7 @@ async def run_agent_stream(
     conversation_id: str | None = None,
     usage_limits: UsageLimits | None = None,
 ) -> AsyncGenerator[dict, None]:
-    """Standard streaming entry point. Called by the coordinator."""
+    """Standard streaming entry point. Called by mission control."""
     result = await run_agent(user_message, deps, agent, usage_limits=usage_limits)
     yield {
         "type": "complete",
