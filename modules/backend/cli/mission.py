@@ -6,7 +6,6 @@ All operations go through proper service layers with real DB persistence.
 """
 
 import asyncio
-import json
 import sys
 
 import click
@@ -24,6 +23,7 @@ def run_mission(
     roster: str,
     budget: float | None,
     triggered_by: str,
+    output_format: str = "summary",
 ) -> None:
     """Dispatch mission CLI actions."""
     actions = {
@@ -55,6 +55,7 @@ def run_mission(
             roster=roster,
             budget=budget,
             triggered_by=triggered_by,
+            output_format=output_format,
         ))
     except Exception as e:
         click.echo(click.style(f"Error: {e}", fg="red"), err=True)
@@ -67,7 +68,7 @@ def run_mission(
 # =============================================================================
 
 
-async def _action_create(cli_logger, *, objective, mission_id, roster, budget, triggered_by):
+async def _action_create(cli_logger, *, objective, mission_id, roster, budget, triggered_by, output_format):
     """Create a mission (PENDING state)."""
     if not objective:
         click.echo(click.style("Error: --objective is required for create.", fg="red"), err=True)
@@ -97,16 +98,19 @@ async def _action_create(cli_logger, *, objective, mission_id, roster, budget, t
     click.echo(f"Execute with: python cli.py --service mission --mission-action execute --mission-id {mission.id}")
 
 
-async def _action_execute(cli_logger, *, objective, mission_id, roster, budget, triggered_by):
+async def _action_execute(cli_logger, *, objective, mission_id, roster, budget, triggered_by, output_format):
     """Execute an existing mission (PENDING → RUNNING → COMPLETED)."""
     if not mission_id:
         click.echo(click.style("Error: --mission-id is required for execute.", fg="red"), err=True)
         sys.exit(1)
 
+    await _preflight_gate(roster)
+
     from modules.backend.core.database import get_async_session
     from modules.backend.agents.mission_control.dispatch_adapter import (
         MissionControlDispatchAdapter,
     )
+    from modules.backend.cli.report import render_mission
     from modules.backend.services.mission import MissionService
     from modules.backend.services.session import SessionService
 
@@ -128,19 +132,22 @@ async def _action_execute(cli_logger, *, objective, mission_id, roster, budget, 
         mission = await service.execute_mission(mission_id)
         await db.commit()
 
-    _print_mission_result(mission)
+    await render_mission(mission, output_format)
 
 
-async def _action_run(cli_logger, *, objective, mission_id, roster, budget, triggered_by):
+async def _action_run(cli_logger, *, objective, mission_id, roster, budget, triggered_by, output_format):
     """Create + execute in one step (convenience)."""
     if not objective:
         click.echo(click.style("Error: --objective is required for run.", fg="red"), err=True)
         sys.exit(1)
 
+    await _preflight_gate(roster)
+
     from modules.backend.core.database import get_async_session
     from modules.backend.agents.mission_control.dispatch_adapter import (
         MissionControlDispatchAdapter,
     )
+    from modules.backend.cli.report import render_mission
     from modules.backend.services.mission import MissionService
     from modules.backend.services.session import SessionService
 
@@ -171,10 +178,10 @@ async def _action_run(cli_logger, *, objective, mission_id, roster, budget, trig
         mission = await service.execute_mission(mission.id)
         await db.commit()
 
-    _print_mission_result(mission)
+    await render_mission(mission, output_format)
 
 
-async def _action_list(cli_logger, *, objective, mission_id, roster, budget, triggered_by):
+async def _action_list(cli_logger, *, objective, mission_id, roster, budget, triggered_by, output_format):
     """List missions."""
     from modules.backend.core.database import get_async_session
     from modules.backend.services.mission import MissionService
@@ -197,7 +204,7 @@ async def _action_list(cli_logger, *, objective, mission_id, roster, budget, tri
         click.echo(f"{m.id:<38} {m.status.value:<12} {cost_str:>8}  {m.triggered_by:<16} {obj_preview}")
 
 
-async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, triggered_by):
+async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, triggered_by, output_format):
     """Show mission detail."""
     if not mission_id:
         click.echo(click.style("Error: --mission-id is required for detail.", fg="red"), err=True)
@@ -240,7 +247,7 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
             )
 
 
-async def _action_cost(cli_logger, *, objective, mission_id, roster, budget, triggered_by):
+async def _action_cost(cli_logger, *, objective, mission_id, roster, budget, triggered_by, output_format):
     """Show mission cost breakdown."""
     if not mission_id:
         click.echo(click.style("Error: --mission-id is required for cost.", fg="red"), err=True)
@@ -280,40 +287,22 @@ def _generate_session_id() -> str:
     return str(uuid4())
 
 
-def _print_mission_result(mission) -> None:
-    """Print mission execution result."""
-    status_color = "green" if mission.status.value == "completed" else "red"
-    click.echo(click.style(f"Status: {mission.status.value.upper()}", fg=status_color, bold=True))
-    click.echo(f"  Mission ID: {mission.id}")
-    click.echo(f"  Cost:       ${mission.total_cost_usd:.4f}")
-    click.echo(f"  Started:    {mission.started_at}")
-    click.echo(f"  Completed:  {mission.completed_at}")
+async def _preflight_gate(roster: str) -> None:
+    """Run preflight credit check; abort if any model fails."""
+    from modules.backend.agents.preflight import preflight_check
 
-    if mission.result_summary:
-        click.echo(f"  Summary:    {mission.result_summary}")
-
-    if mission.mission_outcome:
-        outcome = mission.mission_outcome
-        task_results = outcome.get("task_results", [])
-        if task_results:
-            click.echo()
-            click.echo(click.style("Tasks:", fg="cyan"))
-            for t in task_results:
-                s = t.get("status", "unknown")
-                color = "green" if s == "success" else "red"
-                cost = t.get("cost_usd", 0)
-                dur = t.get("duration_seconds", 0)
-                v = t.get("verification_outcome", {})
-                tier1 = v.get("tier_1", {}).get("status", "—")
-                click.echo(
-                    f"  {t['task_id']:<12} "
-                    f"{t['agent_name']:<28} "
-                    f"{click.style(s, fg=color):<14} "
-                    f"${cost:.4f}  {dur:.1f}s  "
-                    f"verify: {tier1}"
-                )
-
-    if mission.error_data:
+    click.echo("Preflight credit check...")
+    result = await preflight_check(roster_name=roster)
+    if result.ok:
+        click.echo(click.style("  All models OK", fg="green"))
         click.echo()
-        click.echo(click.style("Error:", fg="red"))
-        click.echo(f"  {json.dumps(mission.error_data, indent=2)}")
+        return
+
+    for check in result.failed:
+        label = "insufficient credits" if check.error_type == "insufficient_credits" else check.error
+        click.echo(click.style(f"  ✗ {check.model_name}: {label}", fg="red"))
+    click.echo()
+    click.echo(click.style("Aborting — fix credit issues before running.", fg="red"), err=True)
+    sys.exit(1)
+
+

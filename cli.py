@@ -19,6 +19,8 @@ Usage:
     python cli.py --service db --db-action stats
     python cli.py --service db --db-action query --table missions --limit 5
     python cli.py --service db --db-action clear --yes
+    python cli.py --service playbook --playbook-action list
+    python cli.py --service playbook --playbook-action run --playbook-name ops.platform-self-audit
 """
 
 import sys
@@ -47,6 +49,7 @@ LONG_RUNNING_SERVICES = frozenset({"server", "worker", "scheduler", "telegram-po
 ALL_SERVICES = [
     "server", "worker", "scheduler", "health", "config", "test", "info",
     "migrate", "telegram-poll", "event-worker", "agent", "mission", "db",
+    "playbook", "credits",
 ]
 
 
@@ -190,6 +193,31 @@ ALL_SERVICES = [
     is_flag=True,
     help="Skip confirmation prompts (--service db --db-action clear).",
 )
+# ---- Output format ----
+@click.option(
+    "--output", "-o",
+    "output_format",
+    type=click.Choice(["summary", "detail", "json"]),
+    default="summary",
+    help="Report output format for mission/playbook results.",
+)
+# ---- Playbook options ----
+@click.option(
+    "--playbook-action",
+    type=click.Choice(["list", "detail", "run", "runs", "run-detail", "report"]),
+    default="list",
+    help="Playbook action (--service playbook).",
+)
+@click.option(
+    "--playbook-name",
+    default=None,
+    help="Playbook name for run/detail (--service playbook).",
+)
+@click.option(
+    "--run-id",
+    default=None,
+    help="Playbook run ID for run-detail (--service playbook).",
+)
 def main(
     service: str,
     action: str,
@@ -216,6 +244,10 @@ def main(
     table: str | None,
     query_limit: int,
     yes: bool,
+    output_format: str,
+    playbook_action: str,
+    playbook_name: str | None,
+    run_id: str | None,
 ) -> None:
     """
     BFA Platform CLI.
@@ -238,7 +270,17 @@ def main(
         event-worker    Start event worker
         agent           Send a message to an agent
         mission         Create, execute, and inspect missions
+        playbook        List, run, and inspect playbooks
         db              Database inspection and management
+        credits         Check Anthropic API credits
+
+    \b
+    Playbook examples:
+        python cli.py --service playbook --playbook-action list
+        python cli.py --service playbook --playbook-action detail --playbook-name ops.platform-self-audit
+        python cli.py --service playbook --playbook-action run --playbook-name ops.platform-self-audit --verbose
+        python cli.py --service playbook --playbook-action runs
+        python cli.py --service playbook --playbook-action run-detail --run-id <id>
 
     \b
     DB examples:
@@ -337,7 +379,21 @@ def main(
             roster=roster,
             budget=budget,
             triggered_by=triggered_by,
+            output_format=output_format,
         )
+    elif service == "playbook":
+        from modules.backend.cli.playbook import run_playbook_cli
+        run_playbook_cli(
+            logger,
+            action=playbook_action,
+            playbook_name=playbook_name,
+            run_id=run_id,
+            triggered_by=triggered_by,
+            output_format=output_format,
+        )
+    elif service == "credits":
+        from modules.backend.cli.credits import check_credits
+        check_credits(logger, roster=roster)
     elif service == "db":
         from modules.backend.cli.db import run_db
         run_db(
