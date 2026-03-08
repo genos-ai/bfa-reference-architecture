@@ -36,6 +36,7 @@ def create_agent(model: str | Model) -> Agent[QaAgentDeps, QaAuditResult]:
         deps_type=QaAgentDeps,
         output_type=QaAuditResult,
         instructions=instructions,
+        output_retries=3,
     )
 
     @agent.tool

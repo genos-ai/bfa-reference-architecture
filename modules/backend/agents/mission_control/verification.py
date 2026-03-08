@@ -79,7 +79,7 @@ async def run_verification_pipeline(
             (used by Tier 1 structural validation).
         roster: Agent roster dict (used to validate evaluator_agent exists).
         execute_agent_fn: Async callable to dispatch the Verification Agent
-            for Tier 3. Signature: async (agent_name, instructions, context) -> dict.
+            for Tier 3. Signature: async (agent_name, instructions, inputs, usage_limits) -> dict.
         session_id: Session ID for tracing.
 
     Returns:
@@ -359,10 +359,13 @@ async def _run_tier_3(
     }
 
     try:
+        from pydantic_ai import UsageLimits
+
         evaluation = await execute_agent_fn(
             agent_name=evaluator_agent,
             instructions="Evaluate the agent output against the provided criteria.",
-            context=evaluation_context,
+            inputs=evaluation_context,
+            usage_limits=UsageLimits(request_limit=10),
         )
 
         overall_score = evaluation.get("overall_score", 0.0)

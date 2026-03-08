@@ -1,5 +1,5 @@
 """
-CLI handler for --service playbook.
+CLI handler for playbook commands.
 
 List available playbooks, execute playbook runs, inspect results,
 and render reports in multiple output formats.
@@ -69,6 +69,9 @@ def run_playbook_cli(
 
 async def _action_list(cli_logger, *, playbook_name, run_id, triggered_by, output_format):
     """List available playbooks."""
+    from rich.console import Console
+    from rich.table import Table
+
     from modules.backend.services.playbook import PlaybookService
 
     service = PlaybookService()
@@ -78,24 +81,38 @@ async def _action_list(cli_logger, *, playbook_name, run_id, triggered_by, outpu
         click.echo("No playbooks found.")
         return
 
-    click.echo(click.style("Available Playbooks:", fg="cyan", bold=True))
-    click.echo(f"  {'Name':<36} {'Ver':>3}  {'Enabled':<8} {'Budget':>8}  {'Steps':>5}  Description")
-    click.echo("  " + "-" * 110)
+    console = Console(width=140)
+    table = Table(title=f"Playbooks ({len(playbooks)} available)", show_lines=False, expand=True)
+    table.add_column("Name", style="cyan", no_wrap=True, width=36)
+    table.add_column("Ver", justify="right", no_wrap=True, width=4)
+    table.add_column("Enabled", no_wrap=True, width=8)
+    table.add_column("Budget", justify="right", no_wrap=True, width=8)
+    table.add_column("Steps", justify="right", no_wrap=True, width=6)
+    table.add_column("Description", no_wrap=True, ratio=1)
 
     for p in playbooks:
-        enabled_str = click.style("yes", fg="green") if p.enabled else click.style("no", fg="red")
-        click.echo(
-            f"  {p.playbook_name:<36} {p.version:>3}  {enabled_str:<8} "
-            f"${p.budget.max_cost_usd:>7.2f}  {len(p.steps):>5}  "
-            f"{p.description[:50]}"
+        enabled = "[green]yes[/green]" if p.enabled else "[red]no[/red]"
+        table.add_row(
+            p.playbook_name,
+            str(p.version),
+            enabled,
+            f"${p.budget.max_cost_usd:.2f}",
+            str(len(p.steps)),
+            p.description[:80],
         )
+
+    console.print(table)
 
 
 async def _action_detail(cli_logger, *, playbook_name, run_id, triggered_by, output_format):
     """Show playbook detail."""
     if not playbook_name:
-        click.echo(click.style("Error: --playbook-name is required for detail.", fg="red"), err=True)
+        click.echo(click.style("Error: playbook name is required for detail.", fg="red"), err=True)
         sys.exit(1)
+
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
 
     from modules.backend.services.playbook import PlaybookService
 
@@ -106,43 +123,58 @@ async def _action_detail(cli_logger, *, playbook_name, run_id, triggered_by, out
         click.echo(click.style(f"Playbook '{playbook_name}' not found.", fg="red"), err=True)
         sys.exit(1)
 
-    click.echo(click.style(f"Playbook: {playbook.playbook_name}", fg="cyan", bold=True))
-    click.echo(f"  Description: {playbook.description}")
-    click.echo(f"  Version:     {playbook.version}")
-    click.echo(f"  Enabled:     {playbook.enabled}")
-    click.echo(f"  Trigger:     {playbook.trigger.type}")
-    click.echo(f"  Budget:      ${playbook.budget.max_cost_usd:.2f}")
-    click.echo()
+    console = Console(width=140)
 
-    click.echo(click.style("  Objective:", fg="cyan"))
-    click.echo(f"    Statement: {playbook.objective.statement}")
-    click.echo(f"    Category:  {playbook.objective.category}")
-    click.echo(f"    Owner:     {playbook.objective.owner}")
-    click.echo(f"    Priority:  {playbook.objective.priority}")
-    click.echo()
+    # Header panel
+    enabled_str = "[green]yes[/green]" if playbook.enabled else "[red]no[/red]"
+    info_lines = [
+        f"[bold]Name:[/bold]        {playbook.playbook_name}",
+        f"[bold]Description:[/bold] {playbook.description}",
+        f"[bold]Version:[/bold]     {playbook.version}",
+        f"[bold]Enabled:[/bold]     {enabled_str}",
+        f"[bold]Trigger:[/bold]     {playbook.trigger.type}",
+        f"[bold]Budget:[/bold]      ${playbook.budget.max_cost_usd:.2f}",
+    ]
+    console.print(Panel("\n".join(info_lines), title="Playbook Detail", border_style="cyan"))
 
+    # Objective panel
+    obj_lines = [
+        f"[bold]Statement:[/bold] {playbook.objective.statement}",
+        f"[bold]Category:[/bold]  {playbook.objective.category}",
+        f"[bold]Owner:[/bold]     {playbook.objective.owner}",
+        f"[bold]Priority:[/bold]  {playbook.objective.priority}",
+    ]
     if playbook.trigger.match_patterns:
-        click.echo(click.style("  Trigger Patterns:", fg="cyan"))
-        for pattern in playbook.trigger.match_patterns:
-            click.echo(f"    - {pattern}")
-        click.echo()
+        obj_lines.append(f"[bold]Triggers:[/bold]  {', '.join(playbook.trigger.match_patterns)}")
+    console.print(Panel("\n".join(obj_lines), title="Objective", border_style="dim"))
 
+    # Context panel
     if playbook.context:
-        click.echo(click.style("  Context:", fg="cyan"))
-        for key, value in playbook.context.items():
-            click.echo(f"    {key}: {value}")
-        click.echo()
+        ctx_lines = [f"[bold]{k}:[/bold] {v}" for k, v in playbook.context.items()]
+        console.print(Panel("\n".join(ctx_lines), title="Context", border_style="dim"))
 
-    click.echo(click.style("  Steps:", fg="cyan"))
+    # Steps table
+    table = Table(title="Steps", expand=True, show_lines=True)
+    table.add_column("ID", style="cyan", no_wrap=True, width=20)
+    table.add_column("Capability", no_wrap=True, width=28)
+    table.add_column("Budget", justify="right", no_wrap=True, width=8)
+    table.add_column("Env", no_wrap=True, width=10)
+    table.add_column("Depends On", style="dim", no_wrap=True, width=20)
+    table.add_column("Description", ratio=1)
+
     for step in playbook.steps:
-        deps = f" (depends_on: {', '.join(step.depends_on)})" if step.depends_on else ""
         ceiling = f"${step.cost_ceiling_usd:.2f}" if step.cost_ceiling_usd else "default"
-        click.echo(
-            f"    {step.id:<20} {step.capability:<24} "
-            f"budget: {ceiling:<10} {step.environment}{deps}"
+        deps = ", ".join(step.depends_on) if step.depends_on else ""
+        table.add_row(
+            step.id,
+            step.capability,
+            ceiling,
+            step.environment,
+            deps,
+            step.description or "",
         )
-        if step.description:
-            click.echo(f"      {click.style(step.description, dim=True)}")
+
+    console.print(table)
 
 
 async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output_format):
@@ -197,6 +229,9 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
 
 async def _action_runs(cli_logger, *, playbook_name, run_id, triggered_by, output_format):
     """List playbook runs."""
+    from rich.console import Console
+    from rich.table import Table
+
     from modules.backend.core.database import get_async_session
     from modules.backend.services.playbook_run import PlaybookRunService
     from modules.backend.services.mission import MissionService
@@ -216,17 +251,40 @@ async def _action_runs(cli_logger, *, playbook_name, run_id, triggered_by, outpu
         click.echo("No playbook runs found.")
         return
 
-    click.echo(f"Playbook Runs ({total} total):")
-    click.echo(f"  {'ID':<38} {'Status':<12} {'Cost':>8}  {'Playbook':<36} Trigger")
-    click.echo("  " + "-" * 110)
+    console = Console(width=140)
+    table = Table(title=f"Playbook Runs ({total} total)", show_lines=False, expand=True)
+    table.add_column("Date/Time", style="dim", no_wrap=True, width=16)
+    table.add_column("ID", style="cyan", no_wrap=True, width=36)
+    table.add_column("Playbook", no_wrap=True, width=24)
+    table.add_column("Status", no_wrap=True, width=10)
+    table.add_column("Cost", justify="right", no_wrap=True, width=8)
+    table.add_column("Trigger", style="dim", no_wrap=True, width=10)
+    table.add_column("Summary", no_wrap=True, ratio=1)
 
     for r in runs:
-        status_val = r.status if isinstance(r.status, str) else r.status.value
-        cost_str = f"${r.total_cost_usd:.4f}"
-        click.echo(
-            f"  {r.id:<38} {status_val:<12} {cost_str:>8}  "
-            f"{r.playbook_name:<36} {r.triggered_by}"
+        status_val = r.status.value if hasattr(r.status, "value") else str(r.status)
+        if status_val == "completed":
+            status_str = f"[green]{status_val}[/green]"
+        elif status_val == "failed":
+            status_str = f"[red]{status_val}[/red]"
+        elif status_val in ("running", "pending"):
+            status_str = f"[yellow]{status_val}[/yellow]"
+        else:
+            status_str = status_val
+        dt_str = r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "—"
+        raw_summary = r.result_summary or ""
+        summary = raw_summary[:80] + "..." if len(raw_summary) > 80 else raw_summary
+        table.add_row(
+            dt_str,
+            str(r.id),
+            r.playbook_name,
+            status_str,
+            f"${r.total_cost_usd:.4f}",
+            r.triggered_by,
+            summary,
         )
+
+    console.print(table)
 
 
 async def _action_run_detail(cli_logger, *, playbook_name, run_id, triggered_by, output_format):

@@ -35,6 +35,7 @@ def create_agent(model: str | Model) -> Agent[HealthAgentDeps, HealthCheckResult
         deps_type=HealthAgentDeps,
         output_type=HealthCheckResult,
         instructions=instructions,
+        output_retries=3,
     )
 
     @agent.tool
