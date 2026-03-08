@@ -69,9 +69,7 @@ def run_playbook_cli(
 
 async def _action_list(cli_logger, *, playbook_name, run_id, triggered_by, output_format):
     """List available playbooks."""
-    from rich.console import Console
-    from rich.table import Table
-
+    from modules.backend.cli.report import get_console, build_table
     from modules.backend.services.playbook import PlaybookService
 
     service = PlaybookService()
@@ -81,14 +79,15 @@ async def _action_list(cli_logger, *, playbook_name, run_id, triggered_by, outpu
         click.echo("No playbooks found.")
         return
 
-    console = Console(width=140)
-    table = Table(title=f"Playbooks ({len(playbooks)} available)", show_lines=False, expand=True)
-    table.add_column("Name", style="cyan", no_wrap=True, width=36)
-    table.add_column("Ver", justify="right", no_wrap=True, width=4)
-    table.add_column("Enabled", no_wrap=True, width=8)
-    table.add_column("Budget", justify="right", no_wrap=True, width=8)
-    table.add_column("Steps", justify="right", no_wrap=True, width=6)
-    table.add_column("Description", no_wrap=True, ratio=1)
+    console = get_console()
+    table = build_table(f"Playbooks ({len(playbooks)} available)", columns=[
+        ("Name",        {"style": "cyan", "width": 36}),
+        ("Ver",         {"justify": "right", "width": 4}),
+        ("Enabled",     {"width": 8}),
+        ("Budget",      {"justify": "right", "width": 8}),
+        ("Steps",       {"justify": "right", "width": 6}),
+        ("Description", {"ratio": 1}),
+    ])
 
     for p in playbooks:
         enabled = "[green]yes[/green]" if p.enabled else "[red]no[/red]"
@@ -110,10 +109,7 @@ async def _action_detail(cli_logger, *, playbook_name, run_id, triggered_by, out
         click.echo(click.style("Error: playbook name is required for detail.", fg="red"), err=True)
         sys.exit(1)
 
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.table import Table
-
+    from modules.backend.cli.report import get_console, build_table, primary_panel, info_panel
     from modules.backend.services.playbook import PlaybookService
 
     service = PlaybookService()
@@ -123,7 +119,7 @@ async def _action_detail(cli_logger, *, playbook_name, run_id, triggered_by, out
         click.echo(click.style(f"Playbook '{playbook_name}' not found.", fg="red"), err=True)
         sys.exit(1)
 
-    console = Console(width=140)
+    console = get_console()
 
     # Header panel
     enabled_str = "[green]yes[/green]" if playbook.enabled else "[red]no[/red]"
@@ -135,7 +131,7 @@ async def _action_detail(cli_logger, *, playbook_name, run_id, triggered_by, out
         f"[bold]Trigger:[/bold]     {playbook.trigger.type}",
         f"[bold]Budget:[/bold]      ${playbook.budget.max_cost_usd:.2f}",
     ]
-    console.print(Panel("\n".join(info_lines), title="Playbook Detail", border_style="cyan"))
+    console.print(primary_panel("\n".join(info_lines), title="Playbook Detail"))
 
     # Objective panel
     obj_lines = [
@@ -146,21 +142,22 @@ async def _action_detail(cli_logger, *, playbook_name, run_id, triggered_by, out
     ]
     if playbook.trigger.match_patterns:
         obj_lines.append(f"[bold]Triggers:[/bold]  {', '.join(playbook.trigger.match_patterns)}")
-    console.print(Panel("\n".join(obj_lines), title="Objective", border_style="dim"))
+    console.print(info_panel("\n".join(obj_lines), title="Objective"))
 
     # Context panel
     if playbook.context:
         ctx_lines = [f"[bold]{k}:[/bold] {v}" for k, v in playbook.context.items()]
-        console.print(Panel("\n".join(ctx_lines), title="Context", border_style="dim"))
+        console.print(info_panel("\n".join(ctx_lines), title="Context"))
 
     # Steps table
-    table = Table(title="Steps", expand=True, show_lines=True)
-    table.add_column("ID", style="cyan", no_wrap=True, width=20)
-    table.add_column("Capability", no_wrap=True, width=28)
-    table.add_column("Budget", justify="right", no_wrap=True, width=8)
-    table.add_column("Env", no_wrap=True, width=10)
-    table.add_column("Depends On", style="dim", no_wrap=True, width=20)
-    table.add_column("Description", ratio=1)
+    table = build_table("Steps", columns=[
+        ("ID",          {"style": "cyan", "width": 20}),
+        ("Capability",  {"width": 28}),
+        ("Budget",      {"justify": "right", "width": 8}),
+        ("Env",         {"width": 10}),
+        ("Depends On",  {"style": "dim", "width": 20}),
+        ("Description", {"ratio": 1}),
+    ], show_lines=True)
 
     for step in playbook.steps:
         ceiling = f"${step.cost_ceiling_usd:.2f}" if step.cost_ceiling_usd else "default"
@@ -189,39 +186,38 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
     from modules.backend.agents.mission_control.dispatch_adapter import (
         MissionControlDispatchAdapter,
     )
-    from modules.backend.cli.report import render_playbook_run
+    from modules.backend.cli.report import (
+        get_console, build_table, styled_status, status_panel,
+        info_panel, render_playbook_run,
+        _playbook_run_to_dict, _generate_narrative, colorize_narrative,
+    )
     from modules.backend.services.mission import MissionService
     from modules.backend.services.playbook_run import PlaybookRunService
     from modules.backend.services.session import SessionService
 
-    from rich.console import Console
-    from rich.table import Table
     from rich.live import Live
 
-    console = Console(width=140)
+    console = get_console()
     console.print(f"[bold]Running playbook:[/bold] {playbook_name}\n")
 
     # Progress state for the live display
     progress_state: dict = {"steps": {}, "total": 0, "playbook": playbook_name}
 
-    def _build_progress_table() -> Table:
-        table = Table(show_header=True, expand=True, show_lines=False)
-        table.add_column("Step", style="cyan", no_wrap=True, width=22)
-        table.add_column("Capability", no_wrap=True, width=28)
-        table.add_column("Status", no_wrap=True, width=12)
-        table.add_column("Cost", justify="right", no_wrap=True, width=8)
-        table.add_column("Description", ratio=1)
+    def _build_progress_table():
+        table = build_table(columns=[
+            ("Step",        {"style": "cyan", "width": 22}),
+            ("Capability",  {"width": 28}),
+            ("Status",      {"width": 12}),
+            ("Cost",        {"justify": "right", "width": 8}),
+            ("Description", {"ratio": 1}),
+        ])
 
         for step_id, info in progress_state["steps"].items():
             status = info.get("status", "running")
             if status == "running":
                 status_str = "[yellow]running...[/yellow]"
-            elif status == "completed":
-                status_str = "[green]done[/green]"
-            elif status == "failed":
-                status_str = "[red]failed[/red]"
             else:
-                status_str = status
+                status_str = styled_status(status)
             cost = f"${info.get('cost_usd', 0):.4f}" if "cost_usd" in info else "—"
             table.add_row(
                 step_id,
@@ -282,13 +278,9 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
         await db.commit()
 
     # Render summary below the progress table
-    from rich.panel import Panel
-
-    status_val = run.status.value if hasattr(run.status, "value") else str(run.status)
-    status_color = {"completed": "green", "failed": "red"}.get(status_val, "yellow")
     header = (
         f"[bold]{run.playbook_name}[/bold] v{run.playbook_version}    "
-        f"Status: [{status_color}]{status_val.upper()}[/{status_color}]    "
+        f"Status: {styled_status(run.status)}    "
         f"Cost: ${run.total_cost_usd:.4f}"
     )
     if run.budget_usd:
@@ -296,20 +288,17 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
         header += f"  ({pct:.0f}% of ${run.budget_usd:.2f} budget)"
 
     console.print()
-    console.print(Panel(header, border_style=status_color))
+    console.print(status_panel(header, run.status))
 
     # Generate AI narrative summary
-    from modules.backend.cli.report import _playbook_run_to_dict, _generate_narrative, colorize_narrative
     narrative = await _generate_narrative(_playbook_run_to_dict(run, missions))
     narrative = colorize_narrative(narrative)
-    console.print(Panel(narrative.strip(), title="Summary", border_style="dim"))
+    console.print(info_panel(narrative.strip(), title="Summary"))
 
 
 async def _action_runs(cli_logger, *, playbook_name, run_id, triggered_by, output_format):
     """List playbook runs."""
-    from rich.console import Console
-    from rich.table import Table
-
+    from modules.backend.cli.report import get_console, build_table, styled_status
     from modules.backend.core.database import get_async_session
     from modules.backend.services.playbook_run import PlaybookRunService
     from modules.backend.services.mission import MissionService
@@ -329,26 +318,18 @@ async def _action_runs(cli_logger, *, playbook_name, run_id, triggered_by, outpu
         click.echo("No playbook runs found.")
         return
 
-    console = Console(width=140)
-    table = Table(title=f"Playbook Runs ({total} total)", show_lines=False, expand=True)
-    table.add_column("Date/Time", style="dim", no_wrap=True, width=16)
-    table.add_column("ID", style="cyan", no_wrap=True, width=36)
-    table.add_column("Playbook", no_wrap=True, width=24)
-    table.add_column("Status", no_wrap=True, width=10)
-    table.add_column("Cost", justify="right", no_wrap=True, width=8)
-    table.add_column("Trigger", style="dim", no_wrap=True, width=10)
-    table.add_column("Summary", no_wrap=True, ratio=1)
+    console = get_console()
+    table = build_table(f"Playbook Runs ({total} total)", columns=[
+        ("Date/Time", {"style": "dim", "width": 16}),
+        ("ID",        {"style": "cyan", "width": 36}),
+        ("Playbook",  {"width": 24}),
+        ("Status",    {"width": 10}),
+        ("Cost",      {"justify": "right", "width": 8}),
+        ("Trigger",   {"style": "dim", "width": 10}),
+        ("Summary",   {"ratio": 1}),
+    ])
 
     for r in runs:
-        status_val = r.status.value if hasattr(r.status, "value") else str(r.status)
-        if status_val == "completed":
-            status_str = f"[green]{status_val}[/green]"
-        elif status_val == "failed":
-            status_str = f"[red]{status_val}[/red]"
-        elif status_val in ("running", "pending"):
-            status_str = f"[yellow]{status_val}[/yellow]"
-        else:
-            status_str = status_val
         dt_str = r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "—"
         raw_summary = r.result_summary or ""
         summary = raw_summary[:80] + "..." if len(raw_summary) > 80 else raw_summary
@@ -356,7 +337,7 @@ async def _action_runs(cli_logger, *, playbook_name, run_id, triggered_by, outpu
             dt_str,
             str(r.id),
             r.playbook_name,
-            status_str,
+            styled_status(r.status),
             f"${r.total_cost_usd:.4f}",
             r.triggered_by,
             summary,

@@ -80,35 +80,40 @@ async def _action_stats(cli_logger, *, table, limit, confirm):
     """Show row counts for all tables."""
     from sqlalchemy import text
 
+    from modules.backend.cli.report import get_console, build_table
     from modules.backend.core.database import get_async_session
 
+    console = get_console()
+
     async with get_async_session() as db:
-        click.echo(click.style("Database Statistics", fg="cyan", bold=True))
-        click.echo(f"  {'Table':<24} {'Rows':>8}")
-        click.echo("  " + "-" * 34)
+        tbl_table = build_table("Database Statistics", columns=[
+            ("Table", {"style": "cyan", "width": 28}),
+            ("Rows",  {"justify": "right", "width": 10}),
+        ])
 
         total = 0
         for tbl in ALL_TABLES:
             result = await db.execute(text(f"SELECT COUNT(*) FROM {tbl}"))  # noqa: S608
             count = result.scalar()
             total += count
-            color = "white" if count == 0 else "green"
-            click.echo(f"  {tbl:<24} {click.style(str(count), fg=color):>8}")
+            count_str = f"[green]{count}[/green]" if count else str(count)
+            tbl_table.add_row(tbl, count_str)
 
-        click.echo("  " + "-" * 34)
-        click.echo(f"  {'TOTAL':<24} {total:>8}")
+        tbl_table.add_row("[bold]TOTAL[/bold]", f"[bold]{total}[/bold]", end_section=True)
+
+    console.print(tbl_table)
 
 
 async def _action_tables(cli_logger, *, table, limit, confirm):
     """List all application tables with column info."""
     from sqlalchemy import text
 
+    from modules.backend.cli.report import get_console, build_table
     from modules.backend.core.database import get_async_session
 
-    async with get_async_session() as db:
-        click.echo(click.style("Application Tables", fg="cyan", bold=True))
-        click.echo()
+    console = get_console()
 
+    async with get_async_session() as db:
         for tbl in ALL_TABLES:
             result = await db.execute(text(
                 "SELECT column_name, data_type, is_nullable "
@@ -121,11 +126,15 @@ async def _action_tables(cli_logger, *, table, limit, confirm):
             result = await db.execute(text(f"SELECT COUNT(*) FROM {tbl}"))  # noqa: S608
             count = result.scalar()
 
-            click.echo(click.style(f"  {tbl}", fg="cyan", bold=True) + f"  ({count} rows)")
+            col_table = build_table(f"{tbl}  ({count} rows)", columns=[
+                ("Column",   {"style": "cyan", "width": 30}),
+                ("Type",     {"width": 22}),
+                ("Nullable", {"width": 10}),
+            ])
             for col_name, data_type, nullable in columns:
-                null_str = "" if nullable == "YES" else " NOT NULL"
-                click.echo(f"    {col_name:<28} {data_type:<20}{null_str}")
-            click.echo()
+                null_str = "yes" if nullable == "YES" else "[dim]NOT NULL[/dim]"
+                col_table.add_row(col_name, data_type, null_str)
+            console.print(col_table)
 
 
 async def _action_query(cli_logger, *, table, limit, confirm):
@@ -164,15 +173,21 @@ async def _action_query(cli_logger, *, table, limit, confirm):
             click.echo(f"No rows in {table}.")
             return
 
-        click.echo(click.style(f"{table}", fg="cyan", bold=True) + f"  ({len(rows)} rows shown)")
-        click.echo()
+        from modules.backend.cli.report import get_console, build_table
+
+        console = get_console()
+        row_table = build_table(f"{table}  ({len(rows)} rows shown)", columns=[
+            ("Column", {"style": "cyan", "width": 30}),
+            ("Value",  {"ratio": 1}),
+        ], show_lines=True)
 
         for i, row in enumerate(rows):
-            click.echo(click.style(f"  --- Row {i + 1} ---", dim=True))
+            row_table.add_row(f"[dim]--- Row {i + 1} ---[/dim]", "", end_section=True)
             for col, val in zip(columns, row):
                 val_str = _format_value(val)
-                click.echo(f"    {col:<28} {val_str}")
-            click.echo()
+                row_table.add_row(col, val_str)
+
+        console.print(row_table)
 
 
 async def _action_clear(cli_logger, *, table, limit, confirm):

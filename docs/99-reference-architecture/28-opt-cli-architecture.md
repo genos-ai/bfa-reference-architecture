@@ -106,8 +106,10 @@ Scripts in `scripts/` are utility scripts outside the regular CLI surface.
 | Concern | Solution |
 |---------|----------|
 | Framework | Click (groups + subcommands) |
-| Output (tables, panels) | Rich |
+| Display primitives | `modules/backend/cli/report.py` — shared Rich builders |
+| Output (tables, panels) | Rich via `build_table()`, `primary_panel()`, `info_panel()` |
 | Output (simple text) | Click styling (`click.style`, `click.echo`) |
+| Status styling | `styled_status()`, `status_color()`, `severity_color()` |
 | Configuration | YAML via `get_app_config()` + secrets via `get_settings()` |
 | Logging | structlog via `setup_logging()` + `get_logger()` |
 | Project root | `validate_project_root()` from `modules.backend.core.config` |
@@ -226,24 +228,93 @@ def run_mission(cli_logger, action, objective, mission_id, roster, budget, trigg
 
 ## Output Formatting
 
-### Rich Tables and Panels
+### Display Primitives — `modules/backend/cli/report.py`
 
-Use Rich for structured output (tables, panels, color-coded status):
+All CLI display uses shared primitives from `report.py`. Never create `Console`, `Table`, or `Panel` directly — use the centralized builders:
+
+| Primitive | Purpose |
+|-----------|---------|
+| `get_console()` | Console with standard project width (140) |
+| `build_table(title, columns=...)` | Declarative table from column specs |
+| `styled_status(status)` | Rich-markup colored status (handles str and enum) |
+| `status_color(status)` | Raw color name for a status value |
+| `severity_color(severity)` | Color for finding severity (error, warning, info) |
+| `primary_panel(content, title)` | Cyan-bordered panel for primary content |
+| `info_panel(content, title)` | Dim-bordered panel for secondary content |
+| `status_panel(content, status)` | Panel with status-colored border |
+| `colorize_narrative(text)` | Keyword-driven Rich markup for priority headings |
+
+### Tables
+
+Use `build_table()` with declarative column specs. Each column is a `(name, kwargs)` tuple. Defaults: `no_wrap=True`, `expand=True`.
 
 ```python
-from rich.console import Console
-from rich.table import Table
+from modules.backend.cli.report import get_console, build_table, styled_status
 
-console = Console(width=140)
-table = Table(title="Missions", expand=True)
-table.add_column("Status", no_wrap=True)
-# ...
+console = get_console()
+table = build_table("Missions ({total} total)", columns=[
+    ("Date/Time", {"style": "dim", "width": 16}),
+    ("ID",        {"style": "cyan", "width": 36}),
+    ("Status",    {"width": 10}),
+    ("Cost",      {"justify": "right", "width": 8}),
+    ("Objective", {"ratio": 1}),  # flex column — always last
+])
+
+for m in missions:
+    table.add_row(dt_str, str(m.id), styled_status(m.status), cost_str, objective)
+
 console.print(table)
+```
+
+Column conventions:
+
+| Column type | Style |
+|-------------|-------|
+| ID / name | `style: "cyan"` |
+| Timestamp | `style: "dim"` |
+| Money / numbers | `justify: "right"` |
+| Status | Use `styled_status()` for row values |
+| Last column | `ratio: 1` (fills remaining width) |
+
+List tables: `show_lines=False` (default). Detail tables: `show_lines=True`.
+
+### Panels
+
+Use panels for key-value detail views and summaries:
+
+```python
+from modules.backend.cli.report import primary_panel, info_panel, status_panel
+
+# Primary info (cyan border)
+console.print(primary_panel("\n".join(info_lines), title="Mission Detail"))
+
+# Secondary info (dim border)
+console.print(info_panel(mission.objective, title="Objective"))
+
+# Status-colored (green/red/yellow border based on status)
+console.print(status_panel(header, run.status))
+```
+
+### Live Progress
+
+For long-running operations, use `rich.live.Live` with a progress callback:
+
+```python
+from rich.live import Live
+
+live = Live(_build_progress_table(), console=console, refresh_per_second=4)
+
+def on_progress(event):
+    # Update state, rebuild table
+    live.update(_build_progress_table())
+
+with live:
+    result = await service.run(on_progress=on_progress)
 ```
 
 ### Simple Text
 
-Use Click styling for simple messages:
+Use Click styling for simple messages (startup lines, confirmations, errors):
 
 | Output type | Format |
 |------------|--------|

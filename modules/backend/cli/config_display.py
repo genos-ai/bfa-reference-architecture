@@ -11,37 +11,30 @@ import click
 
 def show_config(logger) -> None:
     """Display loaded configuration."""
-    click.echo("Application Configuration:\n")
-
     try:
+        from modules.backend.cli.report import get_console, primary_panel
         from modules.backend.core.config import get_app_config
 
         app_config = get_app_config()
+        console = get_console()
 
-        click.echo("Application Settings (from YAML):")
-        click.echo("-" * 40)
-        for key, value in app_config.application.model_dump().items():
-            click.echo(f"  {key}: {value}")
+        sections = [
+            ("Application Settings", app_config.application.model_dump()),
+            ("Database Settings", app_config.database.model_dump()),
+            ("Logging Settings", app_config.logging.model_dump()),
+            ("Feature Flags", app_config.features.model_dump()),
+        ]
 
-        click.echo("\nDatabase Settings (from YAML):")
-        click.echo("-" * 40)
-        for key, value in app_config.database.model_dump().items():
-            click.echo(f"  {key}: {value}")
-
-        click.echo("\nLogging Settings (from YAML):")
-        click.echo("-" * 40)
-        for key, value in app_config.logging.model_dump().items():
-            if isinstance(value, dict):
-                click.echo(f"  {key}:")
-                for k, v in value.items():
-                    click.echo(f"    {k}: {v}")
-            else:
-                click.echo(f"  {key}: {value}")
-
-        click.echo("\nFeature Flags (from YAML):")
-        click.echo("-" * 40)
-        for key, value in app_config.features.model_dump().items():
-            click.echo(f"  {key}: {value}")
+        for title, data in sections:
+            lines = []
+            for key, value in data.items():
+                if isinstance(value, dict):
+                    lines.append(f"[bold]{key}:[/bold]")
+                    for k, v in value.items():
+                        lines.append(f"  {k}: {v}")
+                else:
+                    lines.append(f"[bold]{key}:[/bold] {value}")
+            console.print(primary_panel("\n".join(lines), title=title))
 
         logger.info("Configuration displayed successfully")
 

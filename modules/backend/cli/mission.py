@@ -6,7 +6,6 @@ All operations go through proper service layers with real DB persistence.
 """
 
 import asyncio
-import enum
 import sys
 
 import click
@@ -192,9 +191,7 @@ async def _action_run(cli_logger, *, objective, mission_id, roster, budget, trig
 
 async def _action_list(cli_logger, *, objective, mission_id, roster, budget, triggered_by, output_format):
     """List missions."""
-    from rich.console import Console
-    from rich.table import Table
-
+    from modules.backend.cli.report import get_console, build_table, styled_status
     from modules.backend.core.database import get_async_session
     from modules.backend.services.mission import MissionService
 
@@ -206,27 +203,23 @@ async def _action_list(cli_logger, *, objective, mission_id, roster, budget, tri
         click.echo("No missions found.")
         return
 
-    console = Console(width=140)
-    table = Table(title=f"Missions ({total} total)", show_lines=False, expand=True)
-    table.add_column("Date/Time", style="dim", no_wrap=True, width=16)
-    table.add_column("ID", style="cyan", no_wrap=True, width=36)
-    table.add_column("Status", no_wrap=True, width=10)
-    table.add_column("Cost", justify="right", no_wrap=True, width=8)
-    table.add_column("Trigger", style="dim", no_wrap=True, width=12)
-    table.add_column("Objective", no_wrap=True, ratio=1)
+    console = get_console()
+    table = build_table(f"Missions ({total} total)", columns=[
+        ("Date/Time",  {"style": "dim", "width": 16}),
+        ("ID",         {"style": "cyan", "width": 36}),
+        ("Status",     {"width": 10}),
+        ("Cost",       {"justify": "right", "width": 8}),
+        ("Trigger",    {"style": "dim", "width": 12}),
+        ("Objective",  {"ratio": 1}),
+    ])
 
     for m in missions:
         obj_preview = m.objective[:60] + "..." if len(m.objective) > 60 else m.objective
-        cost_str = f"${m.total_cost_usd:.4f}"
-        status_str = m.status.value
-        if status_str == "completed":
-            status_str = f"[green]{status_str}[/green]"
-        elif status_str == "failed":
-            status_str = f"[red]{status_str}[/red]"
-        elif status_str in ("running", "pending"):
-            status_str = f"[yellow]{status_str}[/yellow]"
         dt_str = m.created_at.strftime("%Y-%m-%d %H:%M") if m.created_at else "—"
-        table.add_row(dt_str, str(m.id), status_str, cost_str, m.triggered_by, obj_preview)
+        table.add_row(
+            dt_str, str(m.id), styled_status(m.status),
+            f"${m.total_cost_usd:.4f}", m.triggered_by, obj_preview,
+        )
 
     console.print(table)
 
@@ -237,10 +230,11 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
         click.echo(click.style("Error: --mission-id is required for detail.", fg="red"), err=True)
         raise _AbortMission("mission-id required")
 
-    from rich.console import Console
+    from modules.backend.cli.report import (
+        get_console, build_table, styled_status,
+        primary_panel, info_panel, severity_color,
+    )
     from rich.panel import Panel
-    from rich.table import Table
-    from rich.text import Text
 
     from modules.backend.core.database import get_async_session
     from modules.backend.services.mission import MissionService
@@ -253,16 +247,12 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
             click.echo(click.style(f"Mission '{mission_id}' not found.", fg="red"), err=True)
             raise _AbortMission("mission not found")
 
-    console = Console(width=140)
-
-    # Status with color
-    status = mission.status.value if isinstance(mission.status, enum.Enum) else str(mission.status)
-    status_color = {"completed": "green", "failed": "red", "running": "yellow", "pending": "yellow"}.get(status, "white")
+    console = get_console()
 
     # Header info
     info_lines = [
         f"[bold]ID:[/bold]        {mission.id}",
-        f"[bold]Status:[/bold]    [{status_color}]{status}[/{status_color}]",
+        f"[bold]Status:[/bold]    {styled_status(mission.status)}",
         f"[bold]Created:[/bold]   {mission.created_at.strftime('%Y-%m-%d %H:%M:%S') if mission.created_at else '—'}",
         f"[bold]Started:[/bold]   {mission.started_at or '—'}",
         f"[bold]Finished:[/bold]  {mission.completed_at or '—'}",
@@ -271,10 +261,10 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
         f"[bold]Trigger:[/bold]   {mission.triggered_by}",
         f"[bold]Session:[/bold]   {mission.session_id}",
     ]
-    console.print(Panel("\n".join(info_lines), title="Mission Detail", border_style="cyan"))
+    console.print(primary_panel("\n".join(info_lines), title="Mission Detail"))
 
     # Objective
-    console.print(Panel(mission.objective, title="Objective", border_style="dim"))
+    console.print(info_panel(mission.objective, title="Objective"))
 
     # Result summary
     if mission.result_summary:
@@ -285,17 +275,17 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
     if outcome and isinstance(outcome, dict):
         tasks = outcome.get("task_results") or outcome.get("task_outcomes") or []
         if tasks:
-            table = Table(title="Task Outcomes", expand=True, show_lines=True)
-            table.add_column("Task", style="cyan", no_wrap=True, width=12)
-            table.add_column("Agent", no_wrap=True, width=28)
-            table.add_column("Status", no_wrap=True, width=10)
-            table.add_column("Cost", justify="right", no_wrap=True, width=8)
-            table.add_column("Duration", justify="right", no_wrap=True, width=10)
-            table.add_column("Summary", ratio=1)
+            table = build_table("Task Outcomes", columns=[
+                ("Task",     {"style": "cyan", "width": 12}),
+                ("Agent",    {"width": 28}),
+                ("Status",   {"width": 10}),
+                ("Cost",     {"justify": "right", "width": 8}),
+                ("Duration", {"justify": "right", "width": 10}),
+                ("Summary",  {"ratio": 1}),
+            ], show_lines=True)
 
             for t in tasks:
                 t_status = str(t.get("status", "—"))
-                s_color = {"completed": "green", "failed": "red"}.get(t_status.lower(), "white")
                 cost = f"${t['cost_usd']:.4f}" if "cost_usd" in t else "—"
                 dur = f"{t['duration_seconds']:.1f}s" if "duration_seconds" in t else "—"
                 out_ref = t.get("output_reference") or {}
@@ -307,7 +297,7 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
                 table.add_row(
                     t.get("task_id", "—"),
                     t.get("agent_name", "—"),
-                    f"[{s_color}]{t_status}[/{s_color}]",
+                    styled_status(t_status),
                     cost,
                     dur,
                     summary,
@@ -326,10 +316,9 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
 
             if output_format == "json":
                 import json
-                console.print(Panel(
+                console.print(primary_panel(
                     json.dumps(out_ref, indent=2, default=str),
                     title=f"{task_id} / {agent}",
-                    border_style="cyan",
                 ))
             else:
                 # Render structured findings nicely
@@ -347,7 +336,7 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
                         line_ = f.get("line", "")
                         msg = f.get("message", f.get("details", ""))
                         loc = f"[dim]{file_}:{line_}[/dim]" if file_ else ""
-                        sev_color = {"error": "red", "warning": "yellow", "info": "dim"}.get(sev, "white")
+                        sev_color = severity_color(sev)
                         lines.append(f"  [{sev_color}]{sev}[/{sev_color}]  {loc}  {msg}")
                         rec = f.get("recommendation", "")
                         if rec:
@@ -368,7 +357,7 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
                     lines.append("[dim]" + " | ".join(stats) + "[/dim]")
 
                 content = "\n".join(lines) if lines else str(out_ref)
-                console.print(Panel(content, title=f"{task_id} / {agent}", border_style="cyan"))
+                console.print(primary_panel(content, title=f"{task_id} / {agent}"))
 
     # Error data
     if mission.error_data:
@@ -388,20 +377,31 @@ async def _action_cost(cli_logger, *, objective, mission_id, roster, budget, tri
         service = MissionPersistenceService(db)
         breakdown = await service.get_cost_breakdown(mission_id)
 
-    click.echo(click.style("Cost Breakdown", fg="cyan", bold=True))
-    click.echo(f"  Mission:       {breakdown.mission_id}")
-    click.echo(f"  Total Cost:    ${breakdown.total_cost_usd:.4f}")
-    click.echo(f"  Input Tokens:  {breakdown.total_input_tokens:,}")
-    click.echo(f"  Output Tokens: {breakdown.total_output_tokens:,}")
-    click.echo()
+    from modules.backend.cli.report import get_console, build_table, primary_panel
+
+    console = get_console()
+
+    info_lines = [
+        f"[bold]Mission:[/bold]       {breakdown.mission_id}",
+        f"[bold]Total Cost:[/bold]    ${breakdown.total_cost_usd:.4f}",
+        f"[bold]Input Tokens:[/bold]  {breakdown.total_input_tokens:,}",
+        f"[bold]Output Tokens:[/bold] {breakdown.total_output_tokens:,}",
+    ]
+    console.print(primary_panel("\n".join(info_lines), title="Cost Breakdown"))
 
     if breakdown.task_costs:
-        click.echo(f"  {'Task':<12} {'Agent':<28} {'Cost':>8}  {'Tokens':>12}  {'Duration':>8}")
-        click.echo("  " + "-" * 80)
+        table = build_table("Task Costs", columns=[
+            ("Task",     {"style": "cyan", "width": 12}),
+            ("Agent",    {"width": 28}),
+            ("Cost",     {"justify": "right", "width": 10}),
+            ("Tokens",   {"justify": "right", "width": 14}),
+            ("Duration", {"justify": "right", "width": 10}),
+        ])
         for tc in breakdown.task_costs:
             tokens = f"{(tc.get('input_tokens') or 0) + (tc.get('output_tokens') or 0):,}"
             dur = f"{tc['duration_seconds']:.1f}s" if tc.get('duration_seconds') else "—"
-            click.echo(f"  {tc['task_id']:<12} {tc['agent_name']:<28} ${tc['cost_usd']:>7.4f}  {tokens:>12}  {dur:>8}")
+            table.add_row(tc['task_id'], tc['agent_name'], f"${tc['cost_usd']:.4f}", tokens, dur)
+        console.print(table)
 
 
 # =============================================================================

@@ -18,38 +18,43 @@ def check_credits(logger, roster: str = "default") -> None:
 
 async def _check_credits_async(logger, roster: str) -> None:
     from modules.backend.agents.preflight import preflight_check
+    from modules.backend.cli.report import get_console, build_table
 
-    click.echo(f"Preflight credit check (roster: {roster})...\n")
+    console = get_console()
+    console.print(f"Preflight credit check (roster: {roster})...\n")
 
     try:
         result = await preflight_check(roster_name=roster)
-    except FileNotFoundError as e:
-        click.echo(click.style(f"✗ FAIL  {e}", fg="red"))
+    except (FileNotFoundError, Exception) as e:
+        console.print(f"[red]FAIL  {e}[/red]")
         sys.exit(1)
-    except Exception as e:
-        click.echo(click.style(f"✗ FAIL  {e}", fg="red"))
-        sys.exit(1)
+
+    table = build_table("Credit Check", columns=[
+        ("Status", {"width": 8}),
+        ("Model",  {"style": "cyan", "width": 44}),
+        ("Detail", {"ratio": 1}),
+    ])
 
     for check in result.checks:
         if check.ok:
-            click.echo(
-                click.style("✓ PASS", fg="green")
-                + f"  {check.model_name} ({check.elapsed_ms:.0f}ms)"
+            table.add_row(
+                "[green]PASS[/green]",
+                check.model_name,
+                f"{check.elapsed_ms:.0f}ms",
             )
         else:
-            click.echo(
-                click.style("✗ FAIL", fg="red")
-                + f"  {check.model_name}"
+            detail = (
+                "Insufficient credits — top up at console.anthropic.com"
+                if check.error_type == "insufficient_credits"
+                else check.error
             )
-            if check.error_type == "insufficient_credits":
-                click.echo("         Insufficient credits — top up at: https://console.anthropic.com/settings/billing")
-            else:
-                click.echo(f"         {check.error}")
+            table.add_row("[red]FAIL[/red]", check.model_name, detail)
 
-    click.echo()
+    console.print(table)
+
     if result.ok:
-        click.echo(click.style("All models OK — ready to run missions and playbooks.", fg="green"))
+        console.print("[green]All models OK — ready to run missions and playbooks.[/green]")
     else:
         failed = ", ".join(c.model_name for c in result.failed)
-        click.echo(click.style(f"Preflight failed for: {failed}", fg="red"))
+        console.print(f"[red]Preflight failed for: {failed}[/red]")
         sys.exit(1)

@@ -65,21 +65,26 @@ def check_health(logger) -> None:
         checks.append(("API schemas", False, str(e)))
         logger.error("Schemas failed", extra={"error": str(e)})
 
-    click.echo("Health Check Results:")
-    click.echo("-" * 50)
+    from modules.backend.cli.report import get_console, build_table
+
+    console = get_console()
+    table = build_table("Health Check Results", columns=[
+        ("Status", {"width": 8}),
+        ("Check",  {"style": "cyan", "width": 24}),
+        ("Detail", {"ratio": 1}),
+    ])
 
     all_passed = True
     for name, passed, detail in checks:
-        status = click.style("✓ PASS", fg="green") if passed else click.style("✗ FAIL", fg="red")
-        detail_str = f" ({detail})" if detail else ""
-        click.echo(f"  {status}  {name}{detail_str}")
+        status_str = "[green]PASS[/green]" if passed else "[red]FAIL[/red]"
         if not passed:
             all_passed = False
+        table.add_row(status_str, name, detail or "")
 
-    click.echo("-" * 50)
+    console.print(table)
 
     if all_passed:
-        click.echo(click.style("\nAll checks passed!", fg="green"))
+        console.print("[green]All checks passed![/green]")
     else:
-        click.echo(click.style("\nSome checks failed. See details above.", fg="yellow"))
-        click.echo("Note: Environment settings require config/.env to be configured.")
+        console.print("[yellow]Some checks failed. See details above.[/yellow]")
+        console.print("[dim]Note: Environment settings require config/.env to be configured.[/dim]")

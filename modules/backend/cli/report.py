@@ -1,10 +1,10 @@
 """
-Centralized report renderer for mission and playbook outputs.
+Centralized report renderer and Rich display primitives.
 
-Three output tiers:
-    summary  — AI-generated narrative briefing (default)
-    detail   — Deterministic per-step/task breakdown
-    json     — Raw structured data
+Provides:
+    1. Shared Rich primitives — console, tables, panels, status styling.
+       All CLI handlers import from here instead of building their own.
+    2. Report renderers — summary (AI narrative), detail, json tiers.
 
 All public functions are async. CLI handlers are already async
 (called via asyncio.run()), so there is no sync/async duality.
@@ -15,6 +15,9 @@ import re
 from typing import Any
 
 import click
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 from modules.backend.core.logging import get_logger
 
@@ -22,9 +25,95 @@ logger = get_logger(__name__)
 
 OUTPUT_FORMATS = ("summary", "detail", "json")
 
+# =============================================================================
+# Shared Rich primitives — single source of truth for CLI display
+# =============================================================================
+
+_CONSOLE_WIDTH = 140
+
+_STATUS_COLORS: dict[str, str] = {
+    "completed": "green",
+    "failed": "red",
+    "running": "yellow",
+    "pending": "yellow",
+}
+
+
+def get_console() -> Console:
+    """Return a Console with the standard project width."""
+    return Console(width=_CONSOLE_WIDTH)
+
+
+def status_color(status: Any) -> str:
+    """Return the color name for a status value (str or enum)."""
+    val = status.value if hasattr(status, "value") else str(status)
+    return _STATUS_COLORS.get(val, "white")
+
+
+def styled_status(status: Any) -> str:
+    """Return a Rich-markup-colored status string."""
+    val = status.value if hasattr(status, "value") else str(status)
+    color = _STATUS_COLORS.get(val, "white")
+    return f"[{color}]{val}[/{color}]"
+
+
+def build_table(
+    title: str | None = None,
+    *,
+    columns: list[tuple[str, dict[str, Any]]],
+    show_lines: bool = False,
+) -> Table:
+    """Build a Rich Table from declarative column specs.
+
+    Each column is a (name, kwargs) tuple. ``no_wrap=True`` and
+    ``expand=True`` are applied by default — callers only declare
+    what differs.
+
+    Example::
+
+        build_table("Missions", columns=[
+            ("ID",     {"style": "cyan", "width": 36}),
+            ("Status", {"width": 10}),
+            ("Cost",   {"justify": "right", "width": 8}),
+            ("Desc",   {"ratio": 1}),
+        ])
+    """
+    table = Table(title=title, show_lines=show_lines, expand=True)
+    for name, kwargs in columns:
+        table.add_column(name, no_wrap=True, **kwargs)
+    return table
+
+
+def status_panel(content: str, status: Any, **kwargs: Any) -> Panel:
+    """Panel with border color matching the status."""
+    return Panel(content, border_style=status_color(status), **kwargs)
+
+
+def info_panel(content: str, title: str | None = None) -> Panel:
+    """Panel with dim border for secondary/supporting content."""
+    return Panel(content, title=title, border_style="dim")
+
+
+def primary_panel(content: str, title: str | None = None) -> Panel:
+    """Panel with cyan border for primary content."""
+    return Panel(content, title=title, border_style="cyan")
+
+
+_SEVERITY_COLORS: dict[str, str] = {
+    "error": "red",
+    "warning": "yellow",
+    "info": "dim",
+    "critical": "bold red",
+}
+
+
+def severity_color(severity: str) -> str:
+    """Return the Rich color for a finding severity level."""
+    return _SEVERITY_COLORS.get(severity.lower(), "white")
+
 
 # =============================================================================
-# Public API — async only, called from async CLI handlers
+# Public report API — async only, called from async CLI handlers
 # =============================================================================
 
 
