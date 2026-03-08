@@ -1,0 +1,13 @@
+# =============================================================================
+# Temporal Configuration (Tier 4 - Durable Execution)
+# =============================================================================
+enabled: false
+server_url: "localhost:7233"
+namespace: "default"
+task_queue: "agent-missions"
+workflow_execution_timeout_days: 30
+activity_start_to_close_seconds: 600
+activity_retry_max_attempts: 3
+approval_timeout_seconds: 14400
+escalation_timeout_seconds: 86400
+notification_timeout_seconds: 30

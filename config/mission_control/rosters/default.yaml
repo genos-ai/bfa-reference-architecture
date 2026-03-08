@@ -1,0 +1,69 @@
+# Default Agent Roster
+#   Static agent roster for Mission Control dispatch.
+#   Each entry defines what the Planning Agent can select from.
+#   Models are pinned — no runtime override (P2, research doc 11).
+#
+#   auto_include:
+#     planning_agent and verification_agent are appended automatically.
+#     Do not list them here unless overriding defaults.
+
+agents:
+  - agent_name: code.qa.agent
+    agent_version: "1.0.0"
+    description: >
+      Audits Python codebases for compliance violations including import
+      patterns, datetime usage, hardcoded values, and file size limits.
+      Returns structured findings with severity ratings and suggested fixes.
+    model:
+      name: "anthropic:claude-haiku-4-5-20251001"
+      temperature: 0.0
+      max_tokens: 4096
+    tools:
+      - filesystem.read_file
+      - filesystem.list_files
+      - compliance.scan_imports
+      - compliance.scan_datetime
+      - compliance.scan_hardcoded
+      - compliance.scan_file_sizes
+      - code.apply_fix
+      - code.run_tests
+    interface:
+      input:
+        target_path: string
+        scan_rules: "list[string]"
+      output:
+        findings: "list[object]"
+        summary: string
+        severity_counts: object
+        confidence: float
+    constraints:
+      timeout_seconds: 120
+      cost_ceiling_usd: 0.50
+      retry_budget: 2
+      parallelism: safe
+
+  - agent_name: system.health.agent
+    agent_version: "1.0.0"
+    description: >
+      Reports system health status including service availability, resource
+      utilization, and configuration validation. Used as the fallback agent
+      for unroutable requests.
+    model:
+      name: "anthropic:claude-haiku-4-5-20251001"
+      temperature: 0.0
+      max_tokens: 2048
+    tools:
+      - system.check_health
+      - system.get_config_status
+    interface:
+      input:
+        query: string
+      output:
+        status: string
+        details: object
+        confidence: float
+    constraints:
+      timeout_seconds: 60
+      cost_ceiling_usd: 0.10
+      retry_budget: 1
+      parallelism: safe

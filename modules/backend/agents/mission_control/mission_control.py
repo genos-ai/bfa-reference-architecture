@@ -1,46 +1,43 @@
-"""
-Mission Control.
+"""Mission Control — routes messages to agents, enforces budgets, streams events.
 
-Routes user messages to agents, enforces budgets, manages sessions,
-and yields typed events. Streaming is the default and only path.
+Infrastructure, not intelligence (P6). Does not call LLMs directly.
 
-Mission control is infrastructure, not intelligence (P6). It does not
-have a personality, make domain decisions, or call LLMs. It is a state machine.
-
-Public interface:
-    handle(session_id, message, ...) -> AsyncIterator[SessionEvent]
-    collect(session_id, message, ...) -> dict
-    list_agents() -> list[dict]
+Public: handle(), handle_mission(), collect(), list_agents().
 """
 
-import importlib
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-from pydantic_ai import UserError, UsageLimits
-from pydantic_ai.models import Model
+from pydantic_ai import UserError
 
-from modules.backend.agents.config_schema import AgentConfigSchema, AgentModelSchema
 from modules.backend.agents.mission_control.cost import compute_cost_usd, estimate_cost
+from modules.backend.agents.mission_control.dispatch import dispatch
+from modules.backend.agents.mission_control.persistence_bridge import persist_mission_results
+from modules.backend.agents.mission_control.helpers import (
+    _build_agent_deps,
+    _build_model,
+    _build_planning_prompt,
+    _build_roster_prompt,
+    _append_validation_feedback,
+    _call_planning_agent,
+    _get_model_name,
+    _get_usage_limits,
+    _make_agent_executor,
+    _persist_messages,
+    _publish,
+    _resolve_agent,
+    assemble_instructions,
+    build_deps_from_config,
+)
 from modules.backend.agents.mission_control.history import (
-    model_messages_to_session_creates,
     session_messages_to_model_history,
 )
-from modules.backend.agents.mission_control.middleware import (
-    _load_mission_control_config,
-    check_guardrails,
-)
-from modules.backend.agents.mission_control.models import MissionControlRequest
+from modules.backend.agents.mission_control.middleware import check_guardrails
+from modules.backend.agents.mission_control.outcome import MissionOutcome, MissionStatus
+from modules.backend.agents.mission_control.plan_validator import validate_plan
 from modules.backend.agents.mission_control.registry import get_registry
-from modules.backend.agents.mission_control.router import RuleBasedRouter
-from modules.backend.agents.deps.base import (
-    BaseAgentDeps,
-    FileScope,
-    HealthAgentDeps,
-    QaAgentDeps,
-)
-from modules.backend.core.config import find_project_root, get_app_config, get_settings
+from modules.backend.agents.mission_control.roster import load_roster
 from modules.backend.core.logging import get_logger
 from modules.backend.events.types import (
     AgentResponseChunkEvent,
@@ -53,170 +50,21 @@ from modules.backend.events.types import (
     UserMessageEvent,
 )
 from modules.backend.schemas.session import SessionMessageCreate
+from modules.backend.schemas.task_plan import TaskPlan
 from modules.backend.services.session import SessionService
 
 logger = get_logger(__name__)
 
-
-
-def _build_model(config_model: str | AgentModelSchema) -> Model:
-    """Construct a PydanticAI Model from a config string or AgentModelSchema.
-
-    Accepts either a flat 'provider:model_name' string (legacy) or a structured
-    AgentModelSchema with pinned temperature and max_tokens. API keys are injected
-    from centralized settings — never from os.environ.
-    """
-    if isinstance(config_model, AgentModelSchema):
-        model_name = config_model.name
-    else:
-        model_name = config_model
-
-    settings = get_settings()
-
-    if model_name.startswith("anthropic:"):
-        from pydantic_ai.models.anthropic import AnthropicModel
-        from pydantic_ai.providers.anthropic import AnthropicProvider
-
-        bare_name = model_name.split(":", 1)[1]
-        provider = AnthropicProvider(api_key=settings.anthropic_api_key)
-        return AnthropicModel(bare_name, provider=provider)
-
-    raise ValueError(f"Unsupported model provider in '{model_name}'. Expected 'anthropic:model_name'.")
-
-
-
-def assemble_instructions(category: str, name: str) -> str:
-    """Compose layered prompt: organization -> category -> agent.
-
-    Reads markdown files from config/prompts/ and concatenates them.
-    Missing layers are silently skipped.
-    """
-    project_root = find_project_root()
-    prompts_dir = project_root / "config" / "prompts"
-    layers: list[str] = []
-
-    org_dir = prompts_dir / "organization"
-    if org_dir.exists():
-        for org_file in sorted(org_dir.glob("*.md")):
-            layers.append(org_file.read_text(encoding="utf-8").strip())
-
-    cat_file = prompts_dir / "categories" / f"{category}.md"
-    if cat_file.exists():
-        layers.append(cat_file.read_text(encoding="utf-8").strip())
-
-    agent_file = prompts_dir / "agents" / category / name / "system.md"
-    if agent_file.exists():
-        layers.append(agent_file.read_text(encoding="utf-8").strip())
-
-    return "\n\n".join(layers)
-
-
-
-def build_deps_from_config(agent_config: AgentConfigSchema) -> dict[str, Any]:
-    """Build common dep fields from agent YAML config."""
-    scope = FileScope(
-        read_paths=agent_config.scope.read,
-        write_paths=agent_config.scope.write,
-    )
-    return {
-        "project_root": find_project_root(),
-        "scope": scope,
-        "config": agent_config,
-    }
-
-
-def _build_agent_deps(
-    agent_name: str,
-    agent_config: AgentConfigSchema,
-    session_id: str | None = None,
-) -> BaseAgentDeps:
-    """Build the appropriate deps dataclass for a given agent."""
-    common = build_deps_from_config(agent_config)
-    common["session_id"] = session_id
-    category = agent_name.split(".")[0]
-
-    if category == "system" and "health" in agent_name:
-        return HealthAgentDeps(**common, app_config=get_app_config())
-    if category == "code" and "qa" in agent_name:
-        return QaAgentDeps(**common)
-
-    return BaseAgentDeps(**common)
-
-
-
-def _get_usage_limits() -> UsageLimits:
-    """Build UsageLimits from mission_control.yaml."""
-    config = _load_mission_control_config()
-    return UsageLimits(
-        request_limit=config.limits.max_requests_per_task,
-        total_tokens_limit=config.limits.max_tokens_per_task,
-    )
-
-
-
-def _import_agent_module(agent_name: str) -> Any:
-    """Dynamically import an agent module from the registry."""
-    registry = get_registry()
-    module_path = registry.resolve_module_path(agent_name)
-    return importlib.import_module(module_path)
-
-
-
-def _resolve_agent(session: Any, message: str) -> str:
-    """Determine which agent handles this message.
-
-    Priority: session.agent_id > keyword routing > fallback.
-    """
-    registry = get_registry()
-
-    if session.agent_id and registry.has(session.agent_id):
-        return session.agent_id
-
-    router = RuleBasedRouter(registry)
-    request = MissionControlRequest(user_input=message)
-    agent_name = router.route(request)
-
-    if agent_name is not None:
-        return agent_name
-
-    mc_config = _load_mission_control_config()
-    fallback = mc_config.routing.fallback_agent
-    if fallback and registry.has(fallback):
-        return fallback
-
-    available = ", ".join(c["agent_name"] for c in registry.list_all()) or "none"
-    raise ValueError(f"No agent matched. Available agents: {available}.")
-
-
-async def _publish(event_bus: Any, event: SessionEvent) -> None:
-    """Publish event to bus if available. Non-critical."""
-    if event_bus is None:
-        return
-    try:
-        await event_bus.publish(event)
-    except Exception:
-        logger.debug("Event bus publish failed", exc_info=True)
-
-
-async def _persist_messages(
-    session_service: SessionService,
-    session_id: str,
-    creates: list[SessionMessageCreate],
-) -> None:
-    """Persist messages to session. Non-critical."""
-    try:
-        for create in creates:
-            await session_service.add_message(session_id, create)
-    except Exception:
-        logger.warning("Failed to persist session messages", exc_info=True)
-
-
-def _get_model_name(config_model: str | AgentModelSchema) -> str:
-    """Extract model name string from config model."""
-    if isinstance(config_model, AgentModelSchema):
-        return config_model.name
-    return config_model
-
+# Re-export for backwards compatibility (vertical agents import these)
+__all__ = [
+    "handle",
+    "handle_mission",
+    "collect",
+    "list_agents",
+    "assemble_instructions",
+    "build_deps_from_config",
+    "_build_model",
+]
 
 
 def list_agents() -> list[dict[str, Any]]:
@@ -232,16 +80,14 @@ async def handle(
     event_bus: Any | None = None,
     channel: str = "api",
     sender_id: str | None = None,
+    mission_brief: str | None = None,
 ) -> AsyncIterator[SessionEvent]:
     """Universal streaming mission control entry point.
 
-    All channels call this function:
-    - REST/SSE: stream events directly
-    - WebSocket: forward events to socket
-    - Telegram: buffer chunks, edit message
-    - TUI: render events in panels
-    - CLI: print events to terminal
-    - Temporal Activity: collect events, persist state
+    Simple requests: existing direct-agent path (Plan 12).
+    Complex requests: routed to dispatch via handle_mission() (Plan 13).
+
+    A request is complex if mission_brief is explicitly provided.
 
     Yields SessionEvent instances as the agent works.
     Error handling yields events instead of throwing — the stream
@@ -249,6 +95,33 @@ async def handle(
     """
     sid = uuid.UUID(session_id) if not isinstance(session_id, uuid.UUID) else session_id
     source = "mission_control"
+
+    # Complex request — route to dispatch loop
+    if mission_brief is not None:
+        try:
+            outcome = await handle_mission(
+                mission_id=f"mission-{session_id}",
+                mission_brief=mission_brief,
+                session_service=session_service,
+                event_bus=event_bus,
+            )
+            yield AgentResponseCompleteEvent(
+                session_id=sid,
+                source=source,
+                agent_id="mission_control",
+                full_content=outcome.model_dump_json(),
+                metadata={"mission_status": outcome.status},
+            )
+        except Exception as exc:
+            logger.error("Mission dispatch error", exc_info=True)
+            yield AgentResponseCompleteEvent(
+                session_id=sid,
+                source=source,
+                agent_id="mission_control",
+                full_content=f"Error: {exc}",
+                metadata={"error": True},
+            )
+        return
 
     try:
         # 1. Validate session exists
@@ -485,3 +358,116 @@ async def collect(session_id: str, message: str, **kwargs: Any) -> dict[str, Any
         "cost_usd": cost_usd,
         "session_id": session_id,
     }
+
+
+# =============================================================================
+# Mission dispatch — multi-agent mission execution (Plan 13)
+# =============================================================================
+
+
+async def handle_mission(
+    mission_id: str,
+    mission_brief: str,
+    *,
+    session_service: Any,
+    event_bus: Any | None = None,
+    roster_name: str = "default",
+    mission_budget_usd: float = 10.0,
+    upstream_context: dict | None = None,
+) -> MissionOutcome:
+    """Dispatch entry point for complex multi-agent missions.
+
+    1. Load roster
+    2. Call Planning Agent for task decomposition
+    3. Validate TaskPlan against all 11 rules
+    4. Execute dispatch loop
+    5. Return MissionOutcome
+
+    Simple requests continue through handle() from Plan 12.
+    Complex requests (explicit mission_brief or matched playbook)
+    route here.
+    """
+    roster = load_roster(roster_name)
+
+    roster_description = _build_roster_prompt(roster)
+    planning_prompt = _build_planning_prompt(
+        mission_brief=mission_brief,
+        mission_id=mission_id,
+        roster_description=roster_description,
+        upstream_context=upstream_context,
+    )
+
+    # Call Planning Agent (with retry on validation failure)
+    plan = None
+    thinking_trace = None
+    max_planning_attempts = 3
+
+    for attempt in range(max_planning_attempts):
+        try:
+            planning_result = await _call_planning_agent(
+                planning_prompt, roster, upstream_context,
+            )
+            thinking_trace = planning_result.get("thinking_trace")
+
+            plan = TaskPlan.model_validate(planning_result["task_plan"])
+
+            validation = validate_plan(plan, roster, mission_budget_usd)
+            if validation.is_valid:
+                break
+
+            logger.warning(
+                "TaskPlan validation failed, retrying Planning Agent",
+                extra={
+                    "attempt": attempt + 1,
+                    "errors": validation.errors,
+                    "mission_id": mission_id,
+                },
+            )
+            planning_prompt = _append_validation_feedback(
+                planning_prompt, validation.errors,
+            )
+            plan = None
+
+        except (ValueError, Exception) as e:
+            logger.warning(
+                "Planning Agent error, retrying",
+                extra={
+                    "attempt": attempt + 1,
+                    "error": str(e),
+                    "mission_id": mission_id,
+                },
+            )
+            planning_prompt = _append_validation_feedback(
+                planning_prompt, [str(e)],
+            )
+
+    if plan is None:
+        return MissionOutcome(
+            mission_id=mission_id,
+            status=MissionStatus.FAILED,
+            planning_trace_reference=thinking_trace,
+        )
+
+    # Execute dispatch loop
+    outcome = await dispatch(
+        plan=plan,
+        roster=roster,
+        execute_agent_fn=_make_agent_executor(session_service, event_bus),
+        mission_budget_usd=mission_budget_usd,
+    )
+
+    outcome.planning_trace_reference = thinking_trace
+    outcome.task_plan_reference = plan.model_dump_json()
+
+    # Best-effort persistence — does not block or fail the mission
+    if hasattr(session_service, "_session") and session_service._session:
+        await persist_mission_results(
+            outcome,
+            session_id=mission_id,
+            roster_name=roster_name,
+            task_plan_json=plan.model_dump(),
+            thinking_trace=thinking_trace,
+            db_session=session_service._session,
+        )
+
+    return outcome

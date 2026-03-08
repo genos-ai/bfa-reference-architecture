@@ -12,7 +12,7 @@ from collections.abc import AsyncGenerator
 from pydantic_ai import Agent, RunContext, UsageLimits
 from pydantic_ai.models import Model
 
-from modules.backend.agents.mission_control.mission_control import assemble_instructions
+from modules.backend.agents.mission_control.helpers import assemble_instructions
 from modules.backend.agents.deps.base import QaAgentDeps
 from modules.backend.agents.schemas import QaAuditResult
 from modules.backend.agents.tools import code, compliance, filesystem

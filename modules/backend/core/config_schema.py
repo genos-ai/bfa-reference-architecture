@@ -271,3 +271,58 @@ class SessionsSchema(_StrictBase):
     max_cost_budget_usd: float = 500.00
     cleanup_interval_minutes: int = 60
     budget_warning_threshold: float = 0.80
+
+
+# =============================================================================
+# missions.yaml
+# =============================================================================
+
+
+class MissionsSchema(_StrictBase):
+    """Mission persistence and audit trail configuration."""
+
+    max_thinking_trace_length: int = 50000
+    max_task_output_size_bytes: int = 1_048_576  # 1MB
+    retention_days: int = 0  # 0 = keep forever
+    default_page_size: int = 20
+    max_page_size: int = 100
+    persist_thinking_trace: bool = True
+    persist_verification_details: bool = True
+
+
+# =============================================================================
+# temporal.yaml
+# =============================================================================
+
+
+class TemporalSchema(_StrictBase):
+    """Temporal integration configuration (Tier 4 durable execution)."""
+
+    enabled: bool = False
+    server_url: str = "localhost:7233"
+    namespace: str = "default"
+    task_queue: str = "agent-missions"
+    workflow_execution_timeout_days: int = 30
+    activity_start_to_close_seconds: int = 600
+    activity_retry_max_attempts: int = 3
+    approval_timeout_seconds: int = 14400
+    escalation_timeout_seconds: int = 86400
+    notification_timeout_seconds: int = 30
+
+
+# =============================================================================
+# playbooks.yaml
+# =============================================================================
+
+
+class PlaybooksSchema(_StrictBase):
+    """Playbook and mission system configuration."""
+
+    playbooks_dir: str = "config/playbooks"
+    max_steps_per_playbook: int = 20
+    max_context_size_bytes: int = 1_048_576  # 1MB
+    default_step_timeout_seconds: int = 600
+    default_budget_usd: float = 10.00
+    max_budget_usd: float = 100.00
+    max_concurrent_missions: int = 10
+    enable_playbook_matching: bool = True

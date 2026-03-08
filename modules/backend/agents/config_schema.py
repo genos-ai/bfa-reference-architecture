@@ -117,9 +117,13 @@ class AgentConfigSchema(_StrictBase):
     interface: AgentInterfaceSchema | None = None
     version: str = "1.0.0"
 
+    # Agent-specific optional fields
     file_size_limit: int | None = None
     rules: list[ComplianceRuleSchema] | None = None
     exclusions: ExclusionsSchema | None = None
+
+    # Horizontal agent fields (Plan 13)
+    thinking_budget: dict[str, int] | None = None
 
     @field_validator("model", mode="before")
     @classmethod

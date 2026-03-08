@@ -6,6 +6,7 @@ Uses lazy initialization to prevent import-time failures when .env is not config
 """
 
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -68,6 +69,28 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
             expire_on_commit=False,
         )
     return _async_session_factory
+
+
+@asynccontextmanager
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+    """Standalone async session context manager for non-FastAPI callers.
+
+    Usage (Temporal Activities, CLI scripts, background tasks):
+        async with get_async_session() as db:
+            service = SomeService(db)
+            await service.do_work()
+            await db.commit()
+
+    Unlike get_db_session(), this does NOT auto-commit. The caller
+    controls the transaction boundary explicitly.
+    """
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:

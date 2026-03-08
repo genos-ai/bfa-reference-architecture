@@ -1,0 +1,22 @@
+# =============================================================================
+# Playbook & Mission Configuration
+# =============================================================================
+# Available options:
+#   playbooks_dir              - Directory to scan for playbook YAML files (string)
+#   max_steps_per_playbook     - Maximum steps in a single playbook (integer)
+#   max_context_size_bytes     - Maximum mission context size in bytes (integer)
+#   default_step_timeout_seconds - Default timeout per step if not specified (integer)
+#   default_budget_usd         - Default mission budget if not specified in playbook (float)
+#   max_budget_usd             - Hard cap on mission budget (float)
+#   max_concurrent_missions    - Maximum missions running simultaneously (integer)
+#   enable_playbook_matching   - Enable Mission Control playbook matching fast-path (boolean)
+# =============================================================================
+
+playbooks_dir: "config/playbooks"
+max_steps_per_playbook: 20
+max_context_size_bytes: 1048576
+default_step_timeout_seconds: 600
+default_budget_usd: 10.00
+max_budget_usd: 100.00
+max_concurrent_missions: 10
+enable_playbook_matching: true

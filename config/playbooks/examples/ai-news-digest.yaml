@@ -1,0 +1,134 @@
+# =============================================================================
+# Example Playbook: AI News Digest
+# =============================================================================
+# Curates, summarizes, and delivers AI news from thought leaders.
+# This playbook demonstrates: multi-mission workflow, per-step rosters,
+# complexity tiers, output mapping, and inter-mission data flow.
+#
+# NOTE: This playbook is disabled by default. The referenced agent
+# capabilities (research.scraper, content.summarizer, etc.) do not
+# exist yet. Enable once the agents are built.
+# =============================================================================
+
+playbook_name: research.ai-news-digest
+description: "Curate, summarize, and deliver AI news from thought leaders"
+objective:
+  statement: "Keep engineering team informed of AI developments that may affect platform architecture decisions"
+  category: research
+  owner: engineering-lead
+  priority: normal
+  regulatory_reference: null
+version: 1
+enabled: false
+
+trigger:
+  type: on_demand
+  match_patterns:
+    - "ai news"
+    - "ai digest"
+    - "news digest"
+    - "ai updates"
+
+budget:
+  max_cost_usd: 5.00
+  max_tokens: 500000
+
+context:
+  sources:
+    - name: "Simon Willison"
+      url: "https://simonwillison.net/atom/everything/"
+      type: rss
+    - name: "Andrej Karpathy"
+      url: "https://karpathy.ai/"
+      type: blog
+  delivery_channels:
+    - telegram
+  max_articles: 20
+  summary_style: "concise, actionable, technical"
+
+steps:
+  - id: scrape
+    description: "Fetch content from curated source list"
+    capability: research.scraper
+    roster: research_team
+    complexity_tier: simple
+    cost_ceiling_usd: 0.50
+    environment: container
+    input:
+      sources: "@context.sources"
+      max_articles: "@context.max_articles"
+    output_mapping:
+      field_mappings:
+        - source_task: scrape_articles
+          source_field: articles
+          target_key: raw_articles
+    timeout_seconds: 600
+
+  - id: summarize
+    description: "Synthesize articles into key learnings and takeaways"
+    capability: content.summarizer
+    roster: content_team
+    complexity_tier: complex
+    cost_ceiling_usd: 2.00
+    environment: local
+    input:
+      articles: "@context.raw_articles"
+      style: "@context.summary_style"
+    output_mapping:
+      summary_key: summaries_summary
+      field_mappings:
+        - source_task: summarize_articles
+          source_field: summaries
+          target_key: summaries
+    depends_on:
+      - scrape
+
+  - id: extract-actions
+    description: "Identify actionable takeaways and recommendations"
+    capability: content.analyst
+    roster: content_team
+    complexity_tier: simple
+    cost_ceiling_usd: 0.50
+    environment: local
+    input:
+      summaries: "@context.summaries"
+    output_mapping:
+      field_mappings:
+        - source_task: analyze_content
+          source_field: actions
+          target_key: actions
+    depends_on:
+      - summarize
+
+  - id: format
+    description: "Format digest for delivery channels"
+    capability: content.formatter
+    roster: content_team
+    complexity_tier: simple
+    cost_ceiling_usd: 0.50
+    environment: local
+    input:
+      summaries: "@context.summaries"
+      actions: "@context.actions"
+      channels: "@context.delivery_channels"
+    output_mapping:
+      field_mappings:
+        - source_task: format_digest
+          source_field: formatted_content
+          target_key: formatted_digest
+    depends_on:
+      - summarize
+      - extract-actions
+
+  - id: deliver
+    description: "Send formatted digest via configured channels"
+    capability: comms.dispatcher
+    roster: delivery_team
+    complexity_tier: simple
+    cost_ceiling_usd: 0.10
+    environment: local
+    input:
+      content: "@context.formatted_digest"
+      channels: "@context.delivery_channels"
+    depends_on:
+      - format

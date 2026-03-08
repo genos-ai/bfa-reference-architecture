@@ -1,0 +1,23 @@
+# =============================================================================
+# Mission Persistence Configuration
+# =============================================================================
+#   Controls how mission execution records are stored and queried.
+#   This is the audit and analytics layer, not the execution engine.
+#
+# Available options:
+#   max_thinking_trace_length    - Max characters for planning thinking trace (integer)
+#   max_task_output_size_bytes   - Max size for task output_data JSONB (integer)
+#   retention_days               - Days to retain mission records (integer, 0=forever)
+#   default_page_size            - Default pagination size for list queries (integer)
+#   max_page_size                - Maximum pagination size (integer)
+#   persist_thinking_trace       - Whether to store planning agent thinking trace (boolean)
+#   persist_verification_details - Whether to store full verification outcome JSON (boolean)
+# =============================================================================
+
+max_thinking_trace_length: 50000
+max_task_output_size_bytes: 1048576
+retention_days: 0
+default_page_size: 20
+max_page_size: 100
+persist_thinking_trace: true
+persist_verification_details: true

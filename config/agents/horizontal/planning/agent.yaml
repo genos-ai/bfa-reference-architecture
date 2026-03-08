@@ -1,0 +1,40 @@
+# Planning Agent Configuration
+#   The Planning Agent decomposes mission briefs into executable task plans.
+#   Called by Mission Control, not by other agents.
+#
+#   Model: Opus 4.6 with extended thinking — best reasoning for task decomposition.
+#   Model is PINNED — no runtime override (P2).
+#   System prompt is security-critical — changes require review.
+
+agent_name: horizontal.planning.agent
+agent_type: horizontal
+description: "Decomposes mission briefs into executable task plans with dependency graphs, verification specs, and cost estimates."
+enabled: true
+version: "1.0.0"
+
+model:
+  name: "anthropic:claude-opus-4-20250514"
+  temperature: 0.0
+  max_tokens: 16384
+
+keywords: []
+tools: []
+
+max_input_length: 64000
+max_budget_usd: 5.00
+
+execution:
+  mode: local
+
+interface:
+  input:
+    mission_brief: string
+    roster: object
+    upstream_context: object
+  output:
+    task_plan: object
+
+thinking_budget:
+  simple: 10000
+  standard: 20000
+  complex: 30000

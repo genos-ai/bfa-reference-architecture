@@ -1,0 +1,54 @@
+# =============================================================================
+# Verification Agent Configuration
+# =============================================================================
+# Security-critical agent. Evaluates other agents' work during Tier 3
+# verification. Changes to this config require review and approval.
+#
+# Available options:
+#   agent_name        - Unique agent identifier (string)
+#   agent_type        - Agent type (string: horizontal)
+#   description       - Agent description (string)
+#   enabled           - Enable/disable (boolean)
+#   model             - LLM model identifier (string, provider:model format)
+#   max_input_length  - Maximum input character count (integer)
+#   max_budget_usd    - Maximum cost per invocation in USD (decimal)
+#   scope             - Filesystem access control (object)
+#     read            - Paths the agent can read (list of strings)
+#     write           - Paths the agent can write (list of strings)
+#   execution         - Execution mode (object)
+#     mode            - Execution environment (string: local | container)
+# =============================================================================
+
+agent_name: horizontal.verification.agent
+agent_type: horizontal
+description: "Evaluates other agents' work quality against criteria from the TaskPlan"
+enabled: true
+model: anthropic:claude-opus-4-20250514
+max_input_length: 64000
+max_budget_usd: 2.00
+
+keywords: []
+
+tools: []
+
+scope:
+  read: []
+  write: []
+
+execution:
+  mode: local
+
+interface:
+  input:
+    task_instructions: str
+    evaluation_criteria: list
+    agent_output: dict
+    upstream_context: dict
+  output:
+    overall_score: float
+    passed: bool
+    criteria_results: list
+    blocking_issues: list
+    recommendations: list
+
+version: "1.0.0"

@@ -279,8 +279,8 @@ class TestEventTypeMap:
             assert event_type in EVENT_TYPE_MAP, f"{cls.__name__} missing from EVENT_TYPE_MAP"
             assert EVENT_TYPE_MAP[event_type] is cls
 
-    def test_registry_has_fourteen_entries(self):
-        assert len(EVENT_TYPE_MAP) == 14
+    def test_registry_has_nineteen_entries(self):
+        assert len(EVENT_TYPE_MAP) == 19
 
 
 class TestDeserializeEvent:

@@ -31,8 +31,11 @@ from modules.backend.core.config_schema import (
     FeaturesSchema,
     GatewaySchema,
     LoggingSchema,
+    MissionsSchema,
+    PlaybooksSchema,
     SecuritySchema,
     SessionsSchema,
+    TemporalSchema,
 )
 
 
@@ -128,6 +131,9 @@ class AppConfig:
         self._gateway = _load_validated(GatewaySchema, "gateway.yaml")
         self._events = _load_validated_optional(EventsSchema, "events.yaml")
         self._sessions = _load_validated_optional(SessionsSchema, "sessions.yaml")
+        self._missions = _load_validated_optional(MissionsSchema, "missions.yaml")
+        self._temporal = _load_validated_optional(TemporalSchema, "temporal.yaml")
+        self._playbooks = _load_validated_optional(PlaybooksSchema, "playbooks.yaml")
 
     @property
     def application(self) -> ApplicationSchema:
@@ -168,6 +174,21 @@ class AppConfig:
     def sessions(self) -> SessionsSchema:
         """Session settings."""
         return self._sessions
+
+    @property
+    def missions(self) -> MissionsSchema:
+        """Mission persistence settings."""
+        return self._missions
+
+    @property
+    def temporal(self) -> TemporalSchema:
+        """Temporal integration settings."""
+        return self._temporal
+
+    @property
+    def playbooks(self) -> PlaybooksSchema:
+        """Playbook and mission settings."""
+        return self._playbooks
 
 
 @lru_cache
