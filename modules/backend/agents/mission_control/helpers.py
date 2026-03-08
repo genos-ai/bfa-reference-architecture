@@ -267,6 +267,7 @@ def _append_validation_feedback(prompt: str, errors: list[str]) -> str:
 
 def _make_agent_executor(session_service: Any, event_bus: Any | None) -> Any:
     """Create the execute_agent_fn closure for the dispatch loop."""
+    from modules.backend.agents.mission_control.cost import compute_cost_usd
 
     async def execute_agent(
         agent_name: str,
@@ -274,7 +275,11 @@ def _make_agent_executor(session_service: Any, event_bus: Any | None) -> Any:
         inputs: dict,
         usage_limits: UsageLimits,
     ) -> dict:
-        """Execute a single agent through the standard path."""
+        """Execute a single agent through the standard path.
+
+        Calls agent.run() directly (not module.run_agent()) so we can
+        extract usage from the AgentRunResult before it's unwrapped.
+        """
         registry = get_registry()
         agent_config = registry.get(agent_name)
         if agent_config is None:
@@ -285,25 +290,33 @@ def _make_agent_executor(session_service: Any, event_bus: Any | None) -> Any:
         agent = module.create_agent(model)
         deps = _build_agent_deps(agent_name, agent_config)
 
-        result = await module.run_agent(
-            instructions, deps, agent, usage_limits=usage_limits,
+        # Call agent.run() directly to retain usage metadata
+        run_result = await agent.run(
+            instructions, deps=deps, usage_limits=usage_limits,
         )
 
-        # Normalize output to dict with _meta
-        if hasattr(result, "model_dump"):
-            output_dict = result.model_dump()
-        elif isinstance(result, dict):
-            output_dict = result
+        # Extract output
+        output = run_result.output
+        if hasattr(output, "model_dump"):
+            output_dict = output.model_dump()
+        elif isinstance(output, dict):
+            output_dict = output
         else:
-            output_dict = {"result": str(result)}
+            output_dict = {"result": str(output)}
 
-        if "_meta" not in output_dict:
-            output_dict["_meta"] = {
-                "input_tokens": 0,
-                "output_tokens": 0,
-                "thinking_tokens": 0,
-                "cost_usd": 0.0,
-            }
+        # Extract usage from the AgentRunResult
+        usage = run_result.usage()
+        input_tokens = usage.input_tokens or 0
+        output_tokens = usage.output_tokens or 0
+        model_name = _get_model_name(agent_config.model)
+        cost_usd = compute_cost_usd(input_tokens, output_tokens, model_name)
+
+        output_dict["_meta"] = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "thinking_tokens": 0,
+            "cost_usd": cost_usd,
+        }
 
         return output_dict
 

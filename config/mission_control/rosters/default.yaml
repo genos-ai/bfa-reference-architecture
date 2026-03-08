@@ -31,10 +31,12 @@ agents:
         target_path: string
         scan_rules: "list[string]"
       output:
-        findings: "list[object]"
         summary: string
-        severity_counts: object
-        confidence: float
+        total_violations: integer
+        error_count: integer
+        warning_count: integer
+        violations: "list[object]"
+        scanned_files_count: integer
     constraints:
       timeout_seconds: 120
       cost_ceiling_usd: 0.50
@@ -44,25 +46,31 @@ agents:
   - agent_name: system.health.agent
     agent_version: "1.0.0"
     description: >
-      Reports system health status including service availability, resource
-      utilization, and configuration validation. Used as the fallback agent
-      for unroutable requests.
+      Read-only platform health audit: scans logs for errors, validates config
+      files and secrets, checks dependency consistency, verifies project file
+      structure. Reports but does not fix (P13).
     model:
       name: "anthropic:claude-haiku-4-5-20251001"
       temperature: 0.0
-      max_tokens: 2048
+      max_tokens: 4096
     tools:
-      - system.check_health
-      - system.get_config_status
+      - system.scan_log_errors
+      - system.validate_config
+      - system.check_dependencies
+      - system.check_file_structure
+      - system.get_app_info
     interface:
       input:
         query: string
       output:
-        status: string
-        details: object
-        confidence: float
+        summary: string
+        overall_status: string
+        findings: "list[object]"
+        error_count: integer
+        warning_count: integer
+        checks_performed: "list[string]"
     constraints:
-      timeout_seconds: 60
-      cost_ceiling_usd: 0.10
-      retry_budget: 1
+      timeout_seconds: 120
+      cost_ceiling_usd: 0.25
+      retry_budget: 2
       parallelism: safe

@@ -135,55 +135,96 @@ async def get_mission_cost(
 
 
 # =============================================================================
-# Temporal-gated endpoints (Tier 4)
+# Mission execution
 # =============================================================================
 
 
 @router.post(
     "/{mission_id}/execute",
     response_model=ApiResponse,
-    summary="Execute a mission via Temporal workflow",
+    summary="Execute a mission",
 )
 async def execute_mission(
     mission_id: str,
     db: DbSession,
     request_id: RequestId,
-    mission_brief: str = "",
-    roster_name: str = "default",
-    mission_budget_usd: float = 10.0,
 ) -> ApiResponse:
-    """Start mission execution via Temporal workflow."""
+    """Execute a mission. Uses Temporal when enabled, direct dispatch otherwise."""
     from modules.backend.core.config import get_app_config
 
     config = get_app_config()
 
-    if not config.temporal.enabled:
-        return ApiResponse(
-            success=False,
-            data={
-                "error": "temporal_not_enabled",
-                "message": (
-                    "Temporal is not enabled. Use session streaming for "
-                    "direct execution, or enable Temporal for durable execution."
-                ),
-            },
-            metadata={"request_id": request_id},
-        )
+    if config.temporal.enabled:
+        return await _execute_via_temporal(mission_id, db, request_id, config)
 
+    return await _execute_direct(mission_id, db, request_id)
+
+
+async def _execute_direct(
+    mission_id: str,
+    db: DbSession,
+    request_id: RequestId,
+) -> ApiResponse:
+    """Direct mission execution via handle_mission()."""
+    from modules.backend.agents.mission_control.dispatch_adapter import (
+        MissionControlDispatchAdapter,
+    )
+    from modules.backend.services.mission import MissionService
+    from modules.backend.services.session import SessionService
+
+    session_service = SessionService(db)
+    adapter = MissionControlDispatchAdapter(
+        session_service=session_service,
+        db_session=db,
+    )
+    service = MissionService(
+        session=db,
+        mission_control_dispatch=adapter,
+        session_service=session_service,
+    )
+
+    mission = await service.execute_mission(mission_id)
+
+    from modules.backend.schemas.mission import MissionResponse
+    response = MissionResponse.model_validate(mission)
+    return ApiResponse(
+        success=True,
+        data=response.model_dump(),
+        metadata={"request_id": request_id},
+    )
+
+
+async def _execute_via_temporal(
+    mission_id: str,
+    db: DbSession,
+    request_id: RequestId,
+    config,
+) -> ApiResponse:
+    """Temporal-based mission execution."""
     from modules.backend.temporal.client import get_temporal_client
     from modules.backend.temporal.models import MissionWorkflowInput
     from modules.backend.temporal.workflow import AgentMissionWorkflow
 
-    client = await get_temporal_client()
+    # Need the mission record for brief and roster
+    service = MissionPersistenceService(db)
+    mission_record = await service.get_mission(mission_id)
+    brief = ""
+    roster = "default"
+    budget = 10.0
+    if mission_record:
+        brief = mission_record.objective_statement or ""
+        roster = mission_record.roster_name or "default"
+        budget = mission_record.total_cost_usd or 10.0
 
+    client = await get_temporal_client()
     handle = await client.start_workflow(
         AgentMissionWorkflow.run,
         MissionWorkflowInput(
             mission_id=mission_id,
             session_id=mission_id,
-            mission_brief=mission_brief,
-            roster_name=roster_name,
-            mission_budget_usd=mission_budget_usd,
+            mission_brief=brief,
+            roster_name=roster,
+            mission_budget_usd=budget,
         ),
         id=f"mission-{mission_id}",
         task_queue=config.temporal.task_queue,

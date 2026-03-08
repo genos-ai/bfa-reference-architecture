@@ -23,8 +23,8 @@
 
 host: "localhost"
 port: 5432
-name: "bff_app"
-user: "postgres"
+name: "tachikoma"
+user: "tachikoma"
 
 pool_size: 5
 max_overflow: 10

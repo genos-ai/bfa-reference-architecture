@@ -20,7 +20,7 @@
 
 agent_name: system.health.agent
 agent_type: vertical
-description: "Checks system health and provides diagnostic advice"
+description: "Read-only platform health audit: logs, config, dependencies, file structure (P13)"
 enabled: true
 model: anthropic:claude-haiku-4-5-20251001
 max_input_length: 1000
@@ -35,12 +35,24 @@ keywords:
   - ping
   - diagnostic
   - system check
+  - log errors
+  - config validation
+  - dependencies
 tools:
-  - system.check_system_health
+  - system.scan_log_errors
+  - system.validate_config
+  - system.check_dependencies
+  - system.check_file_structure
   - system.get_app_info
 
 scope:
   read:
     - "logs/"
     - "config/"
+    - "modules/"
+    - "tests/"
+    - "requirements.txt"
+    - "cli.py"
+    - ".project_root"
+    - "AGENTS.md"
   write: []

@@ -29,6 +29,7 @@ class TaskStatus(StrEnum):
     SUCCESS = "success"
     FAILED = "failed"
     TIMEOUT = "timeout"
+    SKIPPED = "skipped"
 
 
 class TaskTokenUsage(BaseModel):

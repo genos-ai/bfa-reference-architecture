@@ -31,9 +31,21 @@ class QaAuditResult(BaseModel):
     scanned_files_count: int
 
 
+class HealthFinding(BaseModel):
+    """A single issue found during health check."""
+
+    category: str          # log_errors, config, dependencies, file_structure
+    severity: str          # error, warning, info
+    message: str
+    details: str | None = None
+
+
 class HealthCheckResult(BaseModel):
-    """Structured output from the system health agent."""
+    """Structured output from the system health agent (read-only)."""
 
     summary: str
-    components: dict[str, str]
-    advice: str | None = None
+    overall_status: str    # healthy, degraded, unhealthy
+    findings: list[HealthFinding]
+    error_count: int
+    warning_count: int
+    checks_performed: list[str]

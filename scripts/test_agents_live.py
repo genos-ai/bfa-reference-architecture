@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Live Agent Test — exercises QA, Planning, and Verification agents against the real codebase.
+Live Agent Test — exercises agents and the full dispatch pipeline against the real codebase.
 
 Calls real LLM APIs (Anthropic). No database, no Redis, no Docker required.
 Uses the same wiring that Mission Control uses — config, deps, prompts, tools.
@@ -8,8 +8,10 @@ Uses the same wiring that Mission Control uses — config, deps, prompts, tools.
 Usage:
     python scripts/test_agents_live.py --verbose
     python scripts/test_agents_live.py --agent qa
+    python scripts/test_agents_live.py --agent health
     python scripts/test_agents_live.py --agent planning
     python scripts/test_agents_live.py --agent verification
+    python scripts/test_agents_live.py --agent mission
     python scripts/test_agents_live.py --agent all
     python scripts/test_agents_live.py --debug
 """
@@ -82,6 +84,62 @@ async def run_qa_agent() -> dict:
             "errors": result.error_count,
             "warnings": result.warning_count,
             "files_scanned": result.scanned_files_count,
+        },
+    )
+
+    return result_dict
+
+
+# ---------------------------------------------------------------------------
+# Health Agent — read-only platform health audit
+# ---------------------------------------------------------------------------
+
+async def run_health_agent() -> dict:
+    """Run the Health agent against the real codebase. Returns HealthCheckResult dict."""
+    from pydantic_ai import UsageLimits
+
+    from modules.backend.agents.deps.base import FileScope, HealthAgentDeps
+    from modules.backend.agents.mission_control.helpers import _build_model
+    from modules.backend.agents.mission_control.registry import get_registry
+    from modules.backend.agents.vertical.system.health.agent import create_agent, run_agent
+    from modules.backend.core.config import get_app_config
+
+    logger.info("=== Health Agent: starting platform health audit ===")
+
+    registry = get_registry()
+    health_config = registry.get("system.health.agent")
+
+    scope = FileScope(
+        read_paths=health_config.scope.read,
+        write_paths=health_config.scope.write,
+    )
+
+    deps = HealthAgentDeps(
+        project_root=find_project_root(),
+        scope=scope,
+        config=health_config,
+        app_config=get_app_config(),
+    )
+
+    model = _build_model(health_config.model)
+    agent = create_agent(model)
+
+    result = await run_agent(
+        user_message="Run a full platform health audit. Check logs, config, dependencies, and file structure.",
+        deps=deps,
+        agent=agent,
+        usage_limits=UsageLimits(request_limit=15),
+    )
+
+    result_dict = result.model_dump()
+
+    logger.info(
+        "=== Health Agent: audit complete ===",
+        extra={
+            "overall_status": result.overall_status,
+            "error_count": result.error_count,
+            "warning_count": result.warning_count,
+            "checks": result.checks_performed,
         },
     )
 
@@ -304,6 +362,150 @@ def print_verification_results(result: dict) -> None:
             click.echo(f"  → {rec}")
 
 
+def print_health_results(result: dict) -> None:
+    """Print Health Agent results in a readable format."""
+    click.echo(click.style("\n" + "=" * 70, fg="cyan"))
+    click.echo(click.style("  HEALTH AUDIT RESULTS", fg="cyan", bold=True))
+    click.echo(click.style("=" * 70, fg="cyan"))
+
+    status = result["overall_status"]
+    status_color = {"healthy": "green", "degraded": "yellow", "unhealthy": "red"}.get(
+        status, "white"
+    )
+
+    click.echo(f"\nSummary: {result['summary']}")
+    click.echo(f"Status: {click.style(status.upper(), fg=status_color, bold=True)}")
+    click.echo(
+        f"Issues: {result['error_count']} errors, {result['warning_count']} warnings"
+    )
+    click.echo(f"Checks performed: {', '.join(result['checks_performed'])}")
+
+    if result["findings"]:
+        click.echo(click.style("\nFindings:", bold=True))
+        for f in result["findings"]:
+            severity_color = {
+                "error": "red", "warning": "yellow", "info": "blue",
+            }.get(f["severity"], "white")
+            click.echo(
+                f"  {click.style(f['severity'].upper(), fg=severity_color):>12s}  "
+                f"[{f['category']}] {f['message']}"
+            )
+            if f.get("details"):
+                click.echo(f"{'':>14s}{f['details']}")
+
+
+# ---------------------------------------------------------------------------
+# Full Mission — end-to-end dispatch pipeline
+# ---------------------------------------------------------------------------
+
+SELF_AUDIT_MISSION_BRIEF = (
+    "Run a full platform self-audit of the BFA reference architecture. "
+    "This is a read-only audit — no files should be modified (P13). "
+    "The audit should cover two areas:\n\n"
+    "1. **Code compliance**: Scan all Python files under modules/ and config/ "
+    "for violations of project rules: no hardcoded values, absolute imports only, "
+    "centralized logging via get_logger(), UTC datetimes via utc_now(), "
+    "and files must not exceed 1000 lines.\n\n"
+    "2. **Platform health**: Check log files for errors and warnings, "
+    "validate config files and secrets, check dependency consistency, "
+    "and verify project file structure.\n\n"
+    "Produce structured reports from each check."
+)
+
+
+async def run_mission() -> dict:
+    """Run the full dispatch pipeline: Planning → Validate → Dispatch → Verify."""
+    from modules.backend.agents.mission_control.mission_control import handle_mission
+
+    logger.info("=== Mission: starting full dispatch pipeline ===")
+
+    mission_id = "live-test-self-audit"
+
+    outcome = await handle_mission(
+        mission_id=mission_id,
+        mission_brief=SELF_AUDIT_MISSION_BRIEF,
+        session_service=None,
+        event_bus=None,
+        roster_name="default",
+        mission_budget_usd=10.0,
+    )
+
+    outcome_dict = outcome.model_dump()
+
+    logger.info(
+        "=== Mission: dispatch complete ===",
+        extra={
+            "status": outcome.status,
+            "total_cost_usd": outcome.total_cost_usd,
+            "total_duration_seconds": outcome.total_duration_seconds,
+            "task_count": len(outcome.task_results),
+        },
+    )
+
+    return outcome_dict
+
+
+def print_mission_results(result: dict) -> None:
+    """Print MissionOutcome in a readable format."""
+    click.echo(click.style("\n" + "=" * 70, fg="magenta"))
+    click.echo(click.style("  MISSION OUTCOME", fg="magenta", bold=True))
+    click.echo(click.style("=" * 70, fg="magenta"))
+
+    status = result["status"]
+    status_color = {
+        "success": "green", "partial": "yellow", "failed": "red",
+    }.get(status, "white")
+
+    click.echo(f"\nMission ID: {result['mission_id']}")
+    click.echo(f"Status: {click.style(status.upper(), fg=status_color, bold=True)}")
+    click.echo(f"Duration: {result['total_duration_seconds']:.1f}s")
+    click.echo(f"Total cost: ${result['total_cost_usd']:.4f}")
+
+    tokens = result.get("total_tokens", {})
+    click.echo(
+        f"Tokens: {tokens.get('input', 0)} in / "
+        f"{tokens.get('output', 0)} out / "
+        f"{tokens.get('thinking', 0)} thinking"
+    )
+
+    if result.get("task_results"):
+        click.echo(click.style("\nTask Results:", bold=True))
+        for tr in result["task_results"]:
+            task_status = tr["status"]
+            task_color = {
+                "success": "green", "failed": "red", "timeout": "yellow",
+            }.get(task_status, "white")
+
+            click.echo(
+                f"\n  {click.style(task_status.upper(), fg=task_color):>12s}  "
+                f"{tr['task_id']} ({tr['agent_name']})"
+            )
+            click.echo(f"{'':>14s}Duration: {tr['duration_seconds']:.1f}s | Cost: ${tr['cost_usd']:.4f}")
+
+            # Verification outcome
+            vo = tr.get("verification_outcome", {})
+            tier_statuses = []
+            for tier_name in ("tier_1", "tier_2", "tier_3"):
+                tier = vo.get(tier_name, {})
+                ts = tier.get("status", "skipped")
+                tier_statuses.append(f"T{tier_name[-1]}:{ts}")
+            click.echo(f"{'':>14s}Verification: {' | '.join(tier_statuses)}")
+
+            # Retry history
+            if tr.get("retry_history"):
+                click.echo(f"{'':>14s}Retries: {tr['retry_count']}")
+                for rh in tr["retry_history"]:
+                    click.echo(
+                        f"{'':>16s}Attempt {rh['attempt']}: "
+                        f"tier {rh['failure_tier']} — {rh['failure_reason'][:80]}"
+                    )
+
+    if result.get("planning_trace_reference"):
+        click.echo(click.style("\nPlanning trace captured (truncated):", dim=True))
+        trace = result["planning_trace_reference"]
+        click.echo(f"  {trace[:400]}..." if len(trace) > 400 else f"  {trace}")
+
+
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
@@ -313,7 +515,7 @@ def print_verification_results(result: dict) -> None:
 @click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
 @click.option(
     "--agent", "-a",
-    type=click.Choice(["qa", "planning", "verification", "all"]),
+    type=click.Choice(["qa", "health", "planning", "verification", "mission", "all"]),
     default="all",
     help="Which agent(s) to run.",
 )
@@ -333,6 +535,10 @@ def main(verbose: bool, debug: bool, agent: str) -> None:
             qa_output = await run_qa_agent()
             print_qa_results(qa_output)
 
+        if agent in ("health", "all"):
+            health_output = await run_health_agent()
+            print_health_results(health_output)
+
         if agent in ("planning", "all"):
             planning_output = await run_planning_agent()
             print_planning_results(planning_output)
@@ -345,6 +551,10 @@ def main(verbose: bool, debug: bool, agent: str) -> None:
 
             verification_output = await run_verification_agent(qa_output)
             print_verification_results(verification_output)
+
+        if agent == "mission":
+            mission_output = await run_mission()
+            print_mission_results(mission_output)
 
     asyncio.run(_run())
 

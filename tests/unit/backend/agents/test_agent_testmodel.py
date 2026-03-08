@@ -109,8 +109,11 @@ class TestHealthAgentWithTestModel:
 
         assert isinstance(result.output, HealthCheckResult)
         assert hasattr(result.output, "summary")
-        assert hasattr(result.output, "components")
-        assert hasattr(result.output, "advice")
+        assert hasattr(result.output, "overall_status")
+        assert hasattr(result.output, "findings")
+        assert hasattr(result.output, "error_count")
+        assert hasattr(result.output, "warning_count")
+        assert hasattr(result.output, "checks_performed")
 
     @pytest.mark.asyncio
     async def test_usage_is_tracked(self, health_deps):

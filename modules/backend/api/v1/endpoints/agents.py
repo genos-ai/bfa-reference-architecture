@@ -3,6 +3,7 @@ Agent Endpoints.
 
 REST API for agent interaction: chat, streaming, and registry listing.
 All chat goes through sessions. Auto-creates ephemeral session when none provided.
+Multi-agent missions go through the missions API, not here.
 """
 
 from pydantic import BaseModel, Field
@@ -58,7 +59,7 @@ class AgentInfo(BaseModel):
     "/chat",
     response_model=ApiResponse[ChatResponse],
     summary="Chat with an agent",
-    description="Send a message to mission control. Auto-creates a session if none provided.",
+    description="Send a message to an agent via single-agent routing. Auto-creates a session if none provided.",
 )
 async def agent_chat(
     data: ChatRequest,

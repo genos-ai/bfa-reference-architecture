@@ -7,13 +7,19 @@ from modules.backend.models.mission_record import (
     TaskAttempt,
     TaskExecution,
 )
+from modules.backend.models.note import Note
+from modules.backend.models.session import Session, SessionChannel, SessionMessage
 
 __all__ = [
     "Base",
     "Mission",
     "MissionDecision",
     "MissionRecord",
+    "Note",
     "PlaybookRun",
+    "Session",
+    "SessionChannel",
+    "SessionMessage",
     "TaskAttempt",
     "TaskExecution",
 ]

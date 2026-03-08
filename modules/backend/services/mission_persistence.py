@@ -245,6 +245,10 @@ class MissionPersistenceService(BaseService):
         """Get a mission record with all details loaded."""
         return await self._repo.get_with_details(mission_id)
 
+    async def get_task_executions(self, mission_id: str) -> list:
+        """Get task executions for a mission."""
+        return await self._repo.get_task_executions(mission_id)
+
     async def list_missions(
         self,
         status: str | None = None,

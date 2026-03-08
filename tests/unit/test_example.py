@@ -56,7 +56,7 @@ class TestMainCLI:
         result = runner.invoke(main, ["--help"])
 
         assert result.exit_code == 0
-        assert "BFF Application CLI" in result.output
+        assert "Tachikoma Platform CLI" in result.output
         assert "--service" in result.output
         assert "--verbose" in result.output
         assert "--debug" in result.output

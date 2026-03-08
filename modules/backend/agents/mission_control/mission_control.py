@@ -104,6 +104,7 @@ async def handle(
                 mission_brief=mission_brief,
                 session_service=session_service,
                 event_bus=event_bus,
+                session_id=session_id,
             )
             yield AgentResponseCompleteEvent(
                 session_id=sid,
@@ -374,6 +375,7 @@ async def handle_mission(
     roster_name: str = "default",
     mission_budget_usd: float = 10.0,
     upstream_context: dict | None = None,
+    session_id: str | None = None,
 ) -> MissionOutcome:
     """Dispatch entry point for complex multi-agent missions.
 
@@ -463,7 +465,7 @@ async def handle_mission(
     if hasattr(session_service, "_session") and session_service._session:
         await persist_mission_results(
             outcome,
-            session_id=mission_id,
+            session_id=session_id or mission_id,
             roster_name=roster_name,
             task_plan_json=plan.model_dump(),
             thinking_trace=thinking_trace,
