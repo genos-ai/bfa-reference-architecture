@@ -11,6 +11,7 @@ All public functions are async. CLI handlers are already async
 """
 
 import json as json_mod
+import re
 from typing import Any
 
 import click
@@ -110,6 +111,49 @@ def _fallback_narrative(data: dict) -> str:
         lines.append(f"    - {finding}")
 
     return "\n".join(lines)
+
+
+# =============================================================================
+# Narrative colorization — keyword-driven, not hardcoded
+# =============================================================================
+
+# Maps keyword patterns to Rich markup styles.
+# Each key is a regex pattern matched case-insensitively against
+# standalone heading lines (short lines with no leading digits).
+# Add new entries here to support additional priority levels.
+_HEADING_STYLES: list[tuple[str, str]] = [
+    (r"critical|error|failure", "bold red"),
+    (r"warning|caution|degraded", "bold yellow"),
+    (r"info|note|passed|success", "dim"),
+]
+
+
+def colorize_narrative(text: str) -> str:
+    """Apply Rich markup to priority headings in a narrative.
+
+    Detects standalone heading lines (short, no leading numbers) and
+    applies styles based on keyword matching. This is data-driven —
+    new priority levels only require adding to _HEADING_STYLES.
+    """
+    lines = text.split("\n")
+    result = []
+
+    for line in lines:
+        stripped = line.strip()
+        # A heading line: short, not a numbered item, not empty
+        if stripped and len(stripped) <= 40 and not re.match(r"^\d+\.", stripped):
+            for pattern, style in _HEADING_STYLES:
+                if re.search(pattern, stripped, re.IGNORECASE):
+                    line = re.sub(
+                        re.escape(stripped),
+                        f"[{style}]{stripped}[/{style}]",
+                        line,
+                        count=1,
+                    )
+                    break
+        result.append(line)
+
+    return "\n".join(result)
 
 
 # =============================================================================

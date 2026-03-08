@@ -299,13 +299,9 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
     console.print(Panel(header, border_style=status_color))
 
     # Generate AI narrative summary
-    from modules.backend.cli.report import _playbook_run_to_dict, _generate_narrative
+    from modules.backend.cli.report import _playbook_run_to_dict, _generate_narrative, colorize_narrative
     narrative = await _generate_narrative(_playbook_run_to_dict(run, missions))
-    # Post-process: colorize priority headings if the model didn't use Rich markup
-    import re
-    narrative = re.sub(r'(?m)^(\s*)(Critical)\s*$', r'\1[bold red]\2[/bold red]', narrative)
-    narrative = re.sub(r'(?m)^(\s*)(Warnings?)\s*$', r'\1[bold yellow]\2[/bold yellow]', narrative)
-    narrative = re.sub(r'(?m)^(\s*)(Info)\s*$', r'\1[dim]\2[/dim]', narrative)
+    narrative = colorize_narrative(narrative)
     console.print(Panel(narrative.strip(), title="Summary", border_style="dim"))
 
 
