@@ -427,13 +427,15 @@ def mission_list(ctx):
 
 @mission.command("detail")
 @click.argument("mission_id")
+@click.option("-o", "--output", "output_format", default="detail",
+              type=click.Choice(["summary", "detail", "json"]), help="Output depth.")
 @click.pass_obj
-def mission_detail(ctx, mission_id):
+def mission_detail(ctx, mission_id, output_format):
     """Show mission detail with task executions."""
     from modules.backend.cli.mission import run_mission
     run_mission(ctx.logger, action="detail", objective=None, mission_id=mission_id,
                 roster="default", budget=None, triggered_by="user:cli",
-                output_format="summary")
+                output_format=output_format)
 
 
 @mission.command("cost")

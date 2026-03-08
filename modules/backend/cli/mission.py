@@ -6,6 +6,7 @@ All operations go through proper service layers with real DB persistence.
 """
 
 import asyncio
+import enum
 import sys
 
 import click
@@ -13,6 +14,11 @@ import click
 from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class _AbortMission(Exception):
+    """Raised by async actions to signal a clean exit (output already printed)."""
+    pass
 
 
 def run_mission(
@@ -57,6 +63,9 @@ def run_mission(
             triggered_by=triggered_by,
             output_format=output_format,
         ))
+    except _AbortMission:
+        # Output already printed by the async action — just exit.
+        sys.exit(1)
     except Exception as e:
         click.echo(click.style(f"Error: {e}", fg="red"), err=True)
         cli_logger.error("Mission action failed", extra={"action": action, "error": str(e)})
@@ -72,7 +81,7 @@ async def _action_create(cli_logger, *, objective, mission_id, roster, budget, t
     """Create a mission (PENDING state)."""
     if not objective:
         click.echo(click.style("Error: --objective is required for create.", fg="red"), err=True)
-        sys.exit(1)
+        raise _AbortMission("objective required")
 
     from modules.backend.core.database import get_async_session
     from modules.backend.services.mission import MissionService
@@ -102,7 +111,7 @@ async def _action_execute(cli_logger, *, objective, mission_id, roster, budget, 
     """Execute an existing mission (PENDING → RUNNING → COMPLETED)."""
     if not mission_id:
         click.echo(click.style("Error: --mission-id is required for execute.", fg="red"), err=True)
-        sys.exit(1)
+        raise _AbortMission("mission-id required")
 
     await _preflight_gate(roster)
 
@@ -139,7 +148,7 @@ async def _action_run(cli_logger, *, objective, mission_id, roster, budget, trig
     """Create + execute in one step (convenience)."""
     if not objective:
         click.echo(click.style("Error: --objective is required for run.", fg="red"), err=True)
-        sys.exit(1)
+        raise _AbortMission("objective required")
 
     await _preflight_gate(roster)
 
@@ -183,6 +192,9 @@ async def _action_run(cli_logger, *, objective, mission_id, roster, budget, trig
 
 async def _action_list(cli_logger, *, objective, mission_id, roster, budget, triggered_by, output_format):
     """List missions."""
+    from rich.console import Console
+    from rich.table import Table
+
     from modules.backend.core.database import get_async_session
     from modules.backend.services.mission import MissionService
 
@@ -194,64 +206,180 @@ async def _action_list(cli_logger, *, objective, mission_id, roster, budget, tri
         click.echo("No missions found.")
         return
 
-    click.echo(f"Missions ({total} total):")
-    click.echo(f"{'ID':<38} {'Status':<12} {'Cost':>8}  {'Trigger':<16} Objective")
-    click.echo("-" * 110)
+    console = Console(width=140)
+    table = Table(title=f"Missions ({total} total)", show_lines=False, expand=True)
+    table.add_column("Date/Time", style="dim", no_wrap=True, width=16)
+    table.add_column("ID", style="cyan", no_wrap=True, width=36)
+    table.add_column("Status", no_wrap=True, width=10)
+    table.add_column("Cost", justify="right", no_wrap=True, width=8)
+    table.add_column("Trigger", style="dim", no_wrap=True, width=12)
+    table.add_column("Objective", no_wrap=True, ratio=1)
 
     for m in missions:
-        obj_preview = m.objective[:40] + "..." if len(m.objective) > 40 else m.objective
+        obj_preview = m.objective[:60] + "..." if len(m.objective) > 60 else m.objective
         cost_str = f"${m.total_cost_usd:.4f}"
-        click.echo(f"{m.id:<38} {m.status.value:<12} {cost_str:>8}  {m.triggered_by:<16} {obj_preview}")
+        status_str = m.status.value
+        if status_str == "completed":
+            status_str = f"[green]{status_str}[/green]"
+        elif status_str == "failed":
+            status_str = f"[red]{status_str}[/red]"
+        elif status_str in ("running", "pending"):
+            status_str = f"[yellow]{status_str}[/yellow]"
+        dt_str = m.created_at.strftime("%Y-%m-%d %H:%M") if m.created_at else "—"
+        table.add_row(dt_str, str(m.id), status_str, cost_str, m.triggered_by, obj_preview)
+
+    console.print(table)
 
 
 async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, triggered_by, output_format):
     """Show mission detail."""
     if not mission_id:
         click.echo(click.style("Error: --mission-id is required for detail.", fg="red"), err=True)
-        sys.exit(1)
+        raise _AbortMission("mission-id required")
+
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
 
     from modules.backend.core.database import get_async_session
-    from modules.backend.services.mission_persistence import MissionPersistenceService
+    from modules.backend.services.mission import MissionService
 
     async with get_async_session() as db:
-        service = MissionPersistenceService(db)
-        record = await service.get_mission(mission_id)
+        service = MissionService(session=db)
+        try:
+            mission = await service.get_mission(mission_id)
+        except Exception:
+            click.echo(click.style(f"Mission '{mission_id}' not found.", fg="red"), err=True)
+            raise _AbortMission("mission not found")
 
-        if not record:
-            click.echo(click.style(f"Mission record '{mission_id}' not found.", fg="red"), err=True)
-            sys.exit(1)
+    console = Console(width=140)
 
-        # Also get task executions
-        executions = await service.get_task_executions(mission_id)
+    # Status with color
+    status = mission.status.value if isinstance(mission.status, enum.Enum) else str(mission.status)
+    status_color = {"completed": "green", "failed": "red", "running": "yellow", "pending": "yellow"}.get(status, "white")
 
-    click.echo(click.style("Mission Record", fg="cyan", bold=True))
-    click.echo(f"  ID:       {record.id}")
-    click.echo(f"  Session:  {record.session_id}")
-    click.echo(f"  Status:   {record.status.value}")
-    click.echo(f"  Roster:   {record.roster_name}")
-    click.echo(f"  Cost:     ${record.total_cost_usd:.4f}")
-    click.echo(f"  Started:  {record.started_at}")
-    click.echo(f"  Finished: {record.completed_at}")
+    # Header info
+    info_lines = [
+        f"[bold]ID:[/bold]        {mission.id}",
+        f"[bold]Status:[/bold]    [{status_color}]{status}[/{status_color}]",
+        f"[bold]Created:[/bold]   {mission.created_at.strftime('%Y-%m-%d %H:%M:%S') if mission.created_at else '—'}",
+        f"[bold]Started:[/bold]   {mission.started_at or '—'}",
+        f"[bold]Finished:[/bold]  {mission.completed_at or '—'}",
+        f"[bold]Roster:[/bold]    {mission.roster_ref}",
+        f"[bold]Cost:[/bold]      ${mission.total_cost_usd:.4f}" + (f"  (ceiling: ${mission.cost_ceiling_usd:.2f})" if mission.cost_ceiling_usd else ""),
+        f"[bold]Trigger:[/bold]   {mission.triggered_by}",
+        f"[bold]Session:[/bold]   {mission.session_id}",
+    ]
+    console.print(Panel("\n".join(info_lines), title="Mission Detail", border_style="cyan"))
 
-    if executions:
-        click.echo()
-        click.echo(click.style("Task Executions:", fg="cyan"))
-        for ex in executions:
-            status_color = "green" if ex.status.value == "COMPLETED" else "red"
-            click.echo(
-                f"  {ex.task_id:<12} "
-                f"{click.style(ex.agent_name, fg='cyan'):<40} "
-                f"{click.style(ex.status.value, fg=status_color):<14} "
-                f"${ex.cost_usd:.4f}  "
-                f"{ex.duration_seconds:.1f}s"
-            )
+    # Objective
+    console.print(Panel(mission.objective, title="Objective", border_style="dim"))
+
+    # Result summary
+    if mission.result_summary:
+        console.print(Panel(mission.result_summary, title="Result Summary", border_style="green"))
+
+    # Mission outcome (task-level breakdown)
+    outcome = mission.mission_outcome
+    if outcome and isinstance(outcome, dict):
+        tasks = outcome.get("task_results") or outcome.get("task_outcomes") or []
+        if tasks:
+            table = Table(title="Task Outcomes", expand=True, show_lines=True)
+            table.add_column("Task", style="cyan", no_wrap=True, width=12)
+            table.add_column("Agent", no_wrap=True, width=28)
+            table.add_column("Status", no_wrap=True, width=10)
+            table.add_column("Cost", justify="right", no_wrap=True, width=8)
+            table.add_column("Duration", justify="right", no_wrap=True, width=10)
+            table.add_column("Summary", ratio=1)
+
+            for t in tasks:
+                t_status = str(t.get("status", "—"))
+                s_color = {"completed": "green", "failed": "red"}.get(t_status.lower(), "white")
+                cost = f"${t['cost_usd']:.4f}" if "cost_usd" in t else "—"
+                dur = f"{t['duration_seconds']:.1f}s" if "duration_seconds" in t else "—"
+                out_ref = t.get("output_reference") or {}
+                summary = out_ref.get("summary", "") if isinstance(out_ref, dict) else str(out_ref)
+                if not summary:
+                    summary = t.get("summary", t.get("result_summary", ""))
+                if len(summary) > 120:
+                    summary = summary[:120] + "..."
+                table.add_row(
+                    t.get("task_id", "—"),
+                    t.get("agent_name", "—"),
+                    f"[{s_color}]{t_status}[/{s_color}]",
+                    cost,
+                    dur,
+                    summary,
+                )
+            console.print(table)
+
+    # Full task outputs (when -o detail or -o json)
+    if output_format in ("detail", "json") and outcome and isinstance(outcome, dict):
+        tasks = outcome.get("task_results") or outcome.get("task_outcomes") or []
+        for t in tasks:
+            task_id = t.get("task_id", "—")
+            agent = t.get("agent_name", "—")
+            out_ref = t.get("output_reference") or {}
+            if not isinstance(out_ref, dict):
+                out_ref = {"raw": str(out_ref)}
+
+            if output_format == "json":
+                import json
+                console.print(Panel(
+                    json.dumps(out_ref, indent=2, default=str),
+                    title=f"{task_id} / {agent}",
+                    border_style="cyan",
+                ))
+            else:
+                # Render structured findings nicely
+                lines: list[str] = []
+                summary = out_ref.get("summary", "")
+                if summary:
+                    lines.append(f"[bold]Summary:[/bold] {summary}")
+                    lines.append("")
+
+                findings = out_ref.get("findings") or out_ref.get("violations") or []
+                for f in findings:
+                    if isinstance(f, dict):
+                        sev = f.get("severity", f.get("principle", ""))
+                        file_ = f.get("file", "")
+                        line_ = f.get("line", "")
+                        msg = f.get("message", f.get("details", ""))
+                        loc = f"[dim]{file_}:{line_}[/dim]" if file_ else ""
+                        sev_color = {"error": "red", "warning": "yellow", "info": "dim"}.get(sev, "white")
+                        lines.append(f"  [{sev_color}]{sev}[/{sev_color}]  {loc}  {msg}")
+                        rec = f.get("recommendation", "")
+                        if rec:
+                            lines.append(f"         [dim]{rec}[/dim]")
+                    else:
+                        lines.append(f"  {f}")
+
+                # Stats line
+                stats = []
+                for key in ("total_findings", "total_violations", "error_count", "warning_count",
+                            "scanned_files_count", "files_reviewed", "overall_status", "checks_performed"):
+                    val = out_ref.get(key)
+                    if val is not None:
+                        label = key.replace("_", " ")
+                        stats.append(f"{label}: {val}")
+                if stats:
+                    lines.append("")
+                    lines.append("[dim]" + " | ".join(stats) + "[/dim]")
+
+                content = "\n".join(lines) if lines else str(out_ref)
+                console.print(Panel(content, title=f"{task_id} / {agent}", border_style="cyan"))
+
+    # Error data
+    if mission.error_data:
+        console.print(Panel(str(mission.error_data), title="Error", border_style="red"))
 
 
 async def _action_cost(cli_logger, *, objective, mission_id, roster, budget, triggered_by, output_format):
     """Show mission cost breakdown."""
     if not mission_id:
         click.echo(click.style("Error: --mission-id is required for cost.", fg="red"), err=True)
-        sys.exit(1)
+        raise _AbortMission("mission-id required")
 
     from modules.backend.core.database import get_async_session
     from modules.backend.services.mission_persistence import MissionPersistenceService
@@ -303,6 +431,6 @@ async def _preflight_gate(roster: str) -> None:
         click.echo(click.style(f"  ✗ {check.model_name}: {label}", fg="red"))
     click.echo()
     click.echo(click.style("Aborting — fix credit issues before running.", fg="red"), err=True)
-    sys.exit(1)
+    raise _AbortMission("preflight failed")
 
 
