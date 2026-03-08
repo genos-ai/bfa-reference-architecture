@@ -103,7 +103,7 @@ General-purpose capabilities. Adopt based on project needs. No AI concepts.
 | 25-telegram-bot-integration.md | Building Telegram bot interface |
 | 26-telegram-client-integration.md | Need channel scraping, message history, or autonomous Telegram access |
 | 27-tui-architecture.md | Interactive terminal interface (Textual + Textual Web) for persistent sessions, real-time streaming, dashboards |
-| 28-cli-architecture.md | CLI architecture — Click, `--options` over subcommands, service lifecycle, one-shot operations, output formatting, testing |
+| 28-cli-architecture.md | CLI architecture — Click groups + subcommands, AI-first discoverability, Rich output, service lifecycle, testing |
 
 ### AI-First Platform (40-47)
 
@@ -180,7 +180,7 @@ Definitive technology choices across all docs. When building or modifying code, 
 | Validation / schemas | **Pydantic v2** (request/response schemas, config validation) | 03 |
 | Configuration (secrets) | **Pydantic Settings** (`config/.env` → `get_settings()`) | 03 |
 | Configuration (app) | **YAML files** (`config/settings/*.yaml` → `get_app_config()`) | 03 |
-| CLI | **Click** (`@click.command()` with `--options`, no subcommands) | 28 |
+| CLI | **Click** (groups + subcommands, `tree` for AI discoverability, Rich output) | 28 |
 | Logging | **structlog** (JSON output, structured context binding) | 10 |
 | Code formatting | **black** | 08 |
 | Import sorting | **isort** | 08 |
@@ -237,7 +237,7 @@ Definitive technology choices across all docs. When building or modifying code, 
 | TUI framework | **Textual** (60 FPS, keyboard-first, SSH-compatible) | 27 |
 | TUI in browser | **Textual Web** (same code, WebSocket, zero changes) | 27 |
 | Rich text rendering | **Rich** (Textual dependency) | 27 |
-| CLI framework | **Click** (`--options` only, no subcommands) | 28 |
+| CLI framework | **Click** (groups + subcommands, `tree` command, Rich output) | 28 |
 
 ### Telegram
 

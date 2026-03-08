@@ -611,7 +611,7 @@ export BFF_OUTPUT_FORMAT=json
 export BFF_NON_INTERACTIVE=1
 
 # Now all CLI commands output JSON with no prompts
-python cli.py --service notes --action create --title "Meeting notes"
+python cli.py notes create --title "Meeting notes"
 ```
 
 ### Anti-Patterns

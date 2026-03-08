@@ -1,11 +1,12 @@
 # 28 - CLI Architecture (Optional Module)
 
-*Version: 1.0.0*
+*Version: 2.0.0*
 *Author: Architecture Team*
 *Created: 2026-02-26*
 
 ## Changelog
 
+- 2.0.0 (2026-03-08): Replaced `--options` flat model with Click groups and subcommands; AI-first discoverability (`tree`, zero-side-effect groups); Rich output for tables and panels; consolidated three scripts into one `cli.py`
 - 1.0.0 (2026-02-26): Initial CLI architecture standard; extracted from 22-frontend-architecture.md (v1) and 08-python-coding-standards.md; aligned with actual codebase patterns
 
 ---
@@ -26,62 +27,77 @@ For interactive terminal sessions with real-time streaming, see **27-tui-archite
 
 ## Context
 
-The core architecture mandates that clients are stateless presentation layers (P2) with no business logic (P1). The CLI is the simplest expression of this — a script that accepts options, calls the backend, and displays the result.
+The core architecture mandates that clients are stateless presentation layers (P2) with no business logic (P1). The CLI is the simplest expression of this — a script that accepts commands, calls the backend, and displays the result.
 
-CLI scripts live in the project root (not a separate `cli/` package). Each script is a single `@click.command()` with `--options` for all parameters. No subcommands, no positional arguments, no `@click.group()`. This keeps every script independently executable, grep-friendly, and trivial for AI assistants to understand.
-
-The project has three root entry scripts, each serving a different purpose:
-
-| Script | Purpose | Interaction model |
-|--------|---------|-------------------|
-| `cli.py` | Service lifecycle and admin operations | `--service` + `--action` |
-| `chat.py` | One-shot message to backend agents/services | `--message` + `--agent` |
-| `tui.py` | Launch interactive terminal interface | (no options beyond `--verbose`/`--debug`) |
-
-All three follow identical patterns: Click, `--verbose`/`--debug`, centralized logging, `validate_project_root()`, source binding via structlog.
+The CLI is a single `cli.py` at the project root. It uses Click groups and subcommands to organize functionality. Every group shows help when called bare — no default actions, no side effects during exploration. An AI agent (or human) can fully understand the CLI surface in two calls: `cli.py` → `cli.py tree`.
 
 ---
 
 ## Design Rules
 
-### Options Over Subcommands
+### AI-First Discoverability
 
-All CLI functionality is controlled through `--options`. Never use positional arguments or subcommands.
+The CLI is designed for AI agents as primary consumers. Two principles:
+
+1. **Zero side effects during exploration.** Every group shows help when called bare. No group runs a default action. Calling `cli.py server` shows server subcommands — it does not start the server.
+2. **Full surface in one call.** The `tree` command renders the entire command hierarchy with all arguments, options, and descriptions. An AI can parse this output and understand every available operation.
 
 ```bash
-# Correct: options
-python cli.py --service server --action start --verbose
-python chat.py --message "check health" --agent system.health.agent --raw
+# First call: see top-level groups
+python cli.py
 
-# Wrong: subcommands
-python cli.py server start
-python chat.py send "check health"
-
-# Wrong: positional arguments
-python cli.py server
-python chat.py "check health"
+# Second call: see everything
+python cli.py tree
 ```
 
-**Rationale**: Options are self-documenting (`--help` shows all of them), order-independent, and unambiguous. Subcommands create nested help trees that are harder for both humans and AI to navigate. Options work consistently with `click.Choice` for constrained values.
+### Groups and Subcommands
 
-### Root-Level Entry Scripts
+Organize related operations into Click groups. Use subcommands for actions, arguments for targets, options for modifiers.
 
-CLI scripts live in the project root directory, not in a package. Each is an independently executable Python file with `if __name__ == "__main__"`.
+```bash
+# Correct: groups with subcommands
+python cli.py server start --port 8099 --reload
+python cli.py mission run "audit the platform" --budget 2.00
+python cli.py db query missions --limit 5
+python cli.py migrate upgrade head
+
+# Correct: simple commands (no subcommand needed)
+python cli.py health
+python cli.py credits
+python cli.py agent "run a health check"
+```
+
+**Rationale**: Groups create a navigable hierarchy. Each group's `--help` shows only its subcommands. Each subcommand's `--help` shows only its options. An AI agent can drill into any branch without noise from unrelated commands.
+
+### Show Help on Missing Args
+
+Use a custom group class that shows full help instead of terse "Missing argument" errors when required arguments are omitted:
+
+```python
+class ShowHelpOnMissingArgs(click.Group):
+    def resolve_command(self, ctx, args):
+        cmd_name, cmd, remaining = super().resolve_command(ctx, args)
+        if cmd is not None and not isinstance(cmd, click.Group):
+            required_args = [p for p in cmd.params if isinstance(p, click.Argument) and p.required]
+            if required_args and len(remaining) < len(required_args):
+                with click.Context(cmd, info_name=cmd_name, parent=ctx) as sub_ctx:
+                    click.echo(cmd.get_help(sub_ctx))
+                ctx.exit(0)
+        return cmd_name, cmd, remaining
+```
+
+### Root-Level Entry Point
+
+The CLI is a single `cli.py` at the project root. It is independently executable with `if __name__ == "__main__"`.
 
 ```
 project_root/
-├── cli.py          # Service lifecycle, admin
-├── chat.py         # One-shot messaging
-├── tui.py          # Interactive terminal
+├── cli.py          # All CLI operations
 ├── .project_root   # Marker file
 └── modules/        # Backend code (not entry points)
 ```
 
-Scripts in `scripts/` are exceptions — utility scripts that are not part of the regular CLI surface.
-
-### One Command Per Script
-
-Each script is a single `@click.command()`, not a `@click.group()`. If a script grows too many options, split it into a new script rather than adding subcommands.
+Scripts in `scripts/` are utility scripts outside the regular CLI surface.
 
 ---
 
@@ -89,9 +105,9 @@ Each script is a single `@click.command()`, not a `@click.group()`. If a script 
 
 | Concern | Solution |
 |---------|----------|
-| Framework | Click |
-| HTTP Client | httpx (async) |
-| Output formatting | Click styling (`click.style`, `click.echo`) + Rich (for complex output) |
+| Framework | Click (groups + subcommands) |
+| Output (tables, panels) | Rich |
+| Output (simple text) | Click styling (`click.style`, `click.echo`) |
 | Configuration | YAML via `get_app_config()` + secrets via `get_settings()` |
 | Logging | structlog via `setup_logging()` + `get_logger()` |
 | Project root | `validate_project_root()` from `modules.backend.core.config` |
@@ -100,7 +116,7 @@ Each script is a single `@click.command()`, not a `@click.group()`. If a script 
 
 ## Required Options
 
-Every root-level CLI script must include these options:
+Global options live on the root group only. They are not repeated on subcommands.
 
 | Option | Short | Purpose |
 |--------|-------|---------|
@@ -125,96 +141,84 @@ setup_logging(level=log_level, format_type="console")
 
 ## Implementation Pattern
 
-### Standard Script Template
+### Root Group
 
-Every CLI script follows this structure:
+The root group creates a shared context, shows help when called bare, and propagates `--verbose`/`--debug` to all subcommands:
 
 ```python
-#!/usr/bin/env python3
-"""
-Script description.
+class CliContext:
+    def __init__(self, verbose: bool, debug: bool):
+        # ... logging setup ...
+        self.logger = get_logger("cli")
 
-Usage:
-    python script.py --help
-    python script.py --option value --verbose
-"""
-
-import sys
-from pathlib import Path
-
-import click
-import structlog
-
-PROJECT_ROOT = Path(__file__).parent
-sys.path.insert(0, str(PROJECT_ROOT))
-
-from modules.backend.core.config import validate_project_root
-from modules.backend.core.logging import get_logger, setup_logging
-
-
-@click.command()
-@click.option("--verbose", "-v", is_flag=True, help="Enable verbose output (INFO level logging).")
-@click.option("--debug", "-d", is_flag=True, help="Enable debug output (DEBUG level logging).")
-def main(verbose: bool, debug: bool) -> None:
-    """Script description shown in --help."""
-    validate_project_root()
-
-    if debug:
-        log_level = "DEBUG"
-    elif verbose:
-        log_level = "INFO"
-    else:
-        log_level = "WARNING"
-
-    setup_logging(level=log_level, format_type="console")
-    structlog.contextvars.bind_contextvars(source="cli")
-    logger = get_logger(__name__)
-
-    # Script logic here
-
-
-if __name__ == "__main__":
-    main()
+@click.group(cls=ShowHelpOnMissingArgs, invoke_without_command=True)
+@click.option("--verbose", "-v", is_flag=True, help="Enable INFO-level logging.")
+@click.option("--debug", "-d", is_flag=True, help="Enable DEBUG-level logging.")
+@click.pass_context
+def cli(ctx, verbose: bool, debug: bool):
+    """Platform CLI."""
+    ctx.obj = CliContext(verbose, debug)
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
 ```
 
-### Service Lifecycle Pattern
+### Simple Commands
 
-For scripts that manage long-running services, use `--service` and `--action`:
+Commands that need no subcommands are registered directly on the root group:
 
 ```python
-@click.command()
-@click.option(
-    "--service", "-s",
-    type=click.Choice(["server", "worker", "scheduler"]),
-    default="server",
-    help="Service to manage.",
-)
-@click.option(
-    "--action", "-a",
-    type=click.Choice(["start", "stop", "restart", "status"]),
-    default="start",
-    help="Lifecycle action.",
-)
-@click.option("--verbose", "-v", is_flag=True, help="Enable verbose output.")
-@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
-@click.option("--port", default=None, type=int, help="Override server port.")
-def main(service: str, action: str, verbose: bool, debug: bool, port: int | None) -> None:
-    """Application service manager."""
-    # ...
+@cli.command()
+@click.pass_obj
+def health(ctx):
+    """Run local health checks."""
+    from modules.backend.cli.health import check_health
+    check_health(ctx.logger)
 ```
 
-### One-Shot Operation Pattern
+### Command Groups
 
-For scripts that perform a single operation and exit:
+Related operations are organized into groups. Each group shows help when called bare:
 
 ```python
-@click.command()
-@click.option("--message", "-m", required=True, help="Message to send.")
-@click.option("--raw", is_flag=True, help="Output raw JSON response.")
-@click.option("--verbose", "-v", is_flag=True, help="Enable verbose output.")
-@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
-def main(message: str, raw: bool, verbose: bool, debug: bool) -> None:
-    """Send a message to the backend."""
+@cli.group(cls=ShowHelpOnMissingArgs, invoke_without_command=True)
+@click.pass_context
+def server(ctx):
+    """Manage the API server lifecycle."""
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+@server.command()
+@click.option("--host", default=None, help="Server host.")
+@click.option("--port", default=None, type=int, help="Server port.")
+@click.option("--reload", is_flag=True, help="Enable auto-reload.")
+@click.pass_obj
+def start(ctx, host, port, reload):
+    """Start the API server."""
+    from modules.backend.cli.server import run_server
+    run_server(ctx.logger, host, port, reload)
+```
+
+### Tree Command
+
+The `tree` command renders the full CLI hierarchy for AI discoverability:
+
+```python
+@cli.command("tree")
+def tree_cmd():
+    """Show the full command tree with all options."""
+    click.echo("cli")
+    lines = _format_tree(cli)
+    click.echo("\n".join(lines))
+```
+
+### CLI Handler Modules
+
+Command logic lives in `modules/backend/cli/`. Each handler module exports a function that receives a logger and action-specific parameters. The CLI layer is a thin adapter — no business logic.
+
+```python
+# modules/backend/cli/mission.py
+def run_mission(cli_logger, action, objective, mission_id, roster, budget, triggered_by, output_format):
+    """Dispatch mission CLI actions."""
     # ...
 ```
 
@@ -222,15 +226,30 @@ def main(message: str, raw: bool, verbose: bool, debug: bool) -> None:
 
 ## Output Formatting
 
-### Conventions
+### Rich Tables and Panels
+
+Use Rich for structured output (tables, panels, color-coded status):
+
+```python
+from rich.console import Console
+from rich.table import Table
+
+console = Console(width=140)
+table = Table(title="Missions", expand=True)
+table.add_column("Status", no_wrap=True)
+# ...
+console.print(table)
+```
+
+### Simple Text
+
+Use Click styling for simple messages:
 
 | Output type | Format |
 |------------|--------|
 | Success | `click.style("text", fg="green")` |
 | Error | `click.style("Error: text", fg="red")` to stderr |
 | Warning | `click.style("Warning: text", fg="yellow")` |
-| Data (human) | Tables via Rich or formatted `click.echo` |
-| Data (machine) | JSON via `--raw` flag |
 | Progress | `click.echo` with status updates |
 
 ### Error Output
@@ -242,7 +261,7 @@ click.echo(
     click.style("Error: Backend is not reachable.", fg="red"),
     err=True,
 )
-click.echo("Start it with: python cli.py --service server", err=True)
+click.echo("Start it with: python cli.py server start", err=True)
 sys.exit(1)
 ```
 
@@ -254,6 +273,22 @@ sys.exit(1)
 | 1 | Application error (bad input, backend unreachable, operation failed) |
 | 2 | Usage error (Click handles this automatically for missing required options) |
 
+### Async Exit Handling
+
+Never call `sys.exit()` from inside async code (it causes output duplication with Click). Raise a custom exception and catch it in the synchronous caller:
+
+```python
+class _AbortMission(Exception):
+    """Output already printed — just exit."""
+    pass
+
+def run_mission(...):
+    try:
+        asyncio.run(handler(...))
+    except _AbortMission:
+        sys.exit(1)
+```
+
 ---
 
 ## Configuration
@@ -263,15 +298,6 @@ CLI scripts load configuration from the centralized config system — never from
 - **Secrets**: `config/.env` via `get_settings()`
 - **Application config**: `config/settings/*.yaml` via `get_app_config()`
 - **Server URL/port**: `get_server_base_url()` from config, with `--port` override
-
-```python
-from modules.backend.core.config import get_app_config, get_server_base_url
-
-base_url, timeout = get_server_base_url()
-if port:
-    host = get_app_config().application.server.host
-    base_url = f"http://{host}:{port}"
-```
 
 No hardcoded URLs, ports, timeouts, or fallback defaults.
 
@@ -301,7 +327,7 @@ Handle unreachable backend explicitly — fail fast, suggest the fix:
 ```python
 except httpx.ConnectError:
     click.echo(click.style("Error: Backend is not reachable.", fg="red"), err=True)
-    click.echo("Start it with: python cli.py --service server", err=True)
+    click.echo("Start it with: python cli.py server start", err=True)
     return 1
 ```
 
@@ -336,15 +362,16 @@ def test_cli_help():
         capture_output=True, text=True,
     )
     assert result.returncode == 0
-    assert "--service" in result.stdout
+    assert "server" in result.stdout
     assert "--verbose" in result.stdout
 
-def test_cli_health():
+def test_server_help():
     result = subprocess.run(
-        [sys.executable, "cli.py", "--service", "health", "--verbose"],
+        [sys.executable, "cli.py", "server", "--help"],
         capture_output=True, text=True,
     )
     assert result.returncode == 0
+    assert "start" in result.stdout
 ```
 
 ---
@@ -353,14 +380,17 @@ def test_cli_health():
 
 When adopting this module:
 
-- [ ] Create root-level entry script with `@click.command()` (not `@click.group()`)
-- [ ] Add `--verbose` and `--debug` options with standard logging setup
-- [ ] Add `validate_project_root()` call
-- [ ] Bind structlog source: `structlog.contextvars.bind_contextvars(source="cli")`
+- [ ] Create root-level `cli.py` with `@click.group(cls=ShowHelpOnMissingArgs, invoke_without_command=True)`
+- [ ] Add `--verbose` and `--debug` options on the root group only
+- [ ] Add `validate_project_root()` call in the root group callback
+- [ ] Bind structlog source: `bind_context(source="cli")`
+- [ ] Add `tree` command for full CLI discoverability
+- [ ] Ensure every group shows help when called bare (`invoke_without_command=True`)
+- [ ] Use Rich for tables and structured output
 - [ ] Set `X-Frontend-ID: cli` on all HTTP requests
 - [ ] Load all config from centralized `config/` — no local dotfiles
 - [ ] Handle `httpx.ConnectError` with actionable error messages
-- [ ] Add `--raw` flag if the script outputs structured data
+- [ ] Never call `sys.exit()` from async code — use exception pattern
 - [ ] Write subprocess-based tests (not mocked Click runners)
 - [ ] Add usage examples in the script docstring
 

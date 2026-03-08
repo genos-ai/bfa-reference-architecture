@@ -423,7 +423,7 @@ See **11-testing-standards.md** for the complete test directory structure, fixtu
    ```
 7. Run database migrations:
    ```bash
-   python cli.py --service migrate --migrate-action upgrade
+   python cli.py migrate upgrade
    ```
 8. Start development servers:
    ```bash

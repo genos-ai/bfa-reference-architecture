@@ -321,7 +321,7 @@ connection:
 python -m modules.tui
 
 # Or via CLI
-python cli.py --service tui
+python cli.py tui
 ```
 
 ### Textual Web (Browser)
@@ -465,7 +465,7 @@ When adopting this module:
 - [ ] Configure `X-Frontend-ID: tui` on all API calls
 - [ ] Add `tui` to log source list in `10-observability.md`
 - [ ] Create TUI configuration in `config/settings/tui.yaml`
-- [ ] Add CLI entry point (`--service tui`)
+- [ ] Add CLI entry point (`cli.py tui`)
 - [ ] Write panel unit tests with Textual pilot API
 - [ ] Test WebSocket reconnection behavior
 - [ ] Set up Textual Web for browser access (if needed)

@@ -392,7 +392,7 @@ Summary:
 - **Standard**: Taskiq with Redis
 - **On-demand tasks**: Triggered by code via `.kiq()`
 - **Scheduled tasks**: Cron-based via TaskiqScheduler
-- **CLI**: `python cli.py --service worker` and `--action scheduler`
+- **CLI**: `python cli.py worker` and `python cli.py scheduler`
 
 ---
 

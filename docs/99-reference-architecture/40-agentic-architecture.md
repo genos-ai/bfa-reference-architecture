@@ -945,7 +945,7 @@ The kill switch halts execution immediately:
 
 **API:** `POST /api/v1/agent/cancel` with body `{"scope": "task|plan|all", "id": "uuid"}`
 
-**CLI:** `python cli.py --service agent-cancel --scope plan --id <uuid>`
+**CLI:** `python cli.py agent cancel --scope plan --id <uuid>`
 
 **Behavior:**
 - All running AgentTasks in scope set to `cancelled`

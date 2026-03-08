@@ -468,7 +468,7 @@ For channels where users cannot be pre-configured (public-facing bots), the pair
 1. Unknown user sends a message through any channel
 2. Gateway generates a 6-character alphanumeric code with a configurable TTL
 3. Gateway responds to the user: "Send this code to the admin to get access: `ABC123`"
-4. Admin approves via CLI: `python cli.py --service approve-pairing --code ABC123`
+4. Admin approves via CLI: `python cli.py gateway approve-pairing --code ABC123`
 5. User's channel-specific ID is added to the persistent allowlist
 6. Subsequent messages from this user are processed normally
 
@@ -797,7 +797,7 @@ The daemon is optional — channels with webhook support (Telegram, Slack) do no
 ### Entry Point
 
 ```bash
-python cli.py --service gateway-daemon --verbose
+python cli.py gateway daemon --verbose
 ```
 
 The daemon uses the same configuration (`gateway.yaml`), the same security rules, and the same session model as the embedded gateway. It is a deployment option, not an architectural change.
@@ -953,7 +953,7 @@ async def test_telegram_message_to_agent_response(
 - [ ] Implement gateway-level rate limiting (Redis-backed)
 - [ ] Implement input validation (length, injection patterns)
 - [ ] Write security layer tests (deny, pairing, rate limit, injection)
-- [ ] Add `--action approve-pairing` to CLI
+- [ ] Add `gateway approve-pairing` subcommand to CLI
 
 ### Phase 3: Telegram Adapter
 
@@ -983,7 +983,7 @@ async def test_telegram_message_to_agent_response(
 ### Phase 6: Daemon Mode (Optional)
 
 - [ ] Implement gateway daemon process for persistent-connection channels
-- [ ] Add `--action gateway-daemon` to CLI
+- [ ] Add `gateway daemon` subcommand to CLI
 - [ ] Create systemd/launchd service configuration
 - [ ] Write daemon health check and reconnection tests
 

@@ -749,7 +749,7 @@ The pairing protocol:
 1. Unknown sender messages through any channel
 2. Gateway generates a short alphanumeric code with configurable TTL (stored in Redis)
 3. Gateway responds: "Send this code to the admin to get access: `ABC123`"
-4. Admin approves: `python cli.py --service approve-pairing --code ABC123`
+4. Admin approves: `python cli.py gateway approve-pairing --code ABC123`
 5. Sender's channel-specific ID added to persistent allowlist
 6. Subsequent messages processed normally
 

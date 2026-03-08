@@ -21,7 +21,7 @@ AI-first autonomous agent platform. FastAPI backend, PydanticAI agents, PostgreS
 - **Centralized logging only.** Always `from modules.backend.core.logging import get_logger`. Never `import logging` directly.
 - **Timezone-naive UTC datetimes.** Use `from modules.backend.core.utils import utc_now`. Never `datetime.utcnow()` (deprecated) or `datetime.now()` (local time).
 - **`.project_root` marker** determines the project root. Use `find_project_root()` from `modules.backend.core.config`.
-- **All CLI scripts must have `--verbose` and `--debug` options** with appropriate logging for each.
+- **CLI uses Click groups and subcommands.** Single entry point `cli.py` with `tree` command for full discoverability. Every group shows help when called bare — no default actions. `--verbose` and `--debug` on root group only.
 - **Files must not exceed 1000 lines.** Target ~400-500 lines. Split into focused submodules if larger.
 - **`__init__.py` files must be minimal.** Docstring and necessary exports only. No business logic.
 - **Secure by default (P8).** All external interfaces deny access when unconfigured. Empty allowlists = deny all. Missing secrets = startup failure. New channels/features disabled by default.
@@ -45,7 +45,7 @@ Model Layer (modules/backend/models/)     → SQLAlchemy entities
 
 ### Entry Points
 
-- `cli.py` — Click-based CLI (--service server|worker|scheduler|health|config|test|migrate|info --action start|stop|restart|status)
+- `cli.py` — Click-based CLI with groups and subcommands (e.g., `cli.py server start`, `cli.py mission run "..."`, `cli.py tree`)
 - `modules/backend/main.py` — FastAPI application (for uvicorn)
 
 ### Key Modules
