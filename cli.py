@@ -2,25 +2,22 @@
 """
 BFA Platform CLI.
 
-Primary entry point for all application operations.
-Use --service to select what to run, --action to control lifecycle.
-
 Usage:
     python cli.py --help
-    python cli.py --service server --verbose
-    python cli.py --service server --action stop
-    python cli.py --service health --debug
-    python cli.py --service config
-    python cli.py --service test --test-type unit
-    python cli.py --service agent --agent-message "run a health check"
-    python cli.py --service mission --mission-action run --objective "audit the platform"
-    python cli.py --service mission --mission-action list
-    python cli.py --service mission --mission-action cost --mission-id <id>
-    python cli.py --service db --db-action stats
-    python cli.py --service db --db-action query --table missions --limit 5
-    python cli.py --service db --db-action clear --yes
-    python cli.py --service playbook --playbook-action list
-    python cli.py --service playbook --playbook-action run --playbook-name ops.platform-self-audit
+    python cli.py server --verbose
+    python cli.py server stop
+    python cli.py health
+    python cli.py test unit --coverage
+    python cli.py agent "run a health check"
+    python cli.py mission run "audit the platform"
+    python cli.py mission list
+    python cli.py mission cost <id>
+    python cli.py db stats
+    python cli.py db query missions --limit 5
+    python cli.py db clear --yes
+    python cli.py playbook list
+    python cli.py playbook run ops.platform-audit
+    python cli.py credits
 """
 
 import sys
@@ -31,379 +28,636 @@ import click
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from modules.backend.cli.config_display import show_config
-from modules.backend.cli.health import check_health
-from modules.backend.cli.helpers import get_service_port, service_status, service_stop
-from modules.backend.cli.info import show_info
-from modules.backend.cli.migrate import run_migrations
-from modules.backend.cli.scheduler import run_scheduler
-from modules.backend.cli.server import run_server
-from modules.backend.cli.telegram import run_telegram_poll
-from modules.backend.cli.testing import run_tests
-from modules.backend.cli.worker import run_worker
 from modules.backend.core.config import validate_project_root
 from modules.backend.core.logging import bind_context, get_logger, setup_logging
 
-LONG_RUNNING_SERVICES = frozenset({"server", "worker", "scheduler", "telegram-poll", "event-worker"})
 
-ALL_SERVICES = [
-    "server", "worker", "scheduler", "health", "config", "test", "info",
-    "migrate", "telegram-poll", "event-worker", "agent", "mission", "db",
-    "playbook", "credits",
-]
+# =============================================================================
+# Root group — global options propagate to all subcommands
+# =============================================================================
 
 
-@click.command()
-@click.option(
-    "--service", "-s",
-    type=click.Choice(ALL_SERVICES),
-    default="info",
-    help="Service or command to run.",
-)
-@click.option(
-    "--action", "-a",
-    type=click.Choice(["start", "stop", "restart", "status"]),
-    default="start",
-    help="Lifecycle action for long-running services (server, worker, scheduler, telegram-poll).",
-)
-@click.option(
-    "--verbose", "-v",
-    is_flag=True,
-    help="Enable verbose output (INFO level logging).",
-)
-@click.option(
-    "--debug", "-d",
-    is_flag=True,
-    help="Enable debug output (DEBUG level logging).",
-)
-@click.option(
-    "--host",
-    default=None,
-    help="Server host.",
-)
-@click.option(
-    "--port",
-    default=None,
-    type=int,
-    help="Server port.",
-)
-@click.option(
-    "--reload",
-    is_flag=True,
-    help="Enable auto-reload (server only).",
-)
-@click.option(
-    "--test-type",
-    type=click.Choice(["all", "unit", "integration", "e2e"]),
-    default="all",
-    help="Test type to run.",
-)
-@click.option(
-    "--coverage",
-    is_flag=True,
-    help="Run tests with coverage.",
-)
-@click.option(
-    "--migrate-action",
-    type=click.Choice(["upgrade", "downgrade", "current", "history", "autogenerate"]),
-    default="current",
-    help="Migration action.",
-)
-@click.option(
-    "--revision",
-    default="head",
-    help="Target revision for upgrade/downgrade.",
-)
-@click.option(
-    "-m", "--message",
-    default=None,
-    help="Migration message (for autogenerate).",
-)
-@click.option(
-    "--workers",
-    default=1,
-    type=int,
-    help="Number of worker processes.",
-)
-# ---- Agent options ----
-@click.option(
-    "--agent-message",
-    default=None,
-    help="Message to send to an agent (--service agent).",
-)
-@click.option(
-    "--agent-name",
-    default=None,
-    help="Target a specific agent by name, bypassing routing (--service agent).",
-)
-# ---- Mission options ----
-@click.option(
-    "--mission-action",
-    type=click.Choice(["create", "execute", "run", "list", "detail", "cost"]),
-    default="list",
-    help="Mission action (--service mission).",
-)
-@click.option(
-    "--objective",
-    default=None,
-    help="Mission objective text (--service mission --mission-action create/run).",
-)
-@click.option(
-    "--mission-id",
-    default=None,
-    help="Mission ID for execute/detail/cost actions (--service mission).",
-)
-@click.option(
-    "--roster",
-    default="default",
-    help="Agent roster to use (--service mission).",
-)
-@click.option(
-    "--budget",
-    default=None,
-    type=float,
-    help="Cost ceiling in USD (--service mission).",
-)
-@click.option(
-    "--triggered-by",
-    default="user:cli",
-    help="Who triggered this mission (--service mission).",
-)
-# ---- DB options ----
-@click.option(
-    "--db-action",
-    type=click.Choice(["stats", "tables", "query", "clear", "clear-missions", "clear-sessions"]),
-    default="stats",
-    help="Database action (--service db).",
-)
-@click.option(
-    "--table",
-    default=None,
-    help="Table name for query (--service db --db-action query).",
-)
-@click.option(
-    "--limit",
-    "query_limit",
-    default=10,
-    type=int,
-    help="Row limit for query (--service db --db-action query).",
-)
-@click.option(
-    "--yes", "-y",
-    is_flag=True,
-    help="Skip confirmation prompts (--service db --db-action clear).",
-)
-# ---- Output format ----
-@click.option(
-    "--output", "-o",
-    "output_format",
-    type=click.Choice(["summary", "detail", "json"]),
-    default="summary",
-    help="Report output format for mission/playbook results.",
-)
-# ---- Playbook options ----
-@click.option(
-    "--playbook-action",
-    type=click.Choice(["list", "detail", "run", "runs", "run-detail", "report"]),
-    default="list",
-    help="Playbook action (--service playbook).",
-)
-@click.option(
-    "--playbook-name",
-    default=None,
-    help="Playbook name for run/detail (--service playbook).",
-)
-@click.option(
-    "--run-id",
-    default=None,
-    help="Playbook run ID for run-detail (--service playbook).",
-)
-def main(
-    service: str,
-    action: str,
-    verbose: bool,
-    debug: bool,
-    host: str | None,
-    port: int | None,
-    reload: bool,
-    test_type: str,
-    coverage: bool,
-    migrate_action: str,
-    revision: str,
-    message: str | None,
-    workers: int,
-    agent_message: str | None,
-    agent_name: str | None,
-    mission_action: str,
-    objective: str | None,
-    mission_id: str | None,
-    roster: str,
-    budget: float | None,
-    triggered_by: str,
-    db_action: str,
-    table: str | None,
-    query_limit: int,
-    yes: bool,
-    output_format: str,
-    playbook_action: str,
-    playbook_name: str | None,
-    run_id: str | None,
-) -> None:
+class CliContext:
+    """Shared context passed to all subcommands."""
+
+    def __init__(self, verbose: bool, debug: bool):
+        if debug:
+            log_level = "DEBUG"
+        elif verbose:
+            log_level = "INFO"
+        else:
+            log_level = "WARNING"
+
+        validate_project_root()
+        setup_logging(level=log_level, format_type="console")
+        bind_context(source="cli")
+        self.logger = get_logger("cli")
+
+
+class ShowHelpOnMissingArgs(click.Group):
+    """Show full help instead of terse error when required args are missing."""
+
+    def resolve_command(self, ctx, args):
+        cmd_name, cmd, remaining = super().resolve_command(ctx, args)
+        if cmd is not None and not isinstance(cmd, click.Group):
+            # Count required arguments
+            required_args = [p for p in cmd.params if isinstance(p, click.Argument) and p.required]
+            if required_args and len(remaining) < len(required_args):
+                # Not enough positional args — show help instead of cryptic error
+                with click.Context(cmd, info_name=cmd_name, parent=ctx) as sub_ctx:
+                    click.echo(cmd.get_help(sub_ctx))
+                ctx.exit(0)
+        return cmd_name, cmd, remaining
+
+
+@click.group(cls=ShowHelpOnMissingArgs, invoke_without_command=True)
+@click.option("--verbose", "-v", is_flag=True, help="Enable INFO-level logging.")
+@click.option("--debug", "-d", is_flag=True, help="Enable DEBUG-level logging.")
+@click.pass_context
+def cli(ctx, verbose: bool, debug: bool):
+    """BFA Platform CLI.
+
+    \b
+    Infrastructure:  server, worker, scheduler, telegram, event-worker
+    Diagnostics:     health, config, info, credits
+    Development:     test, migrate, db
+    Agents:          agent, mission, playbook
     """
-    BFA Platform CLI.
+    ctx.ensure_object(dict)
+    ctx.obj = CliContext(verbose, debug)
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
 
-    Use --service to select what to run. For long-running services
-    (server, worker, scheduler, telegram-poll), use --action to
-    control lifecycle (start/stop/restart/status).
+
+# =============================================================================
+# Simple commands — no subcommands
+# =============================================================================
+
+
+@cli.command()
+@click.pass_obj
+def health(ctx):
+    """Run local health checks."""
+    from modules.backend.cli.health import check_health
+    check_health(ctx.logger)
+
+
+@cli.command()
+@click.pass_obj
+def config(ctx):
+    """Display loaded YAML configuration."""
+    from modules.backend.cli.config_display import show_config
+    show_config(ctx.logger)
+
+
+@cli.command()
+@click.pass_obj
+def info(ctx):
+    """Show application metadata and version."""
+    from modules.backend.cli.info import show_info
+    show_info(ctx.logger)
+
+
+@cli.command()
+@click.option("--roster", default="default", help="Roster to check models from.")
+@click.pass_obj
+def credits(ctx, roster: str):
+    """Preflight credit check — verify all roster models have available credits."""
+    from modules.backend.cli.credits import check_credits
+    check_credits(ctx.logger, roster=roster)
+
+
+# =============================================================================
+# Agent dispatch
+# =============================================================================
+
+
+@cli.command()
+@click.argument("message")
+@click.option("--name", default=None, help="Target a specific agent, bypassing routing.")
+@click.pass_obj
+def agent(ctx, message: str, name: str | None):
+    """Send a message to an agent.
 
     \b
-    Services:
-        server          Start the API server
-        worker          Start the task worker
-        scheduler       Start the scheduler
-        health          Run local health checks
-        config          Display configuration
-        test            Run tests
-        info            Show application info
-        migrate         Run database migrations
-        telegram-poll   Start Telegram polling
-        event-worker    Start event worker
-        agent           Send a message to an agent
-        mission         Create, execute, and inspect missions
-        playbook        List, run, and inspect playbooks
-        db              Database inspection and management
-        credits         Check Anthropic API credits
-
-    \b
-    Playbook examples:
-        python cli.py --service playbook --playbook-action list
-        python cli.py --service playbook --playbook-action detail --playbook-name ops.platform-self-audit
-        python cli.py --service playbook --playbook-action run --playbook-name ops.platform-self-audit --verbose
-        python cli.py --service playbook --playbook-action runs
-        python cli.py --service playbook --playbook-action run-detail --run-id <id>
-
-    \b
-    DB examples:
-        python cli.py --service db --db-action stats
-        python cli.py --service db --db-action tables
-        python cli.py --service db --db-action query --table missions --limit 5
-        python cli.py --service db --db-action clear --yes
-        python cli.py --service db --db-action clear-missions --yes
-        python cli.py --service db --db-action clear-sessions --yes
-
-    \b
-    Agent examples:
-        python cli.py --service agent --agent-message "run a health check" --verbose
-        python cli.py --service agent --agent-message "scan code quality" --agent-name code.qa.agent
-
-    \b
-    Mission examples:
-        python cli.py --service mission --mission-action run --objective "audit the platform" --verbose
-        python cli.py --service mission --mission-action create --objective "scan for violations"
-        python cli.py --service mission --mission-action execute --mission-id <id>
-        python cli.py --service mission --mission-action list
-        python cli.py --service mission --mission-action detail --mission-id <id>
-        python cli.py --service mission --mission-action cost --mission-id <id>
-
-    \b
-    Server examples:
-        python cli.py --service server --verbose
-        python cli.py --service server --action stop
-        python cli.py --service server --action restart --port 8099
+    Examples:
+        python cli.py agent "run a health check"
+        python cli.py agent "scan code quality" --name code.qa.agent
     """
-    validate_project_root()
+    from modules.backend.cli.agent import run_agent
+    run_agent(ctx.logger, message, name)
 
-    if debug:
-        log_level = "DEBUG"
-    elif verbose:
-        log_level = "INFO"
-    else:
-        log_level = "WARNING"
 
-    setup_logging(level=log_level, format_type="console")
-    bind_context(source="cli")
-    logger = get_logger(__name__)
-    logger.debug("CLI invoked", extra={"service": service, "action": action, "log_level": log_level})
+# =============================================================================
+# Server (with lifecycle actions)
+# =============================================================================
 
-    if service in LONG_RUNNING_SERVICES and action != "start":
-        service_port = get_service_port(port)
 
-        if action == "stop":
-            service_stop(logger, service, service_port)
-            return
-        elif action == "status":
-            service_status(logger, service, service_port)
-            return
-        elif action == "restart":
-            service_stop(logger, service, service_port)
-            import time
-            time.sleep(2)
+@cli.group(cls=ShowHelpOnMissingArgs, invoke_without_command=True)
+@click.pass_context
+def server(ctx):
+    """Manage the API server lifecycle.
 
-    if service == "server":
-        run_server(logger, host, port, reload)
-    elif service == "worker":
-        run_worker(logger, workers)
-    elif service == "scheduler":
-        run_scheduler(logger)
-    elif service == "health":
-        check_health(logger)
-    elif service == "config":
-        show_config(logger)
-    elif service == "test":
-        run_tests(logger, test_type, coverage)
-    elif service == "info":
-        show_info(logger)
-    elif service == "migrate":
-        run_migrations(logger, migrate_action, revision, message)
-    elif service == "telegram-poll":
-        run_telegram_poll(logger)
-    elif service == "event-worker":
-        from modules.backend.cli.event_worker import run_event_worker
-        run_event_worker(logger)
-    elif service == "agent":
-        from modules.backend.cli.agent import run_agent
-        if not agent_message:
-            click.echo(
-                click.style("Error: --agent-message is required for --service agent.", fg="red"),
-                err=True,
-            )
-            sys.exit(1)
-        run_agent(logger, agent_message, agent_name)
-    elif service == "mission":
-        from modules.backend.cli.mission import run_mission
-        run_mission(
-            logger,
-            action=mission_action,
-            objective=objective,
-            mission_id=mission_id,
-            roster=roster,
-            budget=budget,
-            triggered_by=triggered_by,
-            output_format=output_format,
-        )
-    elif service == "playbook":
-        from modules.backend.cli.playbook import run_playbook_cli
-        run_playbook_cli(
-            logger,
-            action=playbook_action,
-            playbook_name=playbook_name,
-            run_id=run_id,
-            triggered_by=triggered_by,
-            output_format=output_format,
-        )
-    elif service == "credits":
-        from modules.backend.cli.credits import check_credits
-        check_credits(logger, roster=roster)
-    elif service == "db":
-        from modules.backend.cli.db import run_db
-        run_db(
-            logger,
-            action=db_action,
-            table=table,
-            limit=query_limit,
-            confirm=yes,
-        )
+    \b
+    Examples:
+        python cli.py server start --reload --port 8099
+        python cli.py server stop
+        python cli.py server status
+    """
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@server.command()
+@click.option("--host", default=None, help="Server host.")
+@click.option("--port", default=None, type=int, help="Server port.")
+@click.option("--reload", is_flag=True, help="Enable auto-reload.")
+@click.pass_obj
+def start(ctx, host, port, reload):
+    """Start the API server."""
+    from modules.backend.cli.server import run_server
+    run_server(ctx.logger, host, port, reload)
+
+
+@server.command()
+@click.option("--port", default=None, type=int, help="Port to stop.")
+@click.pass_obj
+def stop(ctx, port):
+    """Stop a running server."""
+    from modules.backend.cli.helpers import get_service_port, service_stop
+    service_stop(ctx.logger, "server", get_service_port(port))
+
+
+@server.command()
+@click.option("--port", default=None, type=int, help="Port to check.")
+@click.pass_obj
+def status(ctx, port):
+    """Check if the server is running."""
+    from modules.backend.cli.helpers import get_service_port, service_status
+    service_status(ctx.logger, "server", get_service_port(port))
+
+
+@server.command()
+@click.option("--host", default=None, help="Server host.")
+@click.option("--port", default=None, type=int, help="Server port.")
+@click.option("--reload", is_flag=True, help="Enable auto-reload.")
+@click.pass_obj
+def restart(ctx, host, port, reload):
+    """Restart the server (stop then start)."""
+    import time
+    from modules.backend.cli.helpers import get_service_port, service_stop
+    from modules.backend.cli.server import run_server
+    service_stop(ctx.logger, "server", get_service_port(port))
+    time.sleep(2)
+    run_server(ctx.logger, host, port, reload)
+
+
+# =============================================================================
+# Worker
+# =============================================================================
+
+
+@cli.command()
+@click.option("--workers", default=1, type=int, help="Number of worker processes.")
+@click.pass_obj
+def worker(ctx, workers: int):
+    """Start the background task worker."""
+    from modules.backend.cli.worker import run_worker
+    run_worker(ctx.logger, workers)
+
+
+# =============================================================================
+# Scheduler
+# =============================================================================
+
+
+@cli.command()
+@click.pass_obj
+def scheduler(ctx):
+    """Start the cron-based task scheduler."""
+    from modules.backend.cli.scheduler import run_scheduler
+    run_scheduler(ctx.logger)
+
+
+# =============================================================================
+# Telegram
+# =============================================================================
+
+
+@cli.command()
+@click.pass_obj
+def telegram(ctx):
+    """Start the Telegram bot in polling mode."""
+    from modules.backend.cli.telegram import run_telegram_poll
+    run_telegram_poll(ctx.logger)
+
+
+# =============================================================================
+# Event worker
+# =============================================================================
+
+
+@cli.command("event-worker")
+@click.pass_obj
+def event_worker(ctx):
+    """Start the event bus consumer worker."""
+    from modules.backend.cli.event_worker import run_event_worker
+    run_event_worker(ctx.logger)
+
+
+# =============================================================================
+# Test
+# =============================================================================
+
+
+@cli.command()
+@click.argument("type", default="all", type=click.Choice(["all", "unit", "integration", "e2e"]))
+@click.option("--coverage", is_flag=True, help="Run with coverage reporting.")
+@click.pass_obj
+def test(ctx, type: str, coverage: bool):
+    """Run the test suite.
+
+    \b
+    Examples:
+        python cli.py test unit
+        python cli.py test unit --coverage
+        python cli.py test integration
+    """
+    from modules.backend.cli.testing import run_tests
+    run_tests(ctx.logger, type, coverage)
+
+
+# =============================================================================
+# Migrate
+# =============================================================================
+
+
+@cli.group(cls=ShowHelpOnMissingArgs, invoke_without_command=True)
+@click.pass_context
+def migrate(ctx):
+    """Database migrations (Alembic).
+
+    \b
+    Examples:
+        python cli.py migrate current
+        python cli.py migrate upgrade head
+        python cli.py migrate autogenerate -m "add table"
+    """
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@migrate.command()
+@click.argument("revision", default="head")
+@click.pass_obj
+def upgrade(ctx, revision: str):
+    """Upgrade database to a revision (default: head)."""
+    from modules.backend.cli.migrate import run_migrations
+    run_migrations(ctx.logger, "upgrade", revision, None)
+
+
+@migrate.command()
+@click.argument("revision")
+@click.pass_obj
+def downgrade(ctx, revision: str):
+    """Downgrade database to a revision."""
+    from modules.backend.cli.migrate import run_migrations
+    run_migrations(ctx.logger, "downgrade", revision, None)
+
+
+@migrate.command()
+@click.pass_obj
+def current(ctx):
+    """Show current database revision."""
+    from modules.backend.cli.migrate import run_migrations
+    run_migrations(ctx.logger, "current", "head", None)
+
+
+@migrate.command()
+@click.pass_obj
+def history(ctx):
+    """Show migration history."""
+    from modules.backend.cli.migrate import run_migrations
+    run_migrations(ctx.logger, "history", "head", None)
+
+
+@migrate.command()
+@click.option("-m", "--message", required=True, help="Migration message.")
+@click.pass_obj
+def autogenerate(ctx, message: str):
+    """Auto-generate migration from model changes."""
+    from modules.backend.cli.migrate import run_migrations
+    run_migrations(ctx.logger, "autogenerate", "head", message)
+
+
+# =============================================================================
+# Mission group
+# =============================================================================
+
+
+@cli.group(cls=ShowHelpOnMissingArgs, invoke_without_command=True)
+@click.pass_context
+def mission(ctx):
+    """Create, execute, and inspect missions.
+
+    \b
+    Examples:
+        python cli.py mission run "audit the platform" --budget 2.00
+        python cli.py mission list
+        python cli.py mission detail <id>
+        python cli.py mission cost <id>
+    """
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@mission.command("run")
+@click.argument("objective")
+@click.option("--roster", default="default", help="Agent roster to use.")
+@click.option("--budget", default=None, type=float, help="Cost ceiling in USD.")
+@click.option("--triggered-by", default="user:cli", help="Trigger origin.")
+@click.option("-o", "--output", "output_format", default="summary",
+              type=click.Choice(["summary", "detail", "json"]), help="Report format.")
+@click.pass_obj
+def mission_run(ctx, objective, roster, budget, triggered_by, output_format):
+    """Create and execute a mission in one step."""
+    from modules.backend.cli.mission import run_mission
+    run_mission(ctx.logger, action="run", objective=objective, mission_id=None,
+                roster=roster, budget=budget, triggered_by=triggered_by,
+                output_format=output_format)
+
+
+@mission.command("create")
+@click.argument("objective")
+@click.option("--roster", default="default", help="Agent roster to use.")
+@click.option("--budget", default=None, type=float, help="Cost ceiling in USD.")
+@click.option("--triggered-by", default="user:cli", help="Trigger origin.")
+@click.pass_obj
+def mission_create(ctx, objective, roster, budget, triggered_by):
+    """Create a mission (PENDING state, not yet executed)."""
+    from modules.backend.cli.mission import run_mission
+    run_mission(ctx.logger, action="create", objective=objective, mission_id=None,
+                roster=roster, budget=budget, triggered_by=triggered_by,
+                output_format="summary")
+
+
+@mission.command("execute")
+@click.argument("mission_id")
+@click.option("--roster", default="default", help="Agent roster to use.")
+@click.option("-o", "--output", "output_format", default="summary",
+              type=click.Choice(["summary", "detail", "json"]), help="Report format.")
+@click.pass_obj
+def mission_execute(ctx, mission_id, roster, output_format):
+    """Execute an existing PENDING mission."""
+    from modules.backend.cli.mission import run_mission
+    run_mission(ctx.logger, action="execute", objective=None, mission_id=mission_id,
+                roster=roster, budget=None, triggered_by="user:cli",
+                output_format=output_format)
+
+
+@mission.command("list")
+@click.pass_obj
+def mission_list(ctx):
+    """List recent missions."""
+    from modules.backend.cli.mission import run_mission
+    run_mission(ctx.logger, action="list", objective=None, mission_id=None,
+                roster="default", budget=None, triggered_by="user:cli",
+                output_format="summary")
+
+
+@mission.command("detail")
+@click.argument("mission_id")
+@click.pass_obj
+def mission_detail(ctx, mission_id):
+    """Show mission detail with task executions."""
+    from modules.backend.cli.mission import run_mission
+    run_mission(ctx.logger, action="detail", objective=None, mission_id=mission_id,
+                roster="default", budget=None, triggered_by="user:cli",
+                output_format="summary")
+
+
+@mission.command("cost")
+@click.argument("mission_id")
+@click.pass_obj
+def mission_cost(ctx, mission_id):
+    """Show mission cost breakdown."""
+    from modules.backend.cli.mission import run_mission
+    run_mission(ctx.logger, action="cost", objective=None, mission_id=mission_id,
+                roster="default", budget=None, triggered_by="user:cli",
+                output_format="summary")
+
+
+# =============================================================================
+# Playbook group
+# =============================================================================
+
+
+@cli.group(cls=ShowHelpOnMissingArgs, invoke_without_command=True)
+@click.pass_context
+def playbook(ctx):
+    """List, run, and inspect playbooks.
+
+    \b
+    Examples:
+        python cli.py playbook list
+        python cli.py playbook run ops.platform-audit
+        python cli.py playbook detail ops.platform-audit
+    """
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@playbook.command("list")
+@click.pass_obj
+def playbook_list(ctx):
+    """List available playbooks."""
+    from modules.backend.cli.playbook import run_playbook_cli
+    run_playbook_cli(ctx.logger, action="list", playbook_name=None, run_id=None,
+                     triggered_by="user:cli", output_format="summary")
+
+
+@playbook.command("detail")
+@click.argument("name")
+@click.pass_obj
+def playbook_detail(ctx, name):
+    """Show playbook configuration and steps."""
+    from modules.backend.cli.playbook import run_playbook_cli
+    run_playbook_cli(ctx.logger, action="detail", playbook_name=name, run_id=None,
+                     triggered_by="user:cli", output_format="summary")
+
+
+@playbook.command("run")
+@click.argument("name")
+@click.option("--triggered-by", default="user:cli", help="Trigger origin.")
+@click.option("-o", "--output", "output_format", default="summary",
+              type=click.Choice(["summary", "detail", "json"]), help="Report format.")
+@click.pass_obj
+def playbook_run(ctx, name, triggered_by, output_format):
+    """Execute a playbook."""
+    from modules.backend.cli.playbook import run_playbook_cli
+    run_playbook_cli(ctx.logger, action="run", playbook_name=name, run_id=None,
+                     triggered_by=triggered_by, output_format=output_format)
+
+
+@playbook.command("runs")
+@click.option("--name", default=None, help="Filter by playbook name.")
+@click.pass_obj
+def playbook_runs(ctx, name):
+    """List playbook runs."""
+    from modules.backend.cli.playbook import run_playbook_cli
+    run_playbook_cli(ctx.logger, action="runs", playbook_name=name, run_id=None,
+                     triggered_by="user:cli", output_format="summary")
+
+
+@playbook.command("run-detail")
+@click.argument("run_id")
+@click.pass_obj
+def playbook_run_detail(ctx, run_id):
+    """Show details for a specific playbook run."""
+    from modules.backend.cli.playbook import run_playbook_cli
+    run_playbook_cli(ctx.logger, action="run-detail", playbook_name=None,
+                     run_id=run_id, triggered_by="user:cli", output_format="detail")
+
+
+@playbook.command("report")
+@click.argument("run_id")
+@click.option("-o", "--output", "output_format", default="summary",
+              type=click.Choice(["summary", "detail", "json"]), help="Report format.")
+@click.pass_obj
+def playbook_report(ctx, run_id, output_format):
+    """Render a report for a past playbook run."""
+    from modules.backend.cli.playbook import run_playbook_cli
+    run_playbook_cli(ctx.logger, action="report", playbook_name=None,
+                     run_id=run_id, triggered_by="user:cli", output_format=output_format)
+
+
+# =============================================================================
+# DB group
+# =============================================================================
+
+
+@cli.group(cls=ShowHelpOnMissingArgs, invoke_without_command=True)
+@click.pass_context
+def db(ctx):
+    """Database inspection and management.
+
+    \b
+    Examples:
+        python cli.py db stats
+        python cli.py db query missions --limit 5
+        python cli.py db clear --yes
+    """
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@db.command("stats")
+@click.pass_obj
+def db_stats(ctx):
+    """Show row counts for all tables."""
+    from modules.backend.cli.db import run_db
+    run_db(ctx.logger, action="stats", table=None, limit=10, confirm=False)
+
+
+@db.command("tables")
+@click.pass_obj
+def db_tables(ctx):
+    """Show table schemas (columns, types, nullability)."""
+    from modules.backend.cli.db import run_db
+    run_db(ctx.logger, action="tables", table=None, limit=10, confirm=False)
+
+
+@db.command("query")
+@click.argument("table")
+@click.option("--limit", default=10, type=int, help="Number of rows to show.")
+@click.pass_obj
+def db_query(ctx, table, limit):
+    """Query recent rows from a table."""
+    from modules.backend.cli.db import run_db
+    run_db(ctx.logger, action="query", table=table, limit=limit, confirm=False)
+
+
+@db.command("clear")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+@click.pass_obj
+def db_clear(ctx, yes):
+    """Clear ALL application data (full reset)."""
+    from modules.backend.cli.db import run_db
+    run_db(ctx.logger, action="clear", table=None, limit=10, confirm=yes)
+
+
+@db.command("clear-missions")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+@click.pass_obj
+def db_clear_missions(ctx, yes):
+    """Clear mission data only."""
+    from modules.backend.cli.db import run_db
+    run_db(ctx.logger, action="clear-missions", table=None, limit=10, confirm=yes)
+
+
+@db.command("clear-sessions")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+@click.pass_obj
+def db_clear_sessions(ctx, yes):
+    """Clear session data only."""
+    from modules.backend.cli.db import run_db
+    run_db(ctx.logger, action="clear-sessions", table=None, limit=10, confirm=yes)
+
+
+# =============================================================================
+# Tree — show full command hierarchy
+# =============================================================================
+
+
+def _format_tree(group: click.Group, prefix: str = "", is_last: bool = True) -> list[str]:
+    """Recursively build a tree representation of a Click group."""
+    lines: list[str] = []
+    commands = sorted(group.list_commands(click.Context(group)))
+
+    for i, name in enumerate(commands):
+        cmd = group.get_command(click.Context(group), name)
+        if cmd is None:
+            continue
+
+        last = i == len(commands) - 1
+        connector = "└── " if last else "├── "
+        child_prefix = prefix + ("    " if last else "│   ")
+
+        # Build the label: name + params + options
+        parts = [name]
+        if hasattr(cmd, "params"):
+            for param in cmd.params:
+                if isinstance(param, click.Argument):
+                    parts.append(param.human_readable_name.upper())
+                elif isinstance(param, click.Option) and param.name not in ("help", "verbose", "debug"):
+                    flag = param.opts[-1]
+                    parts.append(f"[{flag}]")
+
+        label = " ".join(parts)
+        help_text = cmd.get_short_help_str(limit=60) if cmd.help else ""
+        if help_text:
+            label = f"{label}  — {help_text}"
+
+        lines.append(f"{prefix}{connector}{label}")
+
+        if isinstance(cmd, click.Group):
+            lines.extend(_format_tree(cmd, child_prefix, last))
+
+    return lines
+
+
+@cli.command("tree")
+def tree_cmd():
+    """Show the full command tree with all options."""
+    click.echo("cli")
+    lines = _format_tree(cli)
+    click.echo("\n".join(lines))
+
+
+# =============================================================================
+# Entry point
+# =============================================================================
 
 
 if __name__ == "__main__":
-    main()
+    cli()
