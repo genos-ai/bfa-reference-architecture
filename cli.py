@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tachikoma Platform CLI.
+BFA Platform CLI.
 
 Primary entry point for all application operations.
 Use --service to select what to run, --action to control lifecycle.
@@ -16,6 +16,9 @@ Usage:
     python cli.py --service mission --mission-action run --objective "audit the platform"
     python cli.py --service mission --mission-action list
     python cli.py --service mission --mission-action cost --mission-id <id>
+    python cli.py --service db --db-action stats
+    python cli.py --service db --db-action query --table missions --limit 5
+    python cli.py --service db --db-action clear --yes
 """
 
 import sys
@@ -43,7 +46,7 @@ LONG_RUNNING_SERVICES = frozenset({"server", "worker", "scheduler", "telegram-po
 
 ALL_SERVICES = [
     "server", "worker", "scheduler", "health", "config", "test", "info",
-    "migrate", "telegram-poll", "event-worker", "agent", "mission",
+    "migrate", "telegram-poll", "event-worker", "agent", "mission", "db",
 ]
 
 
@@ -163,6 +166,30 @@ ALL_SERVICES = [
     default="user:cli",
     help="Who triggered this mission (--service mission).",
 )
+# ---- DB options ----
+@click.option(
+    "--db-action",
+    type=click.Choice(["stats", "tables", "query", "clear", "clear-missions", "clear-sessions"]),
+    default="stats",
+    help="Database action (--service db).",
+)
+@click.option(
+    "--table",
+    default=None,
+    help="Table name for query (--service db --db-action query).",
+)
+@click.option(
+    "--limit",
+    "query_limit",
+    default=10,
+    type=int,
+    help="Row limit for query (--service db --db-action query).",
+)
+@click.option(
+    "--yes", "-y",
+    is_flag=True,
+    help="Skip confirmation prompts (--service db --db-action clear).",
+)
 def main(
     service: str,
     action: str,
@@ -185,9 +212,13 @@ def main(
     roster: str,
     budget: float | None,
     triggered_by: str,
+    db_action: str,
+    table: str | None,
+    query_limit: int,
+    yes: bool,
 ) -> None:
     """
-    Tachikoma Platform CLI.
+    BFA Platform CLI.
 
     Use --service to select what to run. For long-running services
     (server, worker, scheduler, telegram-poll), use --action to
@@ -207,6 +238,16 @@ def main(
         event-worker    Start event worker
         agent           Send a message to an agent
         mission         Create, execute, and inspect missions
+        db              Database inspection and management
+
+    \b
+    DB examples:
+        python cli.py --service db --db-action stats
+        python cli.py --service db --db-action tables
+        python cli.py --service db --db-action query --table missions --limit 5
+        python cli.py --service db --db-action clear --yes
+        python cli.py --service db --db-action clear-missions --yes
+        python cli.py --service db --db-action clear-sessions --yes
 
     \b
     Agent examples:
@@ -296,6 +337,15 @@ def main(
             roster=roster,
             budget=budget,
             triggered_by=triggered_by,
+        )
+    elif service == "db":
+        from modules.backend.cli.db import run_db
+        run_db(
+            logger,
+            action=db_action,
+            table=table,
+            limit=query_limit,
+            confirm=yes,
         )
 
 

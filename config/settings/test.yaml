@@ -20,8 +20,8 @@ redis_url: "redis://localhost:6379/1"
 database:
   host: "localhost"
   port: 5432
-  name: "tachikoma_test"
-  user: "tachikoma"
+  name: "bfa_test"
+  user: "bfa"
   pool_size: 5
   max_overflow: 10
   pool_timeout: 30
