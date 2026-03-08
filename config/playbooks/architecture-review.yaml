@@ -1,0 +1,68 @@
+# =============================================================================
+# Playbook: Architecture Review
+# =============================================================================
+# Deep architectural review against the six engineering principles.
+# Runs the architecture agent with a compliance scan as prerequisite context.
+# =============================================================================
+
+playbook_name: code.architecture-review
+description: "Deep architectural review against six engineering principles"
+objective:
+  statement: "Review the codebase for architectural principle violations including unnecessary complexity, unsafe concurrency, silent failures, and more"
+  category: engineering
+  owner: platform-team
+  priority: normal
+  regulatory_reference: null
+version: 1
+enabled: true
+
+trigger:
+  type: on_demand
+  match_patterns:
+    - "architecture review"
+    - "arch review"
+    - "principle violations"
+    - "deep review"
+
+budget:
+  max_cost_usd: 8.00
+  max_tokens: 500000
+
+context:
+  target_path: "modules"
+
+steps:
+  - id: code-quality
+    description: "Quick compliance scan to provide baseline context"
+    capability: code.qa
+    roster: default
+    complexity_tier: simple
+    cost_ceiling_usd: 0.75
+    environment: local
+    input:
+      target_path: "@context.target_path"
+    output_mapping:
+      field_mappings:
+        - source_task: code.qa.agent
+          source_field: violations
+          target_key: code_violations
+    timeout_seconds: 120
+    depends_on: []
+
+  - id: architecture-review
+    description: "Deep architectural review against six engineering principles"
+    capability: code.architecture
+    roster: default
+    complexity_tier: simple
+    cost_ceiling_usd: 5.00
+    environment: local
+    input:
+      target_path: "@context.target_path"
+    output_mapping:
+      field_mappings:
+        - source_task: code.architecture.agent
+          source_field: findings
+          target_key: architecture_findings
+    timeout_seconds: 600
+    depends_on:
+      - code-quality

@@ -194,8 +194,63 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
     from modules.backend.services.playbook_run import PlaybookRunService
     from modules.backend.services.session import SessionService
 
-    click.echo(f"Running playbook: {playbook_name}")
-    click.echo()
+    from rich.console import Console
+    from rich.table import Table
+    from rich.live import Live
+
+    console = Console(width=140)
+    console.print(f"[bold]Running playbook:[/bold] {playbook_name}\n")
+
+    # Progress state for the live display
+    progress_state: dict = {"steps": {}, "total": 0, "playbook": playbook_name}
+
+    def _build_progress_table() -> Table:
+        table = Table(show_header=True, expand=True, show_lines=False)
+        table.add_column("Step", style="cyan", no_wrap=True, width=22)
+        table.add_column("Capability", no_wrap=True, width=28)
+        table.add_column("Status", no_wrap=True, width=12)
+        table.add_column("Cost", justify="right", no_wrap=True, width=8)
+        table.add_column("Description", ratio=1)
+
+        for step_id, info in progress_state["steps"].items():
+            status = info.get("status", "running")
+            if status == "running":
+                status_str = "[yellow]running...[/yellow]"
+            elif status == "completed":
+                status_str = "[green]done[/green]"
+            elif status == "failed":
+                status_str = "[red]failed[/red]"
+            else:
+                status_str = status
+            cost = f"${info.get('cost_usd', 0):.4f}" if "cost_usd" in info else "—"
+            table.add_row(
+                step_id,
+                info.get("capability", ""),
+                status_str,
+                cost,
+                info.get("description", ""),
+            )
+        return table
+
+    live = Live(_build_progress_table(), console=console, refresh_per_second=4)
+
+    def on_progress(event: dict) -> None:
+        etype = event.get("type", "")
+        if etype == "playbook_start":
+            progress_state["total"] = event.get("total_steps", 0)
+        elif etype == "step_start":
+            progress_state["steps"][event["step_id"]] = {
+                "capability": event.get("capability", ""),
+                "description": event.get("description", ""),
+                "status": "running",
+            }
+            live.update(_build_progress_table())
+        elif etype == "step_done":
+            sid = event["step_id"]
+            if sid in progress_state["steps"]:
+                progress_state["steps"][sid]["status"] = event.get("status", "done")
+                progress_state["steps"][sid]["cost_usd"] = event.get("cost_usd", 0)
+            live.update(_build_progress_table())
 
     async with get_async_session() as db:
         session_service = SessionService(db)
@@ -213,10 +268,12 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
             mission_service=mission_service,
         )
 
-        run = await run_service.run_playbook(
-            playbook_name=playbook_name,
-            triggered_by=triggered_by,
-        )
+        with live:
+            run = await run_service.run_playbook(
+                playbook_name=playbook_name,
+                triggered_by=triggered_by,
+                on_progress=on_progress,
+            )
 
         # Fetch missions for report rendering
         missions, _ = await mission_service.list_missions(
@@ -224,6 +281,7 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
         )
         await db.commit()
 
+    console.print()
     await render_playbook_run(run, missions, output_format)
 
 
