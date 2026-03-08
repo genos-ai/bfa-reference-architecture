@@ -31,6 +31,28 @@ class QaAuditResult(BaseModel):
     scanned_files_count: int
 
 
+class ArchitectureFinding(BaseModel):
+    """A single architectural principle violation found during review."""
+
+    principle: str         # unnecessary_complexity, unsafe_concurrency, etc.
+    file: str
+    line: int | None = None
+    message: str
+    recommendation: str
+    related_files: list[str] = []
+
+
+class ArchitectureReviewResult(BaseModel):
+    """Structured output from the architecture review agent (read-only)."""
+
+    summary: str
+    total_findings: int
+    findings: list[ArchitectureFinding]
+    files_reviewed: int
+    new_findings: int      # findings not in baseline
+    baseline_findings: int  # known findings from baseline
+
+
 class HealthFinding(BaseModel):
     """A single issue found during health check."""
 

@@ -1,0 +1,68 @@
+# =============================================================================
+# Architecture Review Agent Configuration
+# =============================================================================
+# Deep architectural analysis agent. Reads source code and evaluates against
+# six engineering principles. Uses Opus for reasoning depth — architectural
+# violations require understanding relationships between modules, not regex.
+#
+# Available options:
+#   agent_name        - Unique agent identifier (string, format: category.name.agent)
+#   agent_type        - Agent type (string: vertical | horizontal)
+#   description       - Agent description for routing (string)
+#   enabled           - Enable/disable without code deployment (boolean)
+#   model             - LLM model identifier (string, provider:model format)
+#   keywords          - Keywords for rule-based routing (list of strings)
+#   tools             - Shared tool names (list of dotted strings, domain.action)
+#   max_input_length  - Maximum input character count (integer)
+#   max_budget_usd    - Maximum cost per invocation in USD (decimal)
+#   execution         - Execution mode (object)
+#     mode            - Execution environment (string: local | container)
+#   scope             - Filesystem access control (object)
+#     read            - Paths the agent can read (list of strings)
+#     write           - Paths the agent can write (list of strings)
+#   exclusions        - Paths and patterns to exclude from scanning (object)
+#     paths           - File/directory paths to skip (list of strings)
+#     patterns        - Filename patterns to skip (list of strings)
+# =============================================================================
+
+agent_name: code.architecture.agent
+agent_type: vertical
+description: "Deep architectural review: evaluates code against six engineering principles (read-only)"
+enabled: true
+model: anthropic:claude-haiku-4-5-20251001
+max_input_length: 64000
+max_budget_usd: 5.00
+
+execution:
+  mode: local
+keywords:
+  - architecture
+  - architecture review
+  - code review
+  - design review
+  - principles
+  - complexity
+  - coupling
+tools:
+  - filesystem.read_file
+  - filesystem.list_files
+
+scope:
+  read:
+    - "modules/"
+    - "config/"
+    - "tests/"
+    - "*.py"
+  write: []
+
+exclusions:
+  paths:
+    - "scripts/"
+    - "docs/"
+    - ".venv/"
+    - "__pycache__/"
+    - ".git/"
+    - ".pytest_cache/"
+  patterns:
+    - "*.pyc"
+    - ".DS_Store"

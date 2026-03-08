@@ -31,9 +31,9 @@ agent_name: code.qa.agent
 agent_type: vertical
 description: "Audits the codebase for compliance violations (read-only)"
 enabled: true
-model: anthropic:claude-haiku-4-5-20251001
+model: anthropic:claude-sonnet-4-20250514
 max_input_length: 2000
-max_budget_usd: 0.50
+max_budget_usd: 1.00
 file_size_limit: 1000
 
 execution:

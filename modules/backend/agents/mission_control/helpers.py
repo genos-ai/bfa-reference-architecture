@@ -121,7 +121,7 @@ def _build_agent_deps(
 
     if category == "system" and "health" in agent_name:
         return HealthAgentDeps(**common, app_config=get_app_config())
-    if category == "code" and "qa" in agent_name:
+    if category == "code":
         return QaAgentDeps(**common)
 
     return BaseAgentDeps(**common)

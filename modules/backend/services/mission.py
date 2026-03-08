@@ -307,6 +307,12 @@ class MissionService(BaseService):
     ) -> dict[str, Any]:
         """Extract outputs from a completed mission's MissionOutcome
         according to the playbook step's output_mapping.
+
+        task_results in the outcome is a list of TaskResult dicts.
+        We index them by task_id for direct lookup, but also support
+        matching source_task against agent_name (since the Planning
+        Agent assigns dynamic task IDs like 'task-001' that won't
+        match playbook-defined source_task names).
         """
         if not output_mapping or not mission.mission_outcome:
             return {}
@@ -321,15 +327,34 @@ class MissionService(BaseService):
             )
 
         field_mappings = output_mapping.get("field_mappings", [])
-        task_results = outcome.get("task_results", {})
+        raw_results = outcome.get("task_results", [])
+
+        # Build lookup indices: by task_id and by agent_name
+        by_task_id: dict[str, dict] = {}
+        by_agent: dict[str, dict] = {}
+        if isinstance(raw_results, list):
+            for tr in raw_results:
+                if isinstance(tr, dict):
+                    by_task_id[tr.get("task_id", "")] = tr.get(
+                        "output_reference", {},
+                    )
+                    agent = tr.get("agent_name", "")
+                    by_agent[agent] = tr.get("output_reference", {})
+        elif isinstance(raw_results, dict):
+            # Legacy: already a dict keyed by task name
+            by_task_id = raw_results
 
         for mapping in field_mappings:
             source_task = mapping["source_task"]
             source_field = mapping["source_field"]
             target_key = mapping["target_key"]
 
-            if source_task in task_results:
-                task_output = task_results[source_task]
+            # Try exact task_id match, then agent_name match
+            task_output = by_task_id.get(source_task)
+            if task_output is None:
+                task_output = by_agent.get(source_task)
+
+            if task_output is not None:
                 if isinstance(task_output, dict) and source_field in task_output:
                     extracted[target_key] = task_output[source_field]
                 else:
@@ -339,6 +364,10 @@ class MissionService(BaseService):
                             "mission_id": mission.id,
                             "source_task": source_task,
                             "source_field": source_field,
+                            "available_fields": (
+                                list(task_output.keys())
+                                if isinstance(task_output, dict) else None
+                            ),
                         },
                     )
             else:
@@ -347,6 +376,8 @@ class MissionService(BaseService):
                     extra={
                         "mission_id": mission.id,
                         "source_task": source_task,
+                        "available_task_ids": list(by_task_id.keys()),
+                        "available_agents": list(by_agent.keys()),
                     },
                 )
 

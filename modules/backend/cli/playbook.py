@@ -281,8 +281,32 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
         )
         await db.commit()
 
+    # Render summary below the progress table
+    from rich.panel import Panel
+
+    status_val = run.status.value if hasattr(run.status, "value") else str(run.status)
+    status_color = {"completed": "green", "failed": "red"}.get(status_val, "yellow")
+    header = (
+        f"[bold]{run.playbook_name}[/bold] v{run.playbook_version}    "
+        f"Status: [{status_color}]{status_val.upper()}[/{status_color}]    "
+        f"Cost: ${run.total_cost_usd:.4f}"
+    )
+    if run.budget_usd:
+        pct = (run.total_cost_usd / run.budget_usd) * 100
+        header += f"  ({pct:.0f}% of ${run.budget_usd:.2f} budget)"
+
     console.print()
-    await render_playbook_run(run, missions, output_format)
+    console.print(Panel(header, border_style=status_color))
+
+    # Generate AI narrative summary
+    from modules.backend.cli.report import _playbook_run_to_dict, _generate_narrative
+    narrative = await _generate_narrative(_playbook_run_to_dict(run, missions))
+    # Post-process: colorize priority headings if the model didn't use Rich markup
+    import re
+    narrative = re.sub(r'(?m)^(\s*)(Critical)\s*$', r'\1[bold red]\2[/bold red]', narrative)
+    narrative = re.sub(r'(?m)^(\s*)(Warnings?)\s*$', r'\1[bold yellow]\2[/bold yellow]', narrative)
+    narrative = re.sub(r'(?m)^(\s*)(Info)\s*$', r'\1[dim]\2[/dim]', narrative)
+    console.print(Panel(narrative.strip(), title="Summary", border_style="dim"))
 
 
 async def _action_runs(cli_logger, *, playbook_name, run_id, triggered_by, output_format):

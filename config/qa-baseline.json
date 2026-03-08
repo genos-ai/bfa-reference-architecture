@@ -1,0 +1,68 @@
+[
+  {
+    "principle": "silent_failure",
+    "file": "modules/backend/services/mission.py",
+    "line": 334,
+    "message": "except Exception: pass — completely silent, no logging"
+  },
+  {
+    "principle": "silent_failure",
+    "file": "modules/backend/agents/mission_control/helpers.py",
+    "line": 186,
+    "message": "_publish() swallows all exceptions with logger.debug"
+  },
+  {
+    "principle": "silent_failure",
+    "file": "modules/backend/agents/mission_control/helpers.py",
+    "line": 198,
+    "message": "_persist_messages() swallows all exceptions"
+  },
+  {
+    "principle": "silent_failure",
+    "file": "modules/backend/services/mission.py",
+    "line": 48,
+    "message": "_publish_event() swallows all exceptions"
+  },
+  {
+    "principle": "silent_failure",
+    "file": "modules/backend/agents/mission_control/mission_control.py",
+    "line": 261,
+    "message": "Swallows tool event extraction failures"
+  },
+  {
+    "principle": "silent_failure",
+    "file": "modules/backend/agents/mission_control/mission_control.py",
+    "line": 286,
+    "message": "Swallows session cost update failures"
+  },
+  {
+    "principle": "silent_failure",
+    "file": "modules/backend/api/health.py",
+    "line": 210,
+    "message": "except Exception: app_info = {status: not_configured} — returns default silently"
+  },
+  {
+    "principle": "leaky_boundary",
+    "file": "modules/backend/agents/mission_control/mission_control.py",
+    "line": 465,
+    "message": "session_service._session — accesses private _session attribute"
+  },
+  {
+    "principle": "duplication",
+    "file": "modules/backend/agents/mission_control/dispatch.py",
+    "line": 145,
+    "message": "Hardcoded UsageLimits duplicates _get_usage_limits() from helpers.py"
+  },
+  {
+    "principle": "unnecessary_complexity",
+    "file": "modules/backend/services/mission.py",
+    "line": 208,
+    "message": "Repeated isinstance(outcome, dict) + getattr fallbacks instead of enforcing type at boundary"
+  },
+  {
+    "principle": "brittle_coupling",
+    "file": "modules/backend/agents/mission_control/mission_control.py",
+    "line": 103,
+    "message": "mission_id=f'mission-{session_id}' — dynamically constructed mission ID"
+  }
+]

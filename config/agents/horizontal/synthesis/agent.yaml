@@ -1,0 +1,37 @@
+# =============================================================================
+# Synthesis Agent Configuration
+# =============================================================================
+# Produces human-readable narrative summaries from structured mission/playbook
+# outcome data. This is a presentation-layer agent — it interprets verified
+# results, it does not evaluate or judge them (P13 compliant).
+#
+# Uses Haiku for cost efficiency — the input is already structured data,
+# no complex reasoning required.
+# =============================================================================
+
+agent_name: horizontal.synthesis.agent
+agent_type: horizontal
+description: "Generates human-readable narrative summaries from structured mission and playbook outcome data"
+enabled: true
+model: anthropic:claude-haiku-4-5-20251001
+max_input_length: 32000
+max_budget_usd: 0.05
+
+keywords: []
+
+tools: []
+
+scope:
+  read: []
+  write: []
+
+execution:
+  mode: local
+
+interface:
+  input:
+    outcome_data: dict
+  output:
+    narrative: str
+
+version: "1.0.0"
