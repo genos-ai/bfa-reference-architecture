@@ -15,7 +15,7 @@ from pydantic_ai.models import Model
 from modules.backend.agents.mission_control.helpers import assemble_instructions
 from modules.backend.agents.deps.base import QaAgentDeps
 from modules.backend.agents.schemas import QaAuditResult
-from modules.backend.agents.tools import code, compliance, filesystem
+from modules.backend.agents.tools import compliance, filesystem
 from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -101,23 +101,7 @@ def create_agent(model: str | Model) -> Agent[QaAgentDeps, QaAuditResult]:
         ctx.deps.emit({"type": "tool_start", "tool": "read_source_file", "detail": file_path})
         return await filesystem.read_file(ctx.deps.project_root, file_path, ctx.deps.scope)
 
-    @agent.tool
-    async def apply_fix_tool(ctx: RunContext[QaAgentDeps], file_path: str, old_text: str, new_text: str) -> dict:
-        """Replace exact text in a file. Returns success status."""
-        ctx.deps.emit({"type": "tool_start", "tool": "apply_fix", "detail": file_path})
-        result = await code.apply_fix(ctx.deps.project_root, file_path, old_text, new_text, ctx.deps.scope)
-        ctx.deps.emit({"type": "tool_done", "tool": "apply_fix", "detail": f"{'fixed' if result['success'] else 'failed'} {file_path}"})
-        return result
-
-    @agent.tool
-    async def run_tests_tool(ctx: RunContext[QaAgentDeps]) -> dict:
-        """Run the unit test suite and return results."""
-        ctx.deps.emit({"type": "tool_start", "tool": "run_tests"})
-        result = await code.run_tests(ctx.deps.project_root)
-        ctx.deps.emit({"type": "tool_done", "tool": "run_tests", "detail": "passed" if result["passed"] else "FAILED"})
-        return result
-
-    logger.info("QA compliance agent created", extra={"model": str(model)})
+    logger.info("QA compliance agent created (read-only audit)", extra={"model": str(model)})
     return agent
 
 
@@ -140,7 +124,6 @@ async def run_agent(
         extra={
             "summary": result.output.summary,
             "total_violations": result.output.total_violations,
-            "fixed_count": result.output.fixed_count,
             "usage": {
                 "requests": result.usage().requests,
                 "input_tokens": result.usage().input_tokens,

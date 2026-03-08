@@ -29,7 +29,7 @@
 
 agent_name: code.qa.agent
 agent_type: vertical
-description: "Audits the codebase for compliance violations and fixes them"
+description: "Audits the codebase for compliance violations (read-only)"
 enabled: true
 model: anthropic:claude-haiku-4-5-20251001
 max_input_length: 2000
@@ -55,8 +55,6 @@ tools:
   - compliance.scan_file_sizes
   - compliance.scan_cli_options
   - compliance.scan_config_files
-  - code.apply_fix
-  - code.run_tests
 
 scope:
   read:
@@ -64,9 +62,7 @@ scope:
     - "config/"
     - "tests/"
     - "*.py"
-  write:
-    - "modules/"
-    - "config/"
+  write: []
 
 rules:
   - id: no_hardcoded_values

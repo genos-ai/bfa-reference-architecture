@@ -17,24 +17,17 @@ class Violation(BaseModel):
     line: int | None = None
     message: str
     severity: str
-    auto_fixable: bool = False
-    fix_description: str | None = None
-    fixed: bool = False
-    needs_human_decision: bool = False
-    human_question: str | None = None
+    recommendation: str | None = None
 
 
 class QaAuditResult(BaseModel):
-    """Structured output from the QA compliance agent."""
+    """Structured output from the QA compliance agent (read-only audit)."""
 
     summary: str
     total_violations: int
     error_count: int
     warning_count: int
-    fixed_count: int
-    needs_human_count: int
     violations: list[Violation]
-    tests_passed: bool | None = None
     scanned_files_count: int
 
 

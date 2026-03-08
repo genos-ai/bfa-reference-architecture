@@ -94,8 +94,7 @@ class TestOutputSchemas:
             severity="error",
         )
         assert v.rule_id == "no_hardcoded_values"
-        assert v.auto_fixable is False
-        assert v.fixed is False
+        assert v.recommendation is None
 
     def test_qa_audit_result_schema_valid(self):
         result = QaAuditResult(
@@ -103,8 +102,6 @@ class TestOutputSchemas:
             total_violations=2,
             error_count=1,
             warning_count=1,
-            fixed_count=0,
-            needs_human_count=1,
             violations=[
                 Violation(
                     rule_id="no_hardcoded_values",
@@ -114,38 +111,21 @@ class TestOutputSchemas:
                     severity="error",
                 ),
             ],
-            tests_passed=None,
             scanned_files_count=50,
         )
         assert result.total_violations == 2
         assert len(result.violations) == 1
 
-    def test_violation_with_fix_fields(self):
+    def test_violation_with_recommendation(self):
         v = Violation(
             rule_id="no_datetime_now",
             file="modules/foo.py",
             line=5,
             message="datetime.now()",
             severity="error",
-            auto_fixable=True,
-            fix_description="Replace with utc_now()",
-            fixed=True,
+            recommendation="Replace with utc_now() from modules.backend.core.utils",
         )
-        assert v.auto_fixable is True
-        assert v.fixed is True
-
-    def test_violation_with_human_decision(self):
-        v = Violation(
-            rule_id="no_hardcoded_values",
-            file="modules/foo.py",
-            line=10,
-            message="MAX_LENGTH = 4096",
-            severity="error",
-            needs_human_decision=True,
-            human_question="Is this a platform constant or configurable?",
-        )
-        assert v.needs_human_decision is True
-        assert v.human_question is not None
+        assert v.recommendation is not None
 
 
 class TestScannerViaService:
@@ -198,4 +178,4 @@ class TestConfigLoading:
 
     def test_config_has_scope(self, qa_config):
         assert len(qa_config.scope.read) > 0
-        assert len(qa_config.scope.write) > 0
+        assert qa_config.scope.write == []

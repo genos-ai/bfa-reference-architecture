@@ -62,7 +62,7 @@ async def run_agent(
     """
     result = await agent.run(user_prompt, deps=deps, **kwargs)
 
-    response_text = result.data
+    response_text = result.output
     plan_json = extract_task_plan_json(response_text)
 
     # Capture thinking trace if available

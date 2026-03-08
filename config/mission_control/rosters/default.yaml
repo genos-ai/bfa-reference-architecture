@@ -13,7 +13,8 @@ agents:
     description: >
       Audits Python codebases for compliance violations including import
       patterns, datetime usage, hardcoded values, and file size limits.
-      Returns structured findings with severity ratings and suggested fixes.
+      Returns structured findings with severity ratings and recommendations.
+      Read-only — does not modify files (P13).
     model:
       name: "anthropic:claude-haiku-4-5-20251001"
       temperature: 0.0
@@ -25,8 +26,6 @@ agents:
       - compliance.scan_datetime
       - compliance.scan_hardcoded
       - compliance.scan_file_sizes
-      - code.apply_fix
-      - code.run_tests
     interface:
       input:
         target_path: string
