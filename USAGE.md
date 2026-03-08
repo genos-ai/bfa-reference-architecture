@@ -163,7 +163,94 @@ Without `--yes`, you will be prompted for confirmation.
 
 ---
 
-## 5. Testing
+## 5. Playbook Execution (Repeatable Multi-Agent Workflows)
+
+Playbooks are YAML-defined multi-step workflows that execute missions in dependency order. Unlike dynamic missions where the Planning Agent decides everything at runtime, playbooks provide repeatable, deterministic execution plans.
+
+### List available playbooks
+
+```bash
+python cli.py --service playbook --playbook-action list
+```
+
+### Inspect a playbook
+
+```bash
+python cli.py --service playbook --playbook-action detail --playbook-name ops.platform-self-audit
+```
+
+### Execute a playbook
+
+```bash
+# Default output (AI-generated summary)
+python cli.py --service playbook --playbook-action run --playbook-name ops.platform-self-audit --verbose
+
+# With specific output format
+python cli.py --service playbook --playbook-action run --playbook-name ops.platform-self-audit --output detail
+python cli.py --service playbook --playbook-action run --playbook-name ops.platform-self-audit --output json
+```
+
+### List playbook runs
+
+```bash
+python cli.py --service playbook --playbook-action runs
+```
+
+### Inspect a specific run (with missions)
+
+```bash
+python cli.py --service playbook --playbook-action run-detail --run-id <id>
+```
+
+### Render a report for a past run
+
+```bash
+# AI-generated narrative summary (default)
+python cli.py --service playbook --playbook-action report --run-id <id>
+
+# Deterministic per-step breakdown
+python cli.py --service playbook --playbook-action report --run-id <id> --output detail
+
+# Raw structured JSON
+python cli.py --service playbook --playbook-action report --run-id <id> --output json
+```
+
+---
+
+## 6. Preflight Credit Check
+
+Before running missions or playbooks, verify that all models in the roster have available credits. This is done automatically when you run a mission or playbook, but you can also run it standalone.
+
+### Check default roster
+
+```bash
+python cli.py --service credits
+```
+
+### Check a specific roster
+
+```bash
+python cli.py --service credits --roster default
+```
+
+Output shows pass/fail per model:
+
+```
+Preflight credit check (roster: default)...
+
+✓ PASS  anthropic:claude-haiku-4-5-20251001 (287ms)
+✓ PASS  anthropic:claude-opus-4-20250514 (312ms)
+
+All models OK — ready to run missions and playbooks.
+```
+
+The check is **provider-agnostic** — it uses the same model-building path as agents (PydanticAI), so it works with any provider configured in the roster. Each unique model gets a one-token ping (~$0.004 total).
+
+Mission and playbook `run`/`execute` actions automatically run preflight and abort if any model lacks credits, so you never burn orchestration time on a doomed run.
+
+---
+
+## 7. Testing
 
 ```bash
 # Run all unit tests
@@ -179,7 +266,7 @@ python cli.py --service test --test-type e2e
 
 ---
 
-## 6. Background Services
+## 8. Background Services
 
 ```bash
 # Task worker (Celery/SAQ)
@@ -213,24 +300,27 @@ python cli.py --service db --db-action clear --yes
 # 3. Verify clean state
 python cli.py --service db --db-action stats
 
-# 4. Run a mission
+# 4. Check credits before running anything
+python cli.py --service credits
+
+# 5. Run a mission
 python cli.py --service mission --mission-action run \
   --objective "audit the platform: run a code quality scan and a system health check" \
   --budget 2.00 \
   --verbose
 
-# 5. List missions
+# 6. List missions
 python cli.py --service mission --mission-action list
 
-# 6. Check what was persisted
+# 7. Check what was persisted
 python cli.py --service db --db-action stats
 python cli.py --service db --db-action query --table missions
 python cli.py --service db --db-action query --table task_executions
 
-# 7. Get cost breakdown (use the mission_records ID from query output)
+# 8. Get cost breakdown (use the mission_records ID from query output)
 python cli.py --service mission --mission-action cost --mission-id <record-id>
 
-# 8. Run tests to confirm nothing broke
+# 9. Run tests to confirm nothing broke
 python cli.py --service test --test-type unit
 ```
 
@@ -250,4 +340,5 @@ python cli.py --service test --test-type unit
 | `--action` | `-a` | Lifecycle action: `start`, `stop`, `restart`, `status` |
 | `--verbose` | `-v` | INFO-level logging |
 | `--debug` | `-d` | DEBUG-level logging |
+| `--output` | `-o` | Report format: `summary` (AI narrative), `detail` (deterministic), `json` (raw) |
 | `--yes` | `-y` | Skip confirmation prompts |
