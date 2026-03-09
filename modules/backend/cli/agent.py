@@ -29,10 +29,10 @@ def show_agents(cli_logger) -> None:
     from modules.backend.cli.report import DOTTED_ROWS, build_table, get_console
 
     table = build_table("Available Agents", columns=[
-        ("Agent",       {"style": "cyan"}),
-        ("Description", {}),
-        ("Tools",       {"style": "green"}),
-        ("Folders",     {"style": "dim"}),
+        ("Agent",       {"style": "cyan", "width": 26}),
+        ("Description", {"ratio": 2, "no_wrap": False}),
+        ("Tools",       {"style": "green", "ratio": 2, "no_wrap": False}),
+        ("Folders",     {"style": "dim", "width": 20, "no_wrap": False}),
     ], show_lines=True, table_box=DOTTED_ROWS)
 
     for agent in agents:
