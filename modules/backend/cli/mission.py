@@ -20,6 +20,9 @@ class _AbortMission(Exception):
     pass
 
 
+_REPORT_FORMAT = {"pretty": "summary", "human": "detail", "jsonl": "json"}
+
+
 def run_mission(
     cli_logger,
     action: str,
@@ -28,9 +31,10 @@ def run_mission(
     roster: str,
     budget: float | None,
     triggered_by: str,
-    output_format: str = "summary",
+    output_format: str = "pretty",
 ) -> None:
     """Dispatch mission CLI actions."""
+    output_format = _REPORT_FORMAT.get(output_format, output_format)
     actions = {
         "create": _action_create,
         "execute": _action_execute,

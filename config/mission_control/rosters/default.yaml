@@ -20,6 +20,7 @@ agents:
       temperature: 0.0
       max_tokens: 4096
     tools:
+      - compliance.load_project_standards
       - filesystem.read_file
       - filesystem.list_files
       - compliance.scan_imports

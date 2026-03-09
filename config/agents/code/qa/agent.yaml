@@ -35,9 +35,9 @@ description: "Audits the codebase for compliance violations (read-only)"
 enabled: true
 model: anthropic:claude-sonnet-4-20250514
 max_input_length: 2000
-max_budget_usd: 1.00
-max_tokens: 100000
-max_requests: 15
+max_budget_usd: 2.00
+max_tokens: 500000
+max_requests: 25
 file_size_limit: 1000
 
 execution:
@@ -51,6 +51,7 @@ keywords:
   - code review
   - rule check
 tools:
+  - compliance.load_project_standards
   - filesystem.read_file
   - filesystem.list_files
   - compliance.scan_imports
@@ -64,8 +65,10 @@ scope:
   read:
     - "modules/"
     - "config/"
-    - "tests/"
+    - "docs/"
     - "*.py"
+    - "*.md"
+    - "requirements.txt"
   write: []
 
 rules:
@@ -113,7 +116,7 @@ rules:
 exclusions:
   paths:
     - "scripts/"
-    - "docs/"
+    - "tests/"
     - ".venv/"
     - "__pycache__/"
     - ".git/"

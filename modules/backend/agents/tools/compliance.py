@@ -6,6 +6,7 @@ accepts project_root, scope, and config — and delegates to the service.
 No PydanticAI dependency.
 """
 
+import json
 from pathlib import Path
 
 from modules.backend.agents.config_schema import AgentConfigSchema
@@ -63,3 +64,35 @@ async def scan_config_files(
     """Scan YAML config files for missing option header comments."""
     scope.check_read("config/")
     return _get_scanner(project_root, config).scan_config_files()
+
+
+async def load_project_standards(
+    project_root: Path, scope: FileScope,
+) -> dict:
+    """Load project rules from docs/*-rules/*.jsonl.
+
+    Returns all rules (deterministic checks and principle-based reviews)
+    as a flat list. Principles are codified as JSONL rules with
+    check="review" to signal they require LLM judgment.
+    """
+    scope.check_read("docs/")
+    docs_dir = project_root / "docs"
+    rules: list[dict] = []
+
+    for rules_dir in sorted(docs_dir.glob("*-rules")):
+        if not rules_dir.is_dir():
+            continue
+        for jsonl_file in sorted(rules_dir.glob("*.jsonl")):
+            source = jsonl_file.name
+            for line in jsonl_file.read_text().splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rule = json.loads(line)
+                    rule["source_file"] = source
+                    rules.append(rule)
+                except json.JSONDecodeError:
+                    continue
+
+    return {"rules": rules}

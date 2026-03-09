@@ -40,6 +40,17 @@ def create_agent(model: str | Model) -> Agent[QaAgentDeps, QaAuditResult]:
     )
 
     @agent.tool
+    async def load_project_standards(ctx: RunContext[QaAgentDeps]) -> dict:
+        """Load project rules from docs/. Call this FIRST before scanning."""
+        ctx.deps.emit({"type": "tool_start", "tool": "load_project_standards"})
+        result = await compliance.load_project_standards(ctx.deps.project_root, ctx.deps.scope)
+        ctx.deps.emit({
+            "type": "tool_done", "tool": "load_project_standards",
+            "detail": f"{len(result['rules'])} rules",
+        })
+        return result
+
+    @agent.tool
     async def list_python_files(ctx: RunContext[QaAgentDeps]) -> list[str]:
         """List all Python files in scope, respecting exclusion patterns."""
         ctx.deps.emit({"type": "tool_start", "tool": "list_python_files"})

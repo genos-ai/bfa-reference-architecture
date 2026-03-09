@@ -15,15 +15,19 @@ from modules.backend.core.logging import get_logger
 logger = get_logger(__name__)
 
 
+_REPORT_FORMAT = {"pretty": "summary", "human": "detail", "jsonl": "json"}
+
+
 def run_playbook_cli(
     cli_logger,
     action: str,
     playbook_name: str | None,
     run_id: str | None,
     triggered_by: str,
-    output_format: str = "summary",
+    output_format: str = "pretty",
 ) -> None:
     """Dispatch playbook CLI actions."""
+    output_format = _REPORT_FORMAT.get(output_format, output_format)
     actions = {
         "list": _action_list,
         "detail": _action_detail,

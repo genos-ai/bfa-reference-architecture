@@ -31,6 +31,20 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from modules.backend.core.config import validate_project_root
 from modules.backend.core.logging import bind_context, get_logger, setup_logging
 
+# Unified output format for all commands — single source of truth.
+OUTPUT_FORMATS = click.Choice(["pretty", "human", "jsonl"])
+
+# Maps unified format names to legacy report.py names (summary/detail/json).
+_REPORT_FORMAT = {"pretty": "summary", "human": "detail", "jsonl": "json"}
+
+
+def output_option(default: str = "pretty"):
+    """Reusable -o/--output option decorator."""
+    return click.option(
+        "-o", "--output", "output_format", default=default,
+        type=OUTPUT_FORMATS, help="Output format.",
+    )
+
 
 # =============================================================================
 # Root group — global options propagate to all subcommands
@@ -136,8 +150,7 @@ def credits(ctx, roster: str):
 @click.argument("message", required=False, default=None)
 @click.option("--name", default=None, help="Target a specific agent, bypassing routing.")
 @click.option("--list", "list_agents", is_flag=True, help="List available agents.")
-@click.option("-o", "--output", "output_format", default="pretty",
-              type=click.Choice(["pretty", "human", "jsonl"]), help="Output format.")
+@output_option()
 @click.pass_context
 def agent(ctx, message: str | None, name: str | None, list_agents: bool, output_format: str):
     """Send a message to an agent.
@@ -388,8 +401,7 @@ def mission(ctx):
 @click.option("--roster", default="default", help="Agent roster to use.")
 @click.option("--budget", default=None, type=float, help="Cost ceiling in USD.")
 @click.option("--triggered-by", default="user:cli", help="Trigger origin.")
-@click.option("-o", "--output", "output_format", default="summary",
-              type=click.Choice(["summary", "detail", "json"]), help="Report format.")
+@output_option()
 @click.pass_obj
 def mission_run(ctx, objective, roster, budget, triggered_by, output_format):
     """Create and execute a mission in one step."""
@@ -416,8 +428,7 @@ def mission_create(ctx, objective, roster, budget, triggered_by):
 @mission.command("execute")
 @click.argument("mission_id")
 @click.option("--roster", default="default", help="Agent roster to use.")
-@click.option("-o", "--output", "output_format", default="summary",
-              type=click.Choice(["summary", "detail", "json"]), help="Report format.")
+@output_option()
 @click.pass_obj
 def mission_execute(ctx, mission_id, roster, output_format):
     """Execute an existing PENDING mission."""
@@ -439,8 +450,7 @@ def mission_list(ctx):
 
 @mission.command("detail")
 @click.argument("mission_id")
-@click.option("-o", "--output", "output_format", default="detail",
-              type=click.Choice(["summary", "detail", "json"]), help="Output depth.")
+@output_option(default="human")
 @click.pass_obj
 def mission_detail(ctx, mission_id, output_format):
     """Show mission detail with task executions."""
@@ -503,8 +513,7 @@ def playbook_detail(ctx, name):
 @playbook.command("run")
 @click.argument("name")
 @click.option("--triggered-by", default="user:cli", help="Trigger origin.")
-@click.option("-o", "--output", "output_format", default="summary",
-              type=click.Choice(["summary", "detail", "json"]), help="Report format.")
+@output_option()
 @click.pass_obj
 def playbook_run(ctx, name, triggered_by, output_format):
     """Execute a playbook."""
@@ -535,8 +544,7 @@ def playbook_run_detail(ctx, run_id):
 
 @playbook.command("report")
 @click.argument("run_id")
-@click.option("-o", "--output", "output_format", default="summary",
-              type=click.Choice(["summary", "detail", "json"]), help="Report format.")
+@output_option()
 @click.pass_obj
 def playbook_report(ctx, run_id, output_format):
     """Render a report for a past playbook run."""

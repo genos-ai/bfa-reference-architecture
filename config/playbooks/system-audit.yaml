@@ -64,7 +64,7 @@ steps:
     cost_ceiling_usd: 0.50
     environment: local
     input:
-      query: "Run all five health checks: scan logs for errors, validate config files, check dependencies, verify file structure, and get app info"
+      query: "Run all six health checks: check service connectivity (PostgreSQL, Redis), scan logs for errors, validate config files, check dependencies, verify file structure, and get app info"
     output_mapping:
       field_mappings:
         - source_task: system.health.agent
