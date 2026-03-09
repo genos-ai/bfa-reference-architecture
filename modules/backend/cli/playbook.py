@@ -183,9 +183,6 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
     await _preflight_gate(playbook_name)
 
     from modules.backend.core.database import get_async_session
-    from modules.backend.agents.mission_control.dispatch_adapter import (
-        MissionControlDispatchAdapter,
-    )
     from modules.backend.cli.report import (
         get_console, build_table, styled_status, status_panel,
         info_panel, render_playbook_run,
@@ -193,7 +190,6 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
     )
     from modules.backend.services.mission import MissionService
     from modules.backend.services.playbook_run import PlaybookRunService
-    from modules.backend.services.session import SessionService
 
     from rich.live import Live
 
@@ -249,19 +245,9 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
             live.update(_build_progress_table())
 
     async with get_async_session() as db:
-        session_service = SessionService(db)
-        adapter = MissionControlDispatchAdapter(
-            session_service=session_service,
-            db_session=db,
-        )
-        mission_service = MissionService(
-            session=db,
-            mission_control_dispatch=adapter,
-            session_service=session_service,
-        )
         run_service = PlaybookRunService(
             session=db,
-            mission_service=mission_service,
+            mission_service_factory=MissionService.factory,
         )
 
         with live:
@@ -301,14 +287,9 @@ async def _action_runs(cli_logger, *, playbook_name, run_id, triggered_by, outpu
     from modules.backend.cli.report import get_console, build_table, styled_status
     from modules.backend.core.database import get_async_session
     from modules.backend.services.playbook_run import PlaybookRunService
-    from modules.backend.services.mission import MissionService
 
     async with get_async_session() as db:
-        mission_service = MissionService(session=db)
-        run_service = PlaybookRunService(
-            session=db,
-            mission_service=mission_service,
-        )
+        run_service = PlaybookRunService(session=db)
         runs, total = await run_service.list_runs(
             playbook_name=playbook_name,
             limit=20,
@@ -411,10 +392,7 @@ async def _load_run_with_missions(run_id: str):
 
     async with get_async_session() as db:
         mission_service = MissionService(session=db)
-        run_service = PlaybookRunService(
-            session=db,
-            mission_service=mission_service,
-        )
+        run_service = PlaybookRunService(session=db)
         run = await run_service.get_run(run_id)
         if not run:
             click.echo(click.style(f"Playbook run '{run_id}' not found.", fg="red"), err=True)

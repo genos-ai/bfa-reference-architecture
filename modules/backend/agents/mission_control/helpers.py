@@ -308,9 +308,18 @@ def _make_agent_executor(session_service: Any, event_bus: Any | None) -> Any:
         agent = module.create_agent(model)
         deps = _build_agent_deps(agent_name, agent_config)
 
+        # Merge inputs into the user message so the agent sees them
+        user_message = instructions
+        if inputs:
+            user_message = (
+                f"{instructions}\n\n"
+                f"## Inputs\n\n```json\n"
+                f"{json.dumps(inputs, indent=2, default=str)}\n```"
+            )
+
         # Call agent.run() directly to retain usage metadata
         run_result = await agent.run(
-            instructions, deps=deps, usage_limits=usage_limits,
+            user_message, deps=deps, usage_limits=usage_limits,
         )
 
         # Extract output

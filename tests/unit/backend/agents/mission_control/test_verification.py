@@ -85,7 +85,7 @@ def valid_output():
 @pytest.fixture
 def mock_verification_agent():
     """Mock execute_agent_fn that returns a passing evaluation."""
-    async def _execute(agent_name, instructions, context):
+    async def _execute(agent_name, instructions, inputs, **kwargs):
         return {
             "overall_score": 0.92,
             "passed": True,
@@ -109,7 +109,7 @@ def mock_verification_agent():
 @pytest.fixture
 def mock_failing_verification_agent():
     """Mock execute_agent_fn that returns a failing evaluation."""
-    async def _execute(agent_name, instructions, context):
+    async def _execute(agent_name, instructions, inputs, **kwargs):
         return {
             "overall_score": 0.45,
             "passed": False,
@@ -294,6 +294,8 @@ class TestTier3:
         task = {
             "task_id": "t1",
             "agent": "horizontal.verification.agent",
+            "description": "Test task for self-evaluation prevention",
+            "instructions": "Evaluate the output",
             "verification": {
                 "tier_1": {"schema_validation": True},
                 "tier_3": {
@@ -305,7 +307,7 @@ class TestTier3:
             },
         }
 
-        async def _should_not_be_called(agent_name, instructions, context):
+        async def _should_not_be_called(agent_name, instructions, inputs, **kwargs):
             raise AssertionError("Self-evaluation should be prevented")
 
         result = await run_verification_pipeline(
@@ -317,6 +319,80 @@ class TestTier3:
         assert result.passed is False
         assert result.failed_tier == 3
         assert "Self-evaluation prevented" in result.tier_3.details
+
+    @pytest.mark.asyncio
+    async def test_skipped_when_no_criteria(self, valid_output):
+        """Tier 3 skips (not fails) when evaluation_criteria is empty (P2)."""
+        task = {
+            "task_id": "t1",
+            "agent": "code.qa.agent",
+            "instructions": "Scan the codebase",
+            "description": "QA scan",
+            "verification": {
+                "tier_1": {"schema_validation": True},
+                "tier_3": {
+                    "requires_ai_evaluation": True,
+                    "evaluation_criteria": [],
+                    "evaluator_agent": "horizontal.verification.agent",
+                    "min_evaluation_score": 0.8,
+                },
+            },
+        }
+        result = await run_verification_pipeline(
+            output=valid_output, task=task, agent_interface=None,
+        )
+        assert result.passed is True
+        assert result.tier_3.status == TierStatus.SKIPPED
+        assert "No evaluation_criteria" in result.tier_3.details
+
+    @pytest.mark.asyncio
+    async def test_skipped_when_no_instructions_or_description(self, valid_output):
+        """Tier 3 skips when task has no instructions or description."""
+        task = {
+            "task_id": "t1",
+            "agent": "code.qa.agent",
+            "verification": {
+                "tier_1": {"schema_validation": True},
+                "tier_3": {
+                    "requires_ai_evaluation": True,
+                    "evaluation_criteria": ["check quality"],
+                    "evaluator_agent": "horizontal.verification.agent",
+                    "min_evaluation_score": 0.8,
+                },
+            },
+        }
+        result = await run_verification_pipeline(
+            output=valid_output, task=task, agent_interface=None,
+        )
+        assert result.passed is True
+        assert result.tier_3.status == TierStatus.SKIPPED
+        assert "instructions or description" in result.tier_3.details
+
+    @pytest.mark.asyncio
+    async def test_skipped_when_output_only_has_meta(self):
+        """Tier 3 skips when agent output is empty (only _meta)."""
+        task = {
+            "task_id": "t1",
+            "agent": "code.qa.agent",
+            "instructions": "Scan the codebase",
+            "description": "QA scan",
+            "verification": {
+                "tier_1": {"schema_validation": False},
+                "tier_3": {
+                    "requires_ai_evaluation": True,
+                    "evaluation_criteria": ["check quality"],
+                    "evaluator_agent": "horizontal.verification.agent",
+                    "min_evaluation_score": 0.8,
+                },
+            },
+        }
+        output = {"_meta": {"input_tokens": 100, "cost_usd": 0.01}}
+        result = await run_verification_pipeline(
+            output=output, task=task, agent_interface=None,
+        )
+        assert result.passed is True
+        assert result.tier_3.status == TierStatus.SKIPPED
+        assert "empty" in result.tier_3.details
 
     @pytest.mark.asyncio
     async def test_does_not_run_if_tier1_fails(self, task_with_tier3):

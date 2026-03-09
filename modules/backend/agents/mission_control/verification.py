@@ -324,6 +324,58 @@ async def _run_tier_3(
             execution_time_ms=_elapsed_ms(start),
         )
 
+    evaluation_criteria = tier_3_config.get("evaluation_criteria", [])
+    evaluator_agent = tier_3_config.get("evaluator_agent", "verification_agent")
+    min_score = tier_3_config.get("min_evaluation_score", 0.8)
+
+    # ---- Pre-flight validation (P2: deterministic over non-deterministic) ----
+    # Catch configuration gaps before spending an Opus call.
+    # These are planning errors, not agent quality failures — skip, don't fail,
+    # so we don't burn retry budget on something the task agent can't fix.
+
+    if not evaluation_criteria:
+        logger.warning(
+            "Tier 3 skipped: no evaluation_criteria provided",
+            extra={"task_id": task.get("task_id")},
+        )
+        return TierResult(
+            tier=3,
+            status=TierStatus.SKIPPED,
+            details="No evaluation_criteria provided — nothing to evaluate against",
+            execution_time_ms=_elapsed_ms(start),
+        )
+
+    task_instructions = task.get("instructions", "")
+    task_description = task.get("description", "")
+
+    if not task_instructions and not task_description:
+        logger.warning(
+            "Tier 3 skipped: no task instructions or description",
+            extra={"task_id": task.get("task_id")},
+        )
+        return TierResult(
+            tier=3,
+            status=TierStatus.SKIPPED,
+            details="No task instructions or description — evaluator lacks context",
+            execution_time_ms=_elapsed_ms(start),
+        )
+
+    # Strip _meta before checking — it's transport metadata, not agent output
+    agent_output = {k: v for k, v in output.items() if k != "_meta"}
+    if not agent_output:
+        logger.warning(
+            "Tier 3 skipped: agent output is empty (ignoring _meta)",
+            extra={"task_id": task.get("task_id")},
+        )
+        return TierResult(
+            tier=3,
+            status=TierStatus.SKIPPED,
+            details="Agent output is empty — nothing to evaluate",
+            execution_time_ms=_elapsed_ms(start),
+        )
+
+    # ---- Infrastructure checks ----
+
     if execute_agent_fn is None:
         return TierResult(
             tier=3,
@@ -331,10 +383,6 @@ async def _run_tier_3(
             details="Tier 3 required but no execute_agent_fn provided",
             execution_time_ms=_elapsed_ms(start),
         )
-
-    evaluation_criteria = tier_3_config.get("evaluation_criteria", [])
-    evaluator_agent = tier_3_config.get("evaluator_agent", "verification_agent")
-    min_score = tier_3_config.get("min_evaluation_score", 0.8)
 
     # Self-evaluation prevention (P13) — enforced in code
     task_agent = task.get("agent", "")
@@ -351,10 +399,10 @@ async def _run_tier_3(
 
     # Build evaluation context for the Verification Agent
     evaluation_context = {
-        "task_instructions": task.get("instructions", ""),
-        "task_description": task.get("description", ""),
+        "task_instructions": task_instructions,
+        "task_description": task_description,
         "evaluation_criteria": evaluation_criteria,
-        "agent_output": output,
+        "agent_output": agent_output,
         "upstream_context": task.get("inputs", {}).get("static", {}),
     }
 

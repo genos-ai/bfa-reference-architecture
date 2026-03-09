@@ -6,6 +6,8 @@ instantiates Mission Control with the appropriate roster, tracks
 MissionOutcome results, and manages inter-mission data flow.
 """
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,6 +42,38 @@ class MissionService(BaseService):
         self._mission_control_dispatch = mission_control_dispatch
         self._session_service = session_service
         self._event_bus = event_bus
+
+    @staticmethod
+    @asynccontextmanager
+    async def factory() -> AsyncGenerator["MissionService", None]:
+        """Create a MissionService with its own DB session.
+
+        Each call gets an independent session, adapter, and service —
+        safe for concurrent use in parallel playbook waves.
+
+        Usage:
+            async with MissionService.factory() as svc:
+                await svc.create_mission_from_step(...)
+                await svc.execute_mission(mission_id)
+        """
+        from modules.backend.agents.mission_control.dispatch_adapter import (
+            MissionControlDispatchAdapter,
+        )
+        from modules.backend.core.database import get_async_session
+        from modules.backend.services.session import SessionService
+
+        async with get_async_session() as db:
+            session_service = SessionService(db)
+            adapter = MissionControlDispatchAdapter(
+                session_service=session_service,
+                db_session=db,
+            )
+            yield MissionService(
+                session=db,
+                mission_control_dispatch=adapter,
+                session_service=session_service,
+            )
+            await db.commit()
 
     async def _publish_event(self, event: Any) -> None:
         """Publish event to session event bus (best-effort)."""

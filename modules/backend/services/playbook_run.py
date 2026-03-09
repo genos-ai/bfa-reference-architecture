@@ -5,12 +5,17 @@ Executes a playbook end-to-end: creates a PlaybookRun record, resolves
 steps into missions, dispatches them in dependency order, chains outputs
 between steps, and tracks aggregate cost.
 
+Steps within the same wave (no mutual dependencies) execute in parallel,
+each with its own DB session to avoid SQLAlchemy async flush conflicts.
+
 This is the bridge between the stateless PlaybookService (YAML loading)
 and the stateful MissionService (mission lifecycle).
 """
 
+import asyncio
 from collections import defaultdict
-from typing import Any
+from contextlib import AbstractAsyncContextManager
+from typing import Any, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +29,10 @@ from modules.backend.services.base import BaseService
 from modules.backend.services.mission import MissionService
 from modules.backend.services.playbook import PlaybookService
 
+# Factory that returns an async context manager yielding a MissionService.
+# Default implementation: MissionService.factory
+MissionServiceFactory = Callable[[], AbstractAsyncContextManager[MissionService]]
+
 logger = get_logger(__name__)
 
 
@@ -33,12 +42,12 @@ class PlaybookRunService(BaseService):
     def __init__(
         self,
         session: AsyncSession,
-        mission_service: MissionService,
+        mission_service_factory: MissionServiceFactory | None = None,
         playbook_service: PlaybookService | None = None,
     ) -> None:
         super().__init__(session)
         self._run_repo = PlaybookRunRepository(session)
-        self._mission_service = mission_service
+        self._mission_service_factory = mission_service_factory
         self._playbook_service = playbook_service or PlaybookService()
 
     async def run_playbook(
@@ -171,7 +180,13 @@ class PlaybookRunService(BaseService):
         session_id: str,
         on_progress: Any | None = None,
     ) -> None:
-        """Execute steps in topological wave order."""
+        """Execute steps in topological wave order.
+
+        Steps within a wave have no mutual dependencies and run in
+        parallel via asyncio.gather. Each step gets its own DB session
+        (via mission_service_factory) to avoid SQLAlchemy flush conflicts.
+        Falls back to sequential execution when no factory is provided.
+        """
         waves = self._compute_waves(playbook.steps)
         completed_outcomes: dict[str, dict] = {}
         step_map = {step.id: step for step in playbook.steps}
@@ -200,11 +215,7 @@ class PlaybookRunService(BaseService):
                     f"${run.budget_usd:.2f}"
                 )
 
-            # Execute steps in this wave sequentially.
-            # SQLAlchemy async sessions are not safe for concurrent
-            # coroutines (flush conflicts), so we serialize within
-            # each wave. Inter-wave ordering still respects the
-            # dependency graph.
+            # Emit step_start for all steps in wave
             for step_id in wave_step_ids:
                 step = step_map[step_id]
                 _emit({
@@ -213,29 +224,63 @@ class PlaybookRunService(BaseService):
                     "capability": step.capability,
                     "description": step.description or step_id,
                 })
-                mission, extracted_outputs = await self._execute_step(
-                    run, playbook, step, session_id,
-                    completed_outcomes,
-                )
-                completed_outcomes[step_id] = extracted_outputs
+
+            # Execute all steps in this wave concurrently
+            wave_steps = [step_map[sid] for sid in wave_step_ids]
+            results = await self._execute_wave(
+                run, wave_steps, session_id, completed_outcomes,
+            )
+
+            # Collect results sequentially (cost, outcomes, events)
+            for step, (mission, extracted_outputs) in zip(wave_steps, results):
+                completed_outcomes[step.id] = extracted_outputs
                 run.total_cost_usd += mission.total_cost_usd
                 status_str = mission.status if isinstance(mission.status, str) else mission.status.value
                 _emit({
                     "type": "step_done",
-                    "step_id": step_id,
+                    "step_id": step.id,
                     "status": status_str,
                     "cost_usd": mission.total_cost_usd,
                     "completed_steps": len(completed_outcomes),
                     "total_steps": total_steps,
                 })
 
+    async def _execute_wave(
+        self,
+        run: PlaybookRun,
+        steps: list[PlaybookStepSchema],
+        session_id: str,
+        completed_outcomes: dict[str, dict],
+    ) -> list[tuple[Any, dict]]:
+        """Execute all steps in a wave concurrently.
+
+        Each step gets its own DB session via the factory to avoid
+        SQLAlchemy async flush conflicts.
+        """
+        if self._mission_service_factory is None:
+            raise RuntimeError(
+                "mission_service_factory is required to execute playbooks"
+            )
+
+        async def _run_step(step: PlaybookStepSchema) -> tuple[Any, dict]:
+            async with self._mission_service_factory() as mission_service:
+                return await self._execute_step(
+                    run, step, session_id, completed_outcomes,
+                    mission_service,
+                )
+
+        results = await asyncio.gather(
+            *[_run_step(step) for step in steps],
+        )
+        return list(results)
+
     async def _execute_step(
         self,
         run: PlaybookRun,
-        playbook: PlaybookSchema,
         step: PlaybookStepSchema,
         session_id: str,
         completed_outcomes: dict[str, dict],
+        mission_service: MissionService,
     ) -> tuple[Any, dict]:
         """Execute a single playbook step as a mission."""
         # Resolve upstream context from dependencies
@@ -254,7 +299,7 @@ class PlaybookRunService(BaseService):
         )
 
         # Create mission from playbook step
-        mission = await self._mission_service.create_mission_from_step(
+        mission = await mission_service.create_mission_from_step(
             playbook_run_id=run.id,
             step_id=step.id,
             objective=objective,
@@ -276,7 +321,7 @@ class PlaybookRunService(BaseService):
         )
 
         # Execute the mission
-        mission = await self._mission_service.execute_mission(mission.id)
+        mission = await mission_service.execute_mission(mission.id)
 
         # Extract outputs for downstream steps
         output_mapping = (
@@ -284,7 +329,7 @@ class PlaybookRunService(BaseService):
             if step.output_mapping
             else None
         )
-        extracted = self._mission_service.extract_outputs(
+        extracted = mission_service.extract_outputs(
             mission, output_mapping,
         )
 
