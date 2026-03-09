@@ -258,6 +258,7 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
             )
 
         # Fetch missions for report rendering
+        mission_service = MissionService(session=db)
         missions, _ = await mission_service.list_missions(
             playbook_run_id=run.id,
         )
