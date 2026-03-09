@@ -35,14 +35,6 @@ from modules.backend.core.logging import bind_context, get_logger, setup_logging
 OUTPUT_FORMATS = click.Choice(["human", "json", "jsonl"])
 
 
-def output_option(default: str = "human"):
-    """Reusable -o/--output option decorator."""
-    return click.option(
-        "-o", "--output", "output_format", default=default,
-        type=OUTPUT_FORMATS, help="Output format.",
-    )
-
-
 # =============================================================================
 # Root group — global options propagate to all subcommands
 # =============================================================================
@@ -51,7 +43,7 @@ def output_option(default: str = "human"):
 class CliContext:
     """Shared context passed to all subcommands."""
 
-    def __init__(self, verbose: bool, debug: bool):
+    def __init__(self, verbose: bool, debug: bool, output_format: str = "human"):
         if debug:
             log_level = "DEBUG"
         elif verbose:
@@ -63,6 +55,7 @@ class CliContext:
         setup_logging(level=log_level, format_type="console")
         bind_context(source="cli")
         self.logger = get_logger("cli")
+        self.output_format = output_format
 
 
 class ShowHelpOnMissingArgs(click.Group):
@@ -84,8 +77,10 @@ class ShowHelpOnMissingArgs(click.Group):
 @click.group(cls=ShowHelpOnMissingArgs, invoke_without_command=True)
 @click.option("--verbose", "-v", is_flag=True, help="Enable INFO-level logging.")
 @click.option("--debug", "-d", is_flag=True, help="Enable DEBUG-level logging.")
+@click.option("-o", "--output", "output_format", default="human",
+              type=OUTPUT_FORMATS, help="Output format (human, json, jsonl).")
 @click.pass_context
-def cli(ctx, verbose: bool, debug: bool):
+def cli(ctx, verbose: bool, debug: bool, output_format: str):
     """BFA Platform CLI.
 
     \b
@@ -95,7 +90,7 @@ def cli(ctx, verbose: bool, debug: bool):
     Agents:          agent, mission, playbook
     """
     ctx.ensure_object(dict)
-    ctx.obj = CliContext(verbose, debug)
+    ctx.obj = CliContext(verbose, debug, output_format)
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
@@ -110,7 +105,7 @@ def cli(ctx, verbose: bool, debug: bool):
 def health(ctx):
     """Run local health checks."""
     from modules.backend.cli.health import check_health
-    check_health(ctx.logger)
+    check_health(ctx.logger, output_format=ctx.output_format)
 
 
 @cli.command()
@@ -118,7 +113,7 @@ def health(ctx):
 def config(ctx):
     """Display loaded YAML configuration."""
     from modules.backend.cli.config_display import show_config
-    show_config(ctx.logger)
+    show_config(ctx.logger, output_format=ctx.output_format)
 
 
 @cli.command()
@@ -126,7 +121,7 @@ def config(ctx):
 def info(ctx):
     """Show application metadata and version."""
     from modules.backend.cli.info import show_info
-    show_info(ctx.logger)
+    show_info(ctx.logger, output_format=ctx.output_format)
 
 
 @cli.command()
@@ -135,7 +130,7 @@ def info(ctx):
 def credits(ctx, roster: str):
     """Preflight credit check — verify all roster models have available credits."""
     from modules.backend.cli.credits import check_credits
-    check_credits(ctx.logger, roster=roster)
+    check_credits(ctx.logger, roster=roster, output_format=ctx.output_format)
 
 
 # =============================================================================
@@ -147,16 +142,15 @@ def credits(ctx, roster: str):
 @click.argument("message", required=False, default=None)
 @click.option("--name", default=None, help="Target a specific agent, bypassing routing.")
 @click.option("--list", "list_agents", is_flag=True, help="List available agents.")
-@output_option()
 @click.pass_context
-def agent(ctx, message: str | None, name: str | None, list_agents: bool, output_format: str):
+def agent(ctx, message: str | None, name: str | None, list_agents: bool):
     """Send a message to an agent.
 
     \b
     Examples:
         python cli.py agent "run a health check"
         python cli.py agent "scan code quality" --name code.qa.agent
-        python cli.py agent "check health" -o jsonl
+        python cli.py -o jsonl agent "check health"
         python cli.py agent --list
     """
     if list_agents:
@@ -167,7 +161,7 @@ def agent(ctx, message: str | None, name: str | None, list_agents: bool, output_
         click.echo(ctx.get_help())
         return
     from modules.backend.cli.agent import run_agent
-    run_agent(ctx.obj.logger, message, name, output_format)
+    run_agent(ctx.obj.logger, message, name, ctx.obj.output_format)
 
 
 # =============================================================================
@@ -398,14 +392,13 @@ def mission(ctx):
 @click.option("--roster", default="default", help="Agent roster to use.")
 @click.option("--budget", default=None, type=float, help="Cost ceiling in USD.")
 @click.option("--triggered-by", default="user:cli", help="Trigger origin.")
-@output_option()
 @click.pass_obj
-def mission_run(ctx, objective, roster, budget, triggered_by, output_format):
+def mission_run(ctx, objective, roster, budget, triggered_by):
     """Create and execute a mission in one step."""
     from modules.backend.cli.mission import run_mission
     run_mission(ctx.logger, action="run", objective=objective, mission_id=None,
                 roster=roster, budget=budget, triggered_by=triggered_by,
-                output_format=output_format)
+                output_format=ctx.output_format)
 
 
 @mission.command("create")
@@ -419,20 +412,19 @@ def mission_create(ctx, objective, roster, budget, triggered_by):
     from modules.backend.cli.mission import run_mission
     run_mission(ctx.logger, action="create", objective=objective, mission_id=None,
                 roster=roster, budget=budget, triggered_by=triggered_by,
-                output_format="human")
+                output_format=ctx.output_format)
 
 
 @mission.command("execute")
 @click.argument("mission_id")
 @click.option("--roster", default="default", help="Agent roster to use.")
-@output_option()
 @click.pass_obj
-def mission_execute(ctx, mission_id, roster, output_format):
+def mission_execute(ctx, mission_id, roster):
     """Execute an existing PENDING mission."""
     from modules.backend.cli.mission import run_mission
     run_mission(ctx.logger, action="execute", objective=None, mission_id=mission_id,
                 roster=roster, budget=None, triggered_by="user:cli",
-                output_format=output_format)
+                output_format=ctx.output_format)
 
 
 @mission.command("list")
@@ -442,19 +434,18 @@ def mission_list(ctx):
     from modules.backend.cli.mission import run_mission
     run_mission(ctx.logger, action="list", objective=None, mission_id=None,
                 roster="default", budget=None, triggered_by="user:cli",
-                output_format="human")
+                output_format=ctx.output_format)
 
 
 @mission.command("detail")
 @click.argument("mission_id")
-@output_option(default="human")
 @click.pass_obj
-def mission_detail(ctx, mission_id, output_format):
+def mission_detail(ctx, mission_id):
     """Show mission detail with task executions."""
     from modules.backend.cli.mission import run_mission
     run_mission(ctx.logger, action="detail", objective=None, mission_id=mission_id,
                 roster="default", budget=None, triggered_by="user:cli",
-                output_format=output_format)
+                output_format=ctx.output_format)
 
 
 @mission.command("cost")
@@ -465,7 +456,7 @@ def mission_cost(ctx, mission_id):
     from modules.backend.cli.mission import run_mission
     run_mission(ctx.logger, action="cost", objective=None, mission_id=mission_id,
                 roster="default", budget=None, triggered_by="user:cli",
-                output_format="human")
+                output_format=ctx.output_format)
 
 
 # =============================================================================
@@ -494,7 +485,7 @@ def playbook_list(ctx):
     """List available playbooks."""
     from modules.backend.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="list", playbook_name=None, run_id=None,
-                     triggered_by="user:cli", output_format="human")
+                     triggered_by="user:cli", output_format=ctx.output_format)
 
 
 @playbook.command("detail")
@@ -504,19 +495,18 @@ def playbook_detail(ctx, name):
     """Show playbook configuration and steps."""
     from modules.backend.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="detail", playbook_name=name, run_id=None,
-                     triggered_by="user:cli", output_format="human")
+                     triggered_by="user:cli", output_format=ctx.output_format)
 
 
 @playbook.command("run")
 @click.argument("name")
 @click.option("--triggered-by", default="user:cli", help="Trigger origin.")
-@output_option()
 @click.pass_obj
-def playbook_run(ctx, name, triggered_by, output_format):
+def playbook_run(ctx, name, triggered_by):
     """Execute a playbook."""
     from modules.backend.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="run", playbook_name=name, run_id=None,
-                     triggered_by=triggered_by, output_format=output_format)
+                     triggered_by=triggered_by, output_format=ctx.output_format)
 
 
 @playbook.command("runs")
@@ -526,7 +516,7 @@ def playbook_runs(ctx, name):
     """List playbook runs."""
     from modules.backend.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="runs", playbook_name=name, run_id=None,
-                     triggered_by="user:cli", output_format="human")
+                     triggered_by="user:cli", output_format=ctx.output_format)
 
 
 @playbook.command("run-detail")
@@ -536,18 +526,17 @@ def playbook_run_detail(ctx, run_id):
     """Show details for a specific playbook run."""
     from modules.backend.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="run-detail", playbook_name=None,
-                     run_id=run_id, triggered_by="user:cli", output_format="human")
+                     run_id=run_id, triggered_by="user:cli", output_format=ctx.output_format)
 
 
 @playbook.command("report")
 @click.argument("run_id")
-@output_option()
 @click.pass_obj
-def playbook_report(ctx, run_id, output_format):
+def playbook_report(ctx, run_id):
     """Render a report for a past playbook run."""
     from modules.backend.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="report", playbook_name=None,
-                     run_id=run_id, triggered_by="user:cli", output_format=output_format)
+                     run_id=run_id, triggered_by="user:cli", output_format=ctx.output_format)
 
 
 # =============================================================================

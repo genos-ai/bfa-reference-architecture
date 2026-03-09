@@ -9,7 +9,7 @@ import sys
 import click
 
 
-def show_config(logger) -> None:
+def show_config(logger, output_format: str = "human") -> None:
     """Display loaded configuration."""
     try:
         from modules.backend.cli.report import get_console, primary_panel

@@ -11,7 +11,7 @@ import sys
 import click
 
 
-def check_credits(logger, roster: str = "default") -> None:
+def check_credits(logger, roster: str = "default", output_format: str = "human") -> None:
     """Verify all roster models have available credits."""
     asyncio.run(_check_credits_async(logger, roster))
 

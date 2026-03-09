@@ -9,7 +9,7 @@ import sys
 import click
 
 
-def show_info(logger) -> None:
+def show_info(logger, output_format: str = "human") -> None:
     """Display application information."""
     click.echo("BFF Python Web Application")
     click.echo("=" * 40)

@@ -7,7 +7,7 @@ Runs diagnostic checks against core application components.
 import click
 
 
-def check_health(logger) -> None:
+def check_health(logger, output_format: str = "human") -> None:
     """Check application health by testing imports and configuration."""
     click.echo("Checking application health...\n")
 
