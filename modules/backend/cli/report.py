@@ -198,10 +198,15 @@ def summary_table(
 
 
 _SEVERITY_COLORS: dict[str, str] = {
+    "critical": "bold red",
     "error": "red",
     "warning": "yellow",
     "info": "dim",
-    "critical": "bold red",
+}
+
+# Sort priority — lower number = higher priority. Used by _build_dynamic_table.
+_SEVERITY_ORDER: dict[str, int] = {
+    "critical": 0, "error": 1, "warning": 2, "info": 3,
 }
 
 
@@ -211,37 +216,34 @@ def severity_color(severity: str) -> str:
 
 
 # =============================================================================
-# Human-friendly output — shape-detected rendering
+# Human-friendly output — dynamic shape-detected rendering
 # =============================================================================
 
-# Maps a list-field key to the columns that should be displayed for each item.
-# Each column is (header, item_key, column_kwargs).
-# The renderer picks the first matching key it finds in the parsed output.
-_LIST_RENDERERS: list[tuple[str, list[tuple[str, str, dict[str, Any]]]]] = [
-    ("violations", [
-        ("Sev",     "severity",       {"width": 8}),
-        ("Rule",    "rule_id",        {"style": "cyan", "width": 24}),
-        ("File",    "file",           {"style": "dim", "width": 44}),
-        ("Ln",      "line",           {"justify": "right", "width": 5}),
-        ("Message", "message",        {"ratio": 1, "no_wrap": False}),
-    ]),
-    ("findings", [
-        ("Sev",      "severity",      {"width": 8}),
-        ("Category", "category",      {"style": "cyan", "width": 20}),
-        ("File",     "file",          {"style": "dim", "width": 44}),
-        ("Finding",  "description",   {"ratio": 1, "no_wrap": False}),
-    ]),
-    ("checks", [
-        ("Status", "status",          {"width": 10}),
-        ("Check",  "name",            {"style": "cyan", "width": 30}),
-        ("Detail", "detail",          {"ratio": 1, "no_wrap": False}),
-    ]),
-    ("results", [
-        ("Status", "status",          {"width": 10}),
-        ("Item",   "name",            {"style": "cyan", "width": 30}),
-        ("Detail", "detail",          {"ratio": 1, "no_wrap": False}),
-    ]),
-]
+# Known field styles — applied automatically when a field name matches.
+# Keeps rendering data-driven without a static column registry.
+_FIELD_STYLES: dict[str, dict[str, Any]] = {
+    "severity":    {"width": 8},
+    "status":      {"width": 10},
+    "category":    {"style": "cyan", "width": 20},
+    "type":        {"style": "cyan", "width": 16},
+    "rule_id":     {"style": "cyan", "width": 24},
+    "rule":        {"style": "cyan", "width": 24},
+    "file":        {"style": "dim", "width": 44},
+    "path":        {"style": "dim", "width": 44},
+    "line":        {"justify": "right", "width": 5},
+    "line_number": {"justify": "right", "width": 5},
+    "name":        {"style": "cyan", "width": 30},
+    "check":       {"style": "cyan", "width": 30},
+}
+
+# Fields to exclude from the table (metadata, not useful as columns).
+_SKIP_FIELDS: set[str] = {"type", "id", "uuid"}
+
+# Fields that are always placed last (flex column, wraps text).
+_FLEX_FIELDS: set[str] = {
+    "message", "description", "detail", "details",
+    "finding", "summary", "output", "value",
+}
 
 
 def render_human(
@@ -252,9 +254,9 @@ def render_human(
 ) -> list[Any]:
     """Parse agent output and return human-friendly Rich renderables.
 
-    Detects the output shape (violations, findings, checks, results)
-    and renders an appropriate table. Falls back to formatted JSON
-    for unrecognised shapes.
+    Dynamically detects the output shape — finds the first top-level
+    list of dicts, discovers its fields, and renders a table. No static
+    registry; works with any agent output shape.
     """
     import json as _json
     from rich.text import Text
@@ -262,7 +264,6 @@ def render_human(
     try:
         parsed = _json.loads(raw)
     except (_json.JSONDecodeError, TypeError):
-        # Not JSON — wrap as plain text in a panel
         return [output_panel(Text(str(raw)), title=title, subtitle=subtitle)]
 
     if not isinstance(parsed, dict):
@@ -275,20 +276,13 @@ def render_human(
     if summary_text:
         renderables.append(info_panel(str(summary_text), title=title))
 
-    # Find the first matching list field and render it
-    rendered_list = False
-    for list_key, col_specs in _LIST_RENDERERS:
-        items = parsed.get(list_key)
-        if not isinstance(items, list) or not items:
-            continue
+    # Find the first top-level list of dicts
+    list_key, items = _find_list_field(parsed)
 
-        table = _build_list_table(items, col_specs=col_specs, list_key=list_key)
+    if items:
+        table = _build_dynamic_table(items, list_key=list_key)
         renderables.append(table)
-        rendered_list = True
-        break
-
-    if not rendered_list and not summary_text:
-        # No recognised shape — fall back to JSON panel
+    elif not summary_text:
         return [output_panel(format_json_body(raw), title=title, subtitle=subtitle)]
 
     # Scalar stats table below the list
@@ -299,32 +293,103 @@ def render_human(
     return renderables
 
 
-def _build_list_table(
-    items: list[dict],
-    *,
-    col_specs: list[tuple[str, str, dict[str, Any]]],
-    list_key: str,
-) -> Table:
-    """Build a Rich table from a list of dicts using column specs."""
-    columns = [(header, kwargs) for header, _key, kwargs in col_specs]
-    table = build_table(
-        f"{len(items)} {list_key}",
-        columns=columns,
-        show_lines=False,
-        table_box=DOTTED_ROWS,
-    )
+def _find_list_field(parsed: dict) -> tuple[str, list[dict]]:
+    """Find the first top-level field containing a non-empty list of dicts."""
+    for key, val in parsed.items():
+        if isinstance(val, list) and val and isinstance(val[0], dict):
+            return key, val
+    return "", []
 
+
+def _build_dynamic_table(items: list[dict], *, list_key: str) -> Table:
+    """Build a Rich table by discovering columns from the data itself.
+
+    1. Scan all items to find which fields exist and have values.
+    2. Order: known styled fields first, then unknown, flex fields last.
+    3. Apply known styles or sensible defaults.
+    4. Skip fields in _SKIP_FIELDS.
+    """
+    # Discover fields that have at least one non-empty value
+    field_order: list[str] = []
+    seen: set[str] = set()
     for item in items:
         if not isinstance(item, dict):
             continue
-        row: list[str] = []
-        for header, item_key, _kwargs in col_specs:
-            val = str(item.get(item_key, ""))
+        for key in item:
+            if key not in seen:
+                seen.add(key)
+                field_order.append(key)
+
+    # Partition into: styled, plain, flex — preserving discovery order within each
+    styled = [f for f in field_order if f in _FIELD_STYLES and f not in _SKIP_FIELDS and f not in _FLEX_FIELDS]
+    plain = [f for f in field_order if f not in _FIELD_STYLES and f not in _SKIP_FIELDS and f not in _FLEX_FIELDS]
+    flex = [f for f in field_order if f in _FLEX_FIELDS]
+
+    # Drop fields where every item's value is empty/None
+    def _has_data(field: str) -> bool:
+        return any(
+            item.get(field) not in (None, "", [])
+            for item in items
+            if isinstance(item, dict)
+        )
+
+    ordered = [f for f in styled + plain + flex if _has_data(f)]
+
+    if not ordered:
+        ordered = field_order[:5]  # fallback: first 5 fields
+
+    # Build column specs — row number column first
+    columns: list[tuple[str, dict[str, Any]]] = [
+        ("#", {"style": "dim", "width": 3, "justify": "right"}),
+    ]
+    for i, field in enumerate(ordered):
+        header = field.replace("_", " ").title()
+        kwargs: dict[str, Any] = {}
+
+        if field in _FIELD_STYLES:
+            kwargs = dict(_FIELD_STYLES[field])
+        elif field in _FLEX_FIELDS or i == len(ordered) - 1:
+            # Last column or known text field — flex wrap
+            kwargs = {"ratio": 1, "no_wrap": False}
+        else:
+            # Unknown field — auto width
+            kwargs = {"width": 24}
+
+        columns.append((header, kwargs))
+
+    table = build_table(
+        f"{len(items)} {list_key}",
+        columns=columns,
+        show_lines=True,
+        table_box=DOTTED_ROWS,
+    )
+
+    # Sort by severity/priority if present
+    sort_field = next((f for f in ordered if f in ("severity", "priority", "status")), None)
+    if sort_field:
+        items = sorted(
+            items,
+            key=lambda x: _SEVERITY_ORDER.get(str(x.get(sort_field, "")).lower(), 99),
+        )
+
+    # Build rows
+    row_num = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        row_num += 1
+        row: list[str] = [str(row_num)]
+        for field in ordered:
+            val = item.get(field)
+            if val is None:
+                row.append("")
+                continue
+            val = str(val)
             # Colorize severity/status fields
-            if item_key == "severity" and val:
+            if field == "severity" and val:
                 color = severity_color(val)
                 val = f"[{color}]{val.upper()}[/{color}]"
-            elif item_key == "status" and val:
+            elif field == "status" and val:
                 val = styled_status(val)
             row.append(val)
         table.add_row(*row)
@@ -349,7 +414,7 @@ def _build_scalars_table(scalars: list[tuple[str, str]]) -> Table:
     """Horizontal stats table from scalar key-value pairs."""
     table = Table(
         show_header=True,
-        box=box.SIMPLE,
+        box=DOTTED_ROWS,
         padding=(0, 2),
         expand=False,
     )
