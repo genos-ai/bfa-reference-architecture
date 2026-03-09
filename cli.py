@@ -133,19 +133,31 @@ def credits(ctx, roster: str):
 
 
 @cli.command()
-@click.argument("message")
+@click.argument("message", required=False, default=None)
 @click.option("--name", default=None, help="Target a specific agent, bypassing routing.")
-@click.pass_obj
-def agent(ctx, message: str, name: str | None):
+@click.option("--list", "list_agents", is_flag=True, help="List available agents.")
+@click.option("-o", "--output", "output_format", default="pretty",
+              type=click.Choice(["pretty", "human", "jsonl"]), help="Output format.")
+@click.pass_context
+def agent(ctx, message: str | None, name: str | None, list_agents: bool, output_format: str):
     """Send a message to an agent.
 
     \b
     Examples:
         python cli.py agent "run a health check"
         python cli.py agent "scan code quality" --name code.qa.agent
+        python cli.py agent "check health" -o jsonl
+        python cli.py agent --list
     """
+    if list_agents:
+        from modules.backend.cli.agent import show_agents
+        show_agents(ctx.obj.logger)
+        return
+    if not message:
+        click.echo(ctx.get_help())
+        return
     from modules.backend.cli.agent import run_agent
-    run_agent(ctx.logger, message, name)
+    run_agent(ctx.obj.logger, message, name, output_format)
 
 
 # =============================================================================

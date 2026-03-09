@@ -180,7 +180,7 @@ async def handle(
         model = _build_model(agent_config.model)
         agent = registry.get_instance(agent_name, model)
         deps = _build_agent_deps(agent_name, agent_config, session_id)
-        limits = _get_usage_limits()
+        limits = _get_usage_limits(agent_name)
 
         # Load conversation history
         history_messages, _ = await session_service.get_messages(session_id, limit=100)
@@ -227,14 +227,17 @@ async def handle(
             output_tokens = usage.output_tokens or 0
             cost_usd = compute_cost_usd(input_tokens, output_tokens, model_str)
 
-            # Extract tool events from new_messages (retrospective)
+            # Extract tool events and thinking from new_messages (retrospective)
+            thinking_parts: list[str] = []
             try:
                 new_msgs = stream.new_messages()
                 for msg in new_msgs:
-                    from pydantic_ai.messages import ModelResponse, ToolCallPart, ModelRequest, ToolReturnPart
+                    from pydantic_ai.messages import ModelResponse, ToolCallPart, ModelRequest, ToolReturnPart, ThinkingPart
                     if isinstance(msg, ModelResponse):
                         for part in msg.parts:
-                            if isinstance(part, ToolCallPart):
+                            if isinstance(part, ThinkingPart) and part.has_content():
+                                thinking_parts.append(part.content)
+                            elif isinstance(part, ToolCallPart):
                                 tool_event = AgentToolCallEvent(
                                     session_id=sid,
                                     source=source,
@@ -262,6 +265,10 @@ async def handle(
                 logger.debug("Failed to extract tool events", exc_info=True)
 
         # 8. Yield complete event
+        metadata: dict[str, Any] = {}
+        if thinking_parts:
+            metadata["thinking"] = "\n\n".join(thinking_parts)
+
         complete_event = AgentResponseCompleteEvent(
             session_id=sid,
             source=source,
@@ -271,6 +278,7 @@ async def handle(
             output_tokens=output_tokens,
             cost_usd=cost_usd,
             model=model_str,
+            metadata=metadata,
         )
         yield complete_event
         await _publish(event_bus, complete_event)
@@ -339,17 +347,21 @@ async def handle(
 async def collect(session_id: str, message: str, **kwargs: Any) -> dict[str, Any]:
     """Collect all events from handle(), return a dict.
 
-    Returns: {"agent_name": str, "output": str, "cost_usd": float, "session_id": str}
+    Returns: {"agent_name": str, "output": str, "cost_usd": float,
+              "session_id": str, "thinking": str | None}
     """
     agent_name = ""
     output = ""
     cost_usd = 0.0
+    thinking: str | None = None
 
     async for event in handle(session_id, message, **kwargs):
         if isinstance(event, AgentResponseCompleteEvent):
             agent_name = event.agent_id
             output = event.full_content
             cost_usd = event.cost_usd
+            if event.metadata and "thinking" in event.metadata:
+                thinking = event.metadata["thinking"]
         elif isinstance(event, AgentResponseChunkEvent):
             pass  # chunks are already accumulated in full_content
 
@@ -358,6 +370,7 @@ async def collect(session_id: str, message: str, **kwargs: Any) -> dict[str, Any
         "output": output,
         "cost_usd": cost_usd,
         "session_id": session_id,
+        "thinking": thinking,
     }
 
 

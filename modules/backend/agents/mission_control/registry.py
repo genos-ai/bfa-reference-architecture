@@ -95,6 +95,10 @@ class AgentRegistry:
                 "description": config.description,
                 "keywords": config.keywords,
                 "tools": config.tools,
+                "scope": {
+                    "read": config.scope.read,
+                    "write": config.scope.write,
+                },
             }
             for config in self._agents.values()
         ]

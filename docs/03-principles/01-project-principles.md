@@ -10,7 +10,7 @@ These are **project-specific principles** for the BFA agentic platform. They bui
 
 The reference architecture principles are universal software engineering rules. The principles below are specific to how *this project* builds its agentic platform — platform structure, agent behavior, and development process.
 
-**Numbering note:** This document uses P1–P13. The reference architecture also uses P1–P8 for different principles. When referencing principles from this document in plans or code, include the name (e.g., "P12: Test Against Real Infrastructure") to avoid ambiguity with reference architecture P-numbers.
+**Numbering note:** This document uses P1–P14. The reference architecture also uses P1–P8 for different principles. When referencing principles from this document in plans or code, include the name (e.g., "P12: Test Against Real Infrastructure") to avoid ambiguity with reference architecture P-numbers.
 
 ---
 
@@ -194,6 +194,23 @@ This means:
 - Tests that pass against mocks but fail against real infrastructure are worthless — they hide bugs instead of catching them.
 
 **Test:** If you remove all mocks from a test and it breaks, was it testing your code or testing your mocks?
+
+---
+
+### P14: Modular, Reusable, Elegant, Robust
+
+**Every component should be written once, used everywhere, and easy to understand.**
+
+Code is modular when it does one thing and composes with other modules. It is reusable when a second caller can use it without modification. It is elegant when the implementation is the simplest thing that works. It is robust when edge cases are handled at the boundary, not scattered through callers.
+
+This means:
+- Extract shared logic into centralized modules (e.g. display primitives in `report.py`, config loading in `core/config.py`). Callers import and compose — they don't reinvent.
+- A function that two handlers need is a shared primitive. A function that one handler needs stays local. Don't pre-extract; extract on second use.
+- Prefer keyword arguments and sensible defaults over positional parameters and flag soup. The call site should read like a sentence.
+- Handle validation and edge cases at system boundaries (input parsing, config loading, API entry points). Internal functions trust their callers.
+- If a module requires a paragraph of explanation to use, simplify the interface. If it requires none, you're done.
+
+**Test:** Can a new developer use the function correctly by reading only its signature and docstring?
 
 ---
 

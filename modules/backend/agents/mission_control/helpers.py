@@ -127,12 +127,30 @@ def _build_agent_deps(
     return BaseAgentDeps(**common)
 
 
-def _get_usage_limits() -> UsageLimits:
-    """Build UsageLimits from mission_control.yaml."""
-    config = _load_mission_control_config()
+def _get_usage_limits(agent_name: str | None = None) -> UsageLimits:
+    """Build UsageLimits, preferring per-agent overrides from agent.yaml.
+
+    Resolution order:
+        1. Per-agent max_tokens / max_requests from agent.yaml (if set)
+        2. System defaults from mission_control.yaml limits
+    """
+    mc_config = _load_mission_control_config()
+    system_tokens = mc_config.limits.max_tokens_per_task
+    system_requests = mc_config.limits.max_requests_per_task
+
+    if agent_name:
+        try:
+            agent_config = get_registry().get(agent_name)
+            return UsageLimits(
+                request_limit=agent_config.max_requests or system_requests,
+                total_tokens_limit=agent_config.max_tokens or system_tokens,
+            )
+        except KeyError:
+            pass
+
     return UsageLimits(
-        request_limit=config.limits.max_requests_per_task,
-        total_tokens_limit=config.limits.max_tokens_per_task,
+        request_limit=system_requests,
+        total_tokens_limit=system_tokens,
     )
 
 

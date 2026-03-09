@@ -15,6 +15,7 @@ import re
 from typing import Any
 
 import click
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -30,6 +31,19 @@ OUTPUT_FORMATS = ("summary", "detail", "json")
 # =============================================================================
 
 _CONSOLE_WIDTH = 140
+
+# Solid outer border with dotted row dividers — used for tables with
+# multi-line cells or dense rows where visual separation helps scanning.
+DOTTED_ROWS = box.Box(
+    "┌─┬┐\n"
+    "│ ││\n"
+    "├─┼┤\n"
+    "│ ││\n"
+    "│·││\n"
+    "│·││\n"
+    "│ ││\n"
+    "└─┴┘\n"
+)
 
 _STATUS_COLORS: dict[str, str] = {
     "completed": "green",
@@ -62,6 +76,7 @@ def build_table(
     *,
     columns: list[tuple[str, dict[str, Any]]],
     show_lines: bool = False,
+    table_box: box.Box | None = None,
 ) -> Table:
     """Build a Rich Table from declarative column specs.
 
@@ -78,9 +93,10 @@ def build_table(
             ("Desc",   {"ratio": 1}),
         ])
     """
-    table = Table(title=title, show_lines=show_lines, expand=True)
+    table = Table(title=title, show_lines=show_lines, expand=True, box=table_box)
     for name, kwargs in columns:
-        table.add_column(name, no_wrap=True, **kwargs)
+        col_kwargs = {"no_wrap": True, **kwargs}
+        table.add_column(name, **col_kwargs)
     return table
 
 
@@ -99,6 +115,88 @@ def primary_panel(content: str, title: str | None = None) -> Panel:
     return Panel(content, title=title, border_style="cyan")
 
 
+def thinking_panel(content: str) -> Panel:
+    """Panel for model thinking/reasoning traces (dim border, italic text)."""
+    from rich.text import Text
+
+    return Panel(
+        Text(content, style="italic"),
+        title="[dim]Thinking[/dim]",
+        border_style="dim",
+        padding=(1, 2),
+    )
+
+
+def output_panel(
+    body: Any,
+    *,
+    title: str,
+    subtitle: str | None = None,
+) -> Panel:
+    """Panel for primary agent/task output (cyan border)."""
+    return Panel(
+        body,
+        title=f"[cyan bold]{title}[/cyan bold]",
+        subtitle=f"[dim]{subtitle}[/dim]" if subtitle else None,
+        border_style="cyan",
+        padding=(1, 2),
+    )
+
+
+def format_json_body(raw: str) -> Any:
+    """Parse a JSON string into a Rich Syntax object, or fall back to Text."""
+    import json
+    from rich.syntax import Syntax
+    from rich.text import Text
+
+    try:
+        parsed = json.loads(raw)
+        return Syntax(
+            json.dumps(parsed, indent=2), "json",
+            theme="monokai", word_wrap=True, background_color="default",
+        )
+    except (json.JSONDecodeError, TypeError):
+        return Text(str(raw))
+
+
+def cost_line(
+    input_tokens: int,
+    output_tokens: int,
+    cost_usd: float,
+) -> str:
+    """Formatted dim cost/token summary string (Rich markup)."""
+    return (
+        f"  [dim]Tokens: {input_tokens:,} in / {output_tokens:,} out  "
+        f"Cost: ${cost_usd:.4f}[/dim]"
+    )
+
+
+def summary_table(
+    *,
+    agent_name: str,
+    session_id: str,
+    input_tokens: int,
+    output_tokens: int,
+    cost_usd: float,
+) -> Table:
+    """Compact key-value stats table for agent run results."""
+    table = Table(
+        show_header=False,
+        box=box.SIMPLE,
+        padding=(0, 2),
+        expand=False,
+    )
+    table.add_column("Key", style="dim", no_wrap=True)
+    table.add_column("Value", no_wrap=True)
+
+    table.add_row("Agent", f"[cyan]{agent_name}[/cyan]")
+    table.add_row("Session", f"[dim]{session_id}[/dim]")
+    table.add_row("Tokens", f"{input_tokens:,} in / {output_tokens:,} out")
+    table.add_row("Cost", f"${cost_usd:.4f}")
+
+    return table
+
+
 _SEVERITY_COLORS: dict[str, str] = {
     "error": "red",
     "warning": "yellow",
@@ -110,6 +208,155 @@ _SEVERITY_COLORS: dict[str, str] = {
 def severity_color(severity: str) -> str:
     """Return the Rich color for a finding severity level."""
     return _SEVERITY_COLORS.get(severity.lower(), "white")
+
+
+# =============================================================================
+# Human-friendly output — shape-detected rendering
+# =============================================================================
+
+# Maps a list-field key to the columns that should be displayed for each item.
+# Each column is (header, item_key, column_kwargs).
+# The renderer picks the first matching key it finds in the parsed output.
+_LIST_RENDERERS: list[tuple[str, list[tuple[str, str, dict[str, Any]]]]] = [
+    ("violations", [
+        ("Sev",     "severity",       {"width": 8}),
+        ("Rule",    "rule_id",        {"style": "cyan", "width": 24}),
+        ("File",    "file",           {"style": "dim", "width": 44}),
+        ("Ln",      "line",           {"justify": "right", "width": 5}),
+        ("Message", "message",        {"ratio": 1, "no_wrap": False}),
+    ]),
+    ("findings", [
+        ("Sev",      "severity",      {"width": 8}),
+        ("Category", "category",      {"style": "cyan", "width": 20}),
+        ("File",     "file",          {"style": "dim", "width": 44}),
+        ("Finding",  "description",   {"ratio": 1, "no_wrap": False}),
+    ]),
+    ("checks", [
+        ("Status", "status",          {"width": 10}),
+        ("Check",  "name",            {"style": "cyan", "width": 30}),
+        ("Detail", "detail",          {"ratio": 1, "no_wrap": False}),
+    ]),
+    ("results", [
+        ("Status", "status",          {"width": 10}),
+        ("Item",   "name",            {"style": "cyan", "width": 30}),
+        ("Detail", "detail",          {"ratio": 1, "no_wrap": False}),
+    ]),
+]
+
+
+def render_human(
+    raw: str,
+    *,
+    title: str,
+    subtitle: str | None = None,
+) -> list[Any]:
+    """Parse agent output and return human-friendly Rich renderables.
+
+    Detects the output shape (violations, findings, checks, results)
+    and renders an appropriate table. Falls back to formatted JSON
+    for unrecognised shapes.
+    """
+    import json as _json
+    from rich.text import Text
+
+    try:
+        parsed = _json.loads(raw)
+    except (_json.JSONDecodeError, TypeError):
+        # Not JSON — wrap as plain text in a panel
+        return [output_panel(Text(str(raw)), title=title, subtitle=subtitle)]
+
+    if not isinstance(parsed, dict):
+        return [output_panel(format_json_body(raw), title=title, subtitle=subtitle)]
+
+    renderables: list[Any] = []
+
+    # Summary line (if present)
+    summary_text = parsed.get("summary")
+    if summary_text:
+        renderables.append(info_panel(str(summary_text), title=title))
+
+    # Find the first matching list field and render it
+    rendered_list = False
+    for list_key, col_specs in _LIST_RENDERERS:
+        items = parsed.get(list_key)
+        if not isinstance(items, list) or not items:
+            continue
+
+        table = _build_list_table(items, col_specs=col_specs, list_key=list_key)
+        renderables.append(table)
+        rendered_list = True
+        break
+
+    if not rendered_list and not summary_text:
+        # No recognised shape — fall back to JSON panel
+        return [output_panel(format_json_body(raw), title=title, subtitle=subtitle)]
+
+    # Scalar stats table below the list
+    scalars = _extract_scalars(parsed)
+    if scalars:
+        renderables.append(_build_scalars_table(scalars))
+
+    return renderables
+
+
+def _build_list_table(
+    items: list[dict],
+    *,
+    col_specs: list[tuple[str, str, dict[str, Any]]],
+    list_key: str,
+) -> Table:
+    """Build a Rich table from a list of dicts using column specs."""
+    columns = [(header, kwargs) for header, _key, kwargs in col_specs]
+    table = build_table(
+        f"{len(items)} {list_key}",
+        columns=columns,
+        show_lines=False,
+        table_box=DOTTED_ROWS,
+    )
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        row: list[str] = []
+        for header, item_key, _kwargs in col_specs:
+            val = str(item.get(item_key, ""))
+            # Colorize severity/status fields
+            if item_key == "severity" and val:
+                color = severity_color(val)
+                val = f"[{color}]{val.upper()}[/{color}]"
+            elif item_key == "status" and val:
+                val = styled_status(val)
+            row.append(val)
+        table.add_row(*row)
+
+    return table
+
+
+def _extract_scalars(parsed: dict) -> list[tuple[str, str]]:
+    """Extract scalar summary fields as (label, value) pairs."""
+    pairs: list[tuple[str, str]] = []
+    for key, val in parsed.items():
+        if isinstance(val, (list, dict)):
+            continue
+        if key == "summary":
+            continue
+        label = key.replace("_", " ").title()
+        pairs.append((label, str(val)))
+    return pairs
+
+
+def _build_scalars_table(scalars: list[tuple[str, str]]) -> Table:
+    """Horizontal stats table from scalar key-value pairs."""
+    table = Table(
+        show_header=True,
+        box=box.SIMPLE,
+        padding=(0, 2),
+        expand=False,
+    )
+    for label, _val in scalars:
+        table.add_column(label, style="dim", no_wrap=True)
+    table.add_row(*(val for _label, val in scalars))
+    return table
 
 
 # =============================================================================

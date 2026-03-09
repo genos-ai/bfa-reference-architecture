@@ -232,9 +232,8 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
 
     from modules.backend.cli.report import (
         get_console, build_table, styled_status,
-        primary_panel, info_panel, severity_color,
+        primary_panel, info_panel, status_panel, severity_color,
     )
-    from rich.panel import Panel
 
     from modules.backend.core.database import get_async_session
     from modules.backend.services.mission import MissionService
@@ -268,7 +267,7 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
 
     # Result summary
     if mission.result_summary:
-        console.print(Panel(mission.result_summary, title="Result Summary", border_style="green"))
+        console.print(status_panel(mission.result_summary, "completed", title="Result Summary"))
 
     # Mission outcome (task-level breakdown)
     outcome = mission.mission_outcome
@@ -361,7 +360,7 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
 
     # Error data
     if mission.error_data:
-        console.print(Panel(str(mission.error_data), title="Error", border_style="red"))
+        console.print(status_panel(str(mission.error_data), "failed", title="Error"))
 
 
 async def _action_cost(cli_logger, *, objective, mission_id, roster, budget, triggered_by, output_format):

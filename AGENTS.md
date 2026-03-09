@@ -22,6 +22,7 @@ AI-first autonomous agent platform. FastAPI backend, PydanticAI agents, PostgreS
 - **Timezone-naive UTC datetimes.** Use `from modules.backend.core.utils import utc_now`. Never `datetime.utcnow()` (deprecated) or `datetime.now()` (local time).
 - **`.project_root` marker** determines the project root. Use `find_project_root()` from `modules.backend.core.config`.
 - **CLI uses Click groups and subcommands.** Single entry point `cli.py` with `tree` command for full discoverability. Every group shows help when called bare — no default actions. `--verbose` and `--debug` on root group only.
+- **CLI display is centralized in `report.py`.** All Rich tables, panels, formatting, and styling use shared primitives from `modules/backend/cli/report.py`. Never create `Console`, `Table`, or `Panel` directly in handlers — import from `report.py`.
 - **Files must not exceed 1000 lines.** Target ~400-500 lines. Split into focused submodules if larger.
 - **`__init__.py` files must be minimal.** Docstring and necessary exports only. No business logic.
 - **Secure by default (P8).** All external interfaces deny access when unconfigured. Empty allowlists = deny all. Missing secrets = startup failure. New channels/features disabled by default.

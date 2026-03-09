@@ -35,6 +35,16 @@ The CLI is a single `cli.py` at the project root. It uses Click groups and subco
 
 ## Design Rules
 
+### Centralized, Modular Display Primitives
+
+All CLI display logic — tables, panels, formatting, styling — lives in `modules/backend/cli/report.py` as shared primitives. Never create `Console`, `Table`, `Panel`, or `Box` instances directly in CLI handlers. Every new display pattern must be added to `report.py` first and imported by handlers. This ensures:
+
+1. **Single source of truth.** Changing a style, color, or box format updates every command at once.
+2. **Reusable across commands.** Any CLI handler can compose the same primitives (e.g. `summary_table` works for agents, missions, playbooks).
+3. **Testable in isolation.** Display functions can be unit-tested without invoking Click.
+
+When adding a new display pattern, check `report.py` for an existing primitive before creating anything new.
+
 ### AI-First Discoverability
 
 The CLI is designed for AI agents as primary consumers. Two principles:
@@ -235,13 +245,19 @@ All CLI display uses shared primitives from `report.py`. Never create `Console`,
 | Primitive | Purpose |
 |-----------|---------|
 | `get_console()` | Console with standard project width (140) |
-| `build_table(title, columns=...)` | Declarative table from column specs |
+| `build_table(title, columns=..., table_box=...)` | Declarative table from column specs |
+| `summary_table(agent_name, session_id, ...)` | Compact key-value stats table (tokens, cost) |
+| `DOTTED_ROWS` | Box style: solid outer border, dotted row dividers |
 | `styled_status(status)` | Rich-markup colored status (handles str and enum) |
 | `status_color(status)` | Raw color name for a status value |
 | `severity_color(severity)` | Color for finding severity (error, warning, info) |
+| `cost_line(input_tokens, output_tokens, cost)` | Dim one-line token/cost summary (Rich markup) |
 | `primary_panel(content, title)` | Cyan-bordered panel for primary content |
 | `info_panel(content, title)` | Dim-bordered panel for secondary content |
 | `status_panel(content, status)` | Panel with status-colored border |
+| `thinking_panel(content)` | Dim-bordered italic panel for model reasoning |
+| `output_panel(body, title, subtitle)` | Cyan-bordered panel for agent/task output |
+| `format_json_body(raw)` | JSON string → Rich Syntax (monokai) or fallback Text |
 | `colorize_narrative(text)` | Keyword-driven Rich markup for priority headings |
 
 ### Tables

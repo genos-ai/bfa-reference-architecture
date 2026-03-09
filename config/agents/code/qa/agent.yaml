@@ -11,6 +11,8 @@
 #   tools             - Shared tool names (list of dotted strings, domain.action)
 #   max_input_length  - Maximum input character count (integer)
 #   max_budget_usd    - Maximum cost per invocation in USD (decimal)
+#   max_tokens        - Token limit override (integer, default: system limit)
+#   max_requests      - Request limit override (integer, default: system limit)
 #   file_size_limit   - Maximum Python file line count (integer)
 #   execution         - Execution mode (object)
 #     mode            - Execution environment (string: local | container)
@@ -34,6 +36,8 @@ enabled: true
 model: anthropic:claude-sonnet-4-20250514
 max_input_length: 2000
 max_budget_usd: 1.00
+max_tokens: 100000
+max_requests: 15
 file_size_limit: 1000
 
 execution:
