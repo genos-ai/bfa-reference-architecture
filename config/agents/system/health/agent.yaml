@@ -40,12 +40,17 @@ keywords:
   - log errors
   - config validation
   - dependencies
+  - database
+  - redis
+  - postgresql
+  - services
 tools:
   - system.scan_log_errors
   - system.validate_config
   - system.check_dependencies
   - system.check_file_structure
   - system.get_app_info
+  - system.check_services
 
 scope:
   read:

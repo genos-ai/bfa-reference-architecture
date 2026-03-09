@@ -71,6 +71,11 @@ def create_agent(model: str | Model) -> Agent[HealthAgentDeps, HealthCheckResult
         """Get application metadata (name, version, environment, debug mode)."""
         return await system.get_app_info(ctx.deps.app_config)
 
+    @agent.tool
+    async def check_services(ctx: RunContext[HealthAgentDeps]) -> dict:
+        """Check backend service connectivity (PostgreSQL, Redis). Returns status and latency per service."""
+        return await system.check_system_health()
+
     logger.info(
         "Health agent created (read-only audit)",
         extra={"model": str(model)},
