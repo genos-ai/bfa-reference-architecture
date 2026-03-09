@@ -289,7 +289,7 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
 
 async def _action_runs(cli_logger, *, playbook_name, run_id, triggered_by, output_format):
     """List playbook runs."""
-    from modules.backend.cli.report import get_console, build_table, styled_status
+    from modules.backend.cli.report import get_console, build_table, styled_status, DOTTED_ROWS
     from modules.backend.core.database import get_async_session
     from modules.backend.services.playbook_run import PlaybookRunService
 
@@ -313,7 +313,7 @@ async def _action_runs(cli_logger, *, playbook_name, run_id, triggered_by, outpu
         ("Cost",      {"justify": "right", "width": 8}),
         ("Trigger",   {"style": "dim", "width": 10}),
         ("Summary",   {"ratio": 1}),
-    ])
+    ], show_lines=True, table_box=DOTTED_ROWS)
 
     for r in runs:
         dt_str = r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "—"
@@ -340,7 +340,7 @@ async def _action_run_detail(cli_logger, *, playbook_name, run_id, triggered_by,
 
     run, missions = await _load_run_with_missions(run_id)
     from modules.backend.cli.report import render_playbook_run
-    await render_playbook_run_async(run, missions, "human")
+    await render_playbook_run(run, missions, "human")
 
 
 async def _action_report(cli_logger, *, playbook_name, run_id, triggered_by, output_format):
