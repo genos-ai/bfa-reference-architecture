@@ -25,6 +25,8 @@
 #     webhook_path       - Webhook URL path (string)
 #     authorized_users   - Authorized user IDs (list of integers, empty = deny all)
 #     max_message_length - Maximum message length (integer, default: 4096)
+#   cli             - CLI display settings (object)
+#     console_width  - Console output width in columns (integer, default: 160)
 # =============================================================================
 
 name: "BFF Application"
@@ -58,3 +60,6 @@ telegram:
   webhook_path: "/webhook/telegram"
   authorized_users: []
   max_message_length: 4096
+
+cli:
+  console_width: 160

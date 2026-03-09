@@ -54,6 +54,10 @@ class TelegramAppSchema(_StrictBase):
     max_message_length: int = 4096
 
 
+class CliSchema(_StrictBase):
+    console_width: int = 160
+
+
 class ApplicationSchema(_StrictBase):
     name: str
     version: str
@@ -67,6 +71,7 @@ class ApplicationSchema(_StrictBase):
     pagination: PaginationSchema
     timeouts: TimeoutsSchema
     telegram: TelegramAppSchema
+    cli: CliSchema = Field(default_factory=CliSchema)
 
 
 # =============================================================================

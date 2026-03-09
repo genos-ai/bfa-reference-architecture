@@ -231,8 +231,9 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
         raise _AbortMission("mission-id required")
 
     from modules.backend.cli.report import (
-        get_console, build_table, styled_status,
-        primary_panel, info_panel, status_panel, severity_color,
+        get_console, styled_status,
+        primary_panel, info_panel, status_panel,
+        render_task_outputs,
     )
 
     from modules.backend.core.database import get_async_session
@@ -269,94 +270,12 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
     if mission.result_summary:
         console.print(status_panel(mission.result_summary, "completed", title="Result Summary"))
 
-    # Mission outcome (task-level breakdown)
+    # Task outputs — centralized renderer
     outcome = mission.mission_outcome
     if outcome and isinstance(outcome, dict):
         tasks = outcome.get("task_results") or outcome.get("task_outcomes") or []
         if tasks:
-            table = build_table("Task Outcomes", columns=[
-                ("Task",     {"style": "cyan", "width": 12}),
-                ("Agent",    {"width": 28}),
-                ("Status",   {"width": 10}),
-                ("Cost",     {"justify": "right", "width": 8}),
-                ("Duration", {"justify": "right", "width": 10}),
-                ("Summary",  {"ratio": 1}),
-            ], show_lines=True)
-
-            for t in tasks:
-                t_status = str(t.get("status", "—"))
-                cost = f"${t['cost_usd']:.4f}" if "cost_usd" in t else "—"
-                dur = f"{t['duration_seconds']:.1f}s" if "duration_seconds" in t else "—"
-                out_ref = t.get("output_reference") or {}
-                summary = out_ref.get("summary", "") if isinstance(out_ref, dict) else str(out_ref)
-                if not summary:
-                    summary = t.get("summary", t.get("result_summary", ""))
-                if len(summary) > 120:
-                    summary = summary[:120] + "..."
-                table.add_row(
-                    t.get("task_id", "—"),
-                    t.get("agent_name", "—"),
-                    styled_status(t_status),
-                    cost,
-                    dur,
-                    summary,
-                )
-            console.print(table)
-
-    # Full task outputs (when -o human or -o json)
-    if output_format in ("human", "json") and outcome and isinstance(outcome, dict):
-        tasks = outcome.get("task_results") or outcome.get("task_outcomes") or []
-        for t in tasks:
-            task_id = t.get("task_id", "—")
-            agent = t.get("agent_name", "—")
-            out_ref = t.get("output_reference") or {}
-            if not isinstance(out_ref, dict):
-                out_ref = {"raw": str(out_ref)}
-
-            if output_format == "jsonl":
-                import json
-                console.print(primary_panel(
-                    json.dumps(out_ref, indent=2, default=str),
-                    title=f"{task_id} / {agent}",
-                ))
-            else:
-                # Render structured findings nicely
-                lines: list[str] = []
-                summary = out_ref.get("summary", "")
-                if summary:
-                    lines.append(f"[bold]Summary:[/bold] {summary}")
-                    lines.append("")
-
-                findings = out_ref.get("findings") or out_ref.get("violations") or []
-                for f in findings:
-                    if isinstance(f, dict):
-                        sev = f.get("severity", f.get("principle", ""))
-                        file_ = f.get("file", "")
-                        line_ = f.get("line", "")
-                        msg = f.get("message", f.get("details", ""))
-                        loc = f"[dim]{file_}:{line_}[/dim]" if file_ else ""
-                        sev_color = severity_color(sev)
-                        lines.append(f"  [{sev_color}]{sev}[/{sev_color}]  {loc}  {msg}")
-                        rec = f.get("recommendation", "")
-                        if rec:
-                            lines.append(f"         [dim]{rec}[/dim]")
-                    else:
-                        lines.append(f"  {f}")
-
-                # Stats line
-                stats = []
-                for key in ("total_findings", "total_violations", "error_count", "warning_count",
-                            "scanned_files_count", "files_reviewed", "overall_status", "checks_performed"):
-                    val = out_ref.get(key)
-                    if val is not None:
-                        label = key.replace("_", " ")
-                        stats.append(f"{label}: {val}")
-                if stats:
-                    lines.append("")
-                    lines.append("[dim]" + " | ".join(stats) + "[/dim]")
-
-                content = "\n".join(lines) if lines else str(out_ref)
-                console.print(primary_panel(content, title=f"{task_id} / {agent}"))
+            render_task_outputs(console, tasks)
 
     # Error data
     if mission.error_data:

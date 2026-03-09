@@ -185,7 +185,7 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
     from modules.backend.core.database import get_async_session
     from modules.backend.cli.report import (
         get_console, build_table, styled_status, status_panel,
-        info_panel, render_playbook_run,
+        info_panel, render_mission_outcomes,
         _playbook_run_to_dict, _generate_narrative, colorize_narrative,
     )
     from modules.backend.services.mission import MissionService
@@ -281,6 +281,10 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
     narrative = await _generate_narrative(_playbook_run_to_dict(run, missions))
     narrative = colorize_narrative(narrative)
     console.print(info_panel(narrative.strip(), title="Summary"))
+
+    # Per-step task detail with findings
+    console.print()
+    render_mission_outcomes(console, missions)
 
 
 async def _action_runs(cli_logger, *, playbook_name, run_id, triggered_by, output_format):

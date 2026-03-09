@@ -30,8 +30,6 @@ OUTPUT_FORMATS = ("human", "json", "jsonl")
 # Shared Rich primitives — single source of truth for CLI display
 # =============================================================================
 
-_CONSOLE_WIDTH = 140
-
 # Solid outer border with dotted row dividers — used for tables with
 # multi-line cells or dense rows where visual separation helps scanning.
 DOTTED_ROWS = box.Box(
@@ -54,8 +52,10 @@ _STATUS_COLORS: dict[str, str] = {
 
 
 def get_console() -> Console:
-    """Return a Console with the standard project width."""
-    return Console(width=_CONSOLE_WIDTH)
+    """Return a Console with width from application config."""
+    from modules.backend.core.config import get_app_config
+    width = get_app_config().application.cli.console_width
+    return Console(width=width)
 
 
 def status_color(status: Any) -> str:
@@ -108,6 +108,62 @@ def status_panel(content: str, status: Any, **kwargs: Any) -> Panel:
 def info_panel(content: str, title: str | None = None) -> Panel:
     """Panel with dim border for secondary/supporting content."""
     return Panel(content, title=title, border_style="dim")
+
+
+def render_task_outputs(
+    console: Console,
+    tasks: list[dict],
+    *,
+    title_prefix: str = "",
+) -> None:
+    """Render task output_reference dicts through the dynamic shape-detected renderer.
+
+    This is the single rendering path for task outputs — used by playbook runs,
+    mission detail, and any future view that displays agent results. Each task's
+    ``output_reference`` is serialized to JSON and passed through ``render_human``
+    for auto-discovered tables, severity sorting, and scalar stats.
+
+    Args:
+        console: Rich Console instance.
+        tasks: List of task result dicts (from mission_outcome.task_results).
+        title_prefix: Optional prefix for panel titles (e.g. step ID).
+    """
+    import json as _json
+
+    for t in tasks:
+        task_id = t.get("task_id", "—")
+        agent = t.get("agent_name", "—")
+        out_ref = t.get("output_reference") or {}
+        if not isinstance(out_ref, dict):
+            out_ref = {"raw": str(out_ref)}
+
+        title_parts = [p for p in (title_prefix, task_id, agent) if p]
+        title = " / ".join(title_parts)
+
+        raw_json = _json.dumps(out_ref, indent=2, default=str)
+        for renderable in render_human(raw_json, title=title):
+            console.print(renderable)
+
+
+def render_mission_outcomes(console: Console, missions: list[Any]) -> None:
+    """Render per-mission task outputs. Works for both playbook steps and standalone missions.
+
+    Iterates missions, extracts task_results from each outcome, and delegates
+    to ``render_task_outputs``. Title prefix is the playbook step ID when
+    available, otherwise the mission ID.
+    """
+    if not missions:
+        return
+
+    for m in missions:
+        prefix = getattr(m, "playbook_step_id", None) or str(m.id)[:12]
+        outcome = m.mission_outcome if hasattr(m, "mission_outcome") else None
+        if not outcome or not isinstance(outcome, dict):
+            continue
+        tasks = outcome.get("task_results") or outcome.get("task_outcomes") or []
+        if not tasks:
+            continue
+        render_task_outputs(console, tasks, title_prefix=prefix)
 
 
 def primary_panel(content: str, title: str | None = None) -> Panel:
@@ -251,6 +307,7 @@ def render_human(
     *,
     title: str,
     subtitle: str | None = None,
+    show_scalars: bool = False,
 ) -> list[Any]:
     """Parse agent output and return human-friendly Rich renderables.
 
@@ -286,9 +343,10 @@ def render_human(
         return [output_panel(format_json_body(raw), title=title, subtitle=subtitle)]
 
     # Scalar stats table below the list
-    scalars = _extract_scalars(parsed)
-    if scalars:
-        renderables.append(_build_scalars_table(scalars))
+    if show_scalars:
+        scalars = _extract_scalars(parsed)
+        if scalars:
+            renderables.append(_build_scalars_table(scalars))
 
     return renderables
 
@@ -574,144 +632,50 @@ def _emit_json(data: dict) -> None:
 
 def _render_mission_detail(mission: Any) -> None:
     """Deterministic detailed view of a mission."""
-    click.echo(click.style("Mission Report", fg="cyan", bold=True))
-    click.echo(click.style("=" * 60, dim=True))
-    click.echo()
+    console = get_console()
 
-    click.echo(f"  ID:         {mission.id}")
-    click.echo(f"  Status:     {_styled_status(mission.status)}")
-    click.echo(f"  Objective:  {mission.objective[:120]}")
-    click.echo(f"  Cost:       ${mission.total_cost_usd:.4f}")
-    if mission.cost_ceiling_usd:
-        pct = (mission.total_cost_usd / mission.cost_ceiling_usd) * 100
-        click.echo(f"  Budget:     ${mission.cost_ceiling_usd:.2f} ({pct:.0f}% used)")
-    click.echo(f"  Started:    {mission.started_at}")
-    click.echo(f"  Completed:  {mission.completed_at}")
+    info_lines = [
+        f"[bold]ID:[/bold]        {mission.id}",
+        f"[bold]Status:[/bold]    {styled_status(mission.status)}",
+        f"[bold]Objective:[/bold] {mission.objective[:120]}",
+        f"[bold]Cost:[/bold]      ${mission.total_cost_usd:.4f}"
+        + (f"  (ceiling: ${mission.cost_ceiling_usd:.2f})" if mission.cost_ceiling_usd else ""),
+        f"[bold]Started:[/bold]   {mission.started_at or '—'}",
+        f"[bold]Completed:[/bold] {mission.completed_at or '—'}",
+    ]
+    console.print(primary_panel("\n".join(info_lines), title="Mission Report"))
 
-    _render_outcome_tasks(mission.mission_outcome)
+    outcome = mission.mission_outcome
+    if outcome and isinstance(outcome, dict):
+        tasks = outcome.get("task_results") or outcome.get("task_outcomes") or []
+        if tasks:
+            render_task_outputs(console, tasks)
+
     _render_errors(mission.error_data)
 
 
 def _render_playbook_detail(run: Any, missions: list[Any]) -> None:
     """Deterministic detailed view of a playbook run."""
-    click.echo(click.style("Playbook Run Report", fg="cyan", bold=True))
-    click.echo(click.style("=" * 60, dim=True))
-    click.echo()
+    console = get_console()
 
-    click.echo(f"  Playbook:   {run.playbook_name} v{run.playbook_version}")
-    click.echo(f"  Run ID:     {run.id}")
-    click.echo(f"  Status:     {_styled_status(run.status)}")
-    click.echo(f"  Cost:       ${run.total_cost_usd:.4f}")
-    if run.budget_usd:
-        pct = (run.total_cost_usd / run.budget_usd) * 100
-        click.echo(f"  Budget:     ${run.budget_usd:.2f} ({pct:.0f}% used)")
-    click.echo(f"  Started:    {run.started_at}")
-    click.echo(f"  Completed:  {run.completed_at}")
-    click.echo(f"  Triggered:  {run.triggered_by}")
+    info_lines = [
+        f"[bold]Playbook:[/bold]  {run.playbook_name} v{run.playbook_version}",
+        f"[bold]Run ID:[/bold]    {run.id}",
+        f"[bold]Status:[/bold]    {styled_status(run.status)}",
+        f"[bold]Cost:[/bold]      ${run.total_cost_usd:.4f}"
+        + (f"  ({(run.total_cost_usd / run.budget_usd) * 100:.0f}% of ${run.budget_usd:.2f} budget)" if run.budget_usd else ""),
+        f"[bold]Started:[/bold]   {run.started_at or '—'}",
+        f"[bold]Completed:[/bold] {run.completed_at or '—'}",
+        f"[bold]Triggered:[/bold] {run.triggered_by}",
+    ]
+    console.print(primary_panel("\n".join(info_lines), title="Playbook Run Report"))
 
-    if missions:
-        # Step summary table
-        click.echo()
-        click.echo(click.style("  Steps:", fg="cyan"))
-        click.echo(f"    {'Step':<20} {'Status':<12} {'Cost':>8}  {'Tasks':>5}  Objective")
-        click.echo("    " + "-" * 90)
-
-        for m in missions:
-            task_count = len(m.mission_outcome.get("task_results", [])) if m.mission_outcome else 0
-            click.echo(
-                f"    {(m.playbook_step_id or '—'):<20} "
-                f"{_styled_status(m.status, pad=12)} "
-                f"${m.total_cost_usd:>7.4f}  "
-                f"{task_count:>5}  "
-                f"{m.objective[:50]}"
-            )
-
-        # Expanded task detail per step
-        for m in missions:
-            if not m.mission_outcome:
-                continue
-            task_results = m.mission_outcome.get("task_results", [])
-            if not task_results:
-                continue
-
-            click.echo()
-            click.echo(click.style(f"  Step: {m.playbook_step_id or m.id[:12]}", fg="cyan", bold=True))
-            _render_task_table(task_results)
-
+    render_mission_outcomes(console, missions)
     _render_errors(run.error_data)
 
 
-# =============================================================================
-# Shared rendering helpers
-# =============================================================================
 
 
-def _render_outcome_tasks(outcome: dict | None) -> None:
-    """Render task results and token usage from a mission outcome."""
-    if not outcome:
-        return
-
-    task_results = outcome.get("task_results", [])
-    if task_results:
-        click.echo()
-        click.echo(click.style("  Tasks:", fg="cyan"))
-        _render_task_table(task_results)
-
-    total_tokens = outcome.get("total_tokens", {})
-    if total_tokens:
-        click.echo()
-        click.echo(click.style("  Token Usage:", fg="cyan"))
-        click.echo(f"    Input:    {total_tokens.get('input', 0):,}")
-        click.echo(f"    Output:   {total_tokens.get('output', 0):,}")
-        click.echo(f"    Thinking: {total_tokens.get('thinking', 0):,}")
-
-
-def _render_task_table(task_results: list[dict]) -> None:
-    """Render task result rows with verification detail."""
-    click.echo(f"    {'ID':<12} {'Agent':<28} {'Status':<10} {'Cost':>8}  {'Duration':>8}  Verification")
-    click.echo("    " + "-" * 90)
-
-    for t in task_results:
-        status = t.get("status", "unknown")
-        v = t.get("verification_outcome", {})
-        click.echo(
-            f"    {t.get('task_id', '—'):<12} "
-            f"{t.get('agent_name', '—'):<28} "
-            f"{click.style(status, fg='green' if status == 'success' else 'red'):<10} "
-            f"${t.get('cost_usd', 0):>7.4f}  "
-            f"{t.get('duration_seconds', 0):>7.1f}s  "
-            f"T1:{v.get('tier_1', {}).get('status', '—')} "
-            f"T2:{v.get('tier_2', {}).get('status', '—')} "
-            f"T3:{v.get('tier_3', {}).get('status', '—')}"
-        )
-
-    # Expanded verification detail
-    for t in task_results:
-        _render_verification_detail(t)
-
-
-def _render_verification_detail(t: dict) -> None:
-    """Render expanded verification detail for a task."""
-    v = t.get("verification_outcome", {})
-    if not v:
-        return
-    task_id = t.get("task_id", "—")
-
-    tier1 = v.get("tier_1", {})
-    if tier1.get("status") not in ("skipped", None):
-        details = tier1.get("details", "")
-        if details:
-            click.echo(f"    {task_id} Tier 1: {details}")
-
-    tier2 = v.get("tier_2", {})
-    if tier2.get("status") not in ("skipped", None):
-        click.echo(f"    {task_id} Tier 2: {tier2.get('checks_passed', 0)}/{tier2.get('checks_run', 0)} checks passed")
-        for fc in tier2.get("failed_checks", []):
-            click.echo(f"      FAIL: {fc.get('check', '—')} — {fc.get('reason', '—')}")
-
-    tier3 = v.get("tier_3", {})
-    if tier3.get("status") not in ("skipped", None):
-        click.echo(f"    {task_id} Tier 3: score {tier3.get('overall_score', 0):.2f} (${tier3.get('cost_usd', 0):.4f})")
 
 
 def _render_errors(error_data: dict | None) -> None:
