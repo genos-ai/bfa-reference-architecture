@@ -20,9 +20,6 @@ class _AbortMission(Exception):
     pass
 
 
-_REPORT_FORMAT = {"pretty": "summary", "human": "detail", "jsonl": "json"}
-
-
 def run_mission(
     cli_logger,
     action: str,
@@ -31,10 +28,9 @@ def run_mission(
     roster: str,
     budget: float | None,
     triggered_by: str,
-    output_format: str = "pretty",
+    output_format: str = "human",
 ) -> None:
     """Dispatch mission CLI actions."""
-    output_format = _REPORT_FORMAT.get(output_format, output_format)
     actions = {
         "create": _action_create,
         "execute": _action_execute,
@@ -307,8 +303,8 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
                 )
             console.print(table)
 
-    # Full task outputs (when -o detail or -o json)
-    if output_format in ("detail", "json") and outcome and isinstance(outcome, dict):
+    # Full task outputs (when -o human or -o json)
+    if output_format in ("human", "json") and outcome and isinstance(outcome, dict):
         tasks = outcome.get("task_results") or outcome.get("task_outcomes") or []
         for t in tasks:
             task_id = t.get("task_id", "—")
@@ -317,7 +313,7 @@ async def _action_detail(cli_logger, *, objective, mission_id, roster, budget, t
             if not isinstance(out_ref, dict):
                 out_ref = {"raw": str(out_ref)}
 
-            if output_format == "json":
+            if output_format == "jsonl":
                 import json
                 console.print(primary_panel(
                     json.dumps(out_ref, indent=2, default=str),

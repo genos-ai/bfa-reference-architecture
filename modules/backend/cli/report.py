@@ -24,7 +24,7 @@ from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-OUTPUT_FORMATS = ("summary", "detail", "json")
+OUTPUT_FORMATS = ("human", "json", "jsonl")
 
 # =============================================================================
 # Shared Rich primitives — single source of truth for CLI display
@@ -429,11 +429,11 @@ def _build_scalars_table(scalars: list[tuple[str, str]]) -> Table:
 # =============================================================================
 
 
-async def render_mission(mission: Any, output_format: str = "summary") -> None:
+async def render_mission(mission: Any, output_format: str = "human") -> None:
     """Render a single mission result."""
-    if output_format == "json":
+    if output_format == "jsonl":
         _emit_json(_mission_to_dict(mission))
-    elif output_format == "detail":
+    elif output_format == "human":
         _render_mission_detail(mission)
     else:
         await _render_summary(
@@ -446,12 +446,12 @@ async def render_mission(mission: Any, output_format: str = "summary") -> None:
 async def render_playbook_run(
     run: Any,
     missions: list[Any],
-    output_format: str = "summary",
+    output_format: str = "human",
 ) -> None:
     """Render a playbook run result."""
-    if output_format == "json":
+    if output_format == "jsonl":
         _emit_json(_playbook_run_to_dict(run, missions))
-    elif output_format == "detail":
+    elif output_format == "human":
         _render_playbook_detail(run, missions)
     else:
         await _render_summary(

@@ -57,7 +57,7 @@ def show_agents(cli_logger) -> None:
     cli_logger.info("Listed agents", extra={"count": len(agents)})
 
 
-def run_agent(cli_logger, message: str, agent: str | None, output_format: str = "pretty") -> None:
+def run_agent(cli_logger, message: str, agent: str | None, output_format: str = "human") -> None:
     """Send a message to an agent and print the result."""
     cli_logger.info(
         "Agent dispatch",
@@ -66,7 +66,7 @@ def run_agent(cli_logger, message: str, agent: str | None, output_format: str = 
 
     target = agent or "Mission Control router"
 
-    if output_format in ("pretty", "human"):
+    if output_format in ("human", "json"):
         from modules.backend.cli.report import get_console
 
         console = get_console()

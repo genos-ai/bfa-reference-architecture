@@ -32,13 +32,10 @@ from modules.backend.core.config import validate_project_root
 from modules.backend.core.logging import bind_context, get_logger, setup_logging
 
 # Unified output format for all commands — single source of truth.
-OUTPUT_FORMATS = click.Choice(["pretty", "human", "jsonl"])
-
-# Maps unified format names to legacy report.py names (summary/detail/json).
-_REPORT_FORMAT = {"pretty": "summary", "human": "detail", "jsonl": "json"}
+OUTPUT_FORMATS = click.Choice(["human", "json", "jsonl"])
 
 
-def output_option(default: str = "pretty"):
+def output_option(default: str = "human"):
     """Reusable -o/--output option decorator."""
     return click.option(
         "-o", "--output", "output_format", default=default,
@@ -422,7 +419,7 @@ def mission_create(ctx, objective, roster, budget, triggered_by):
     from modules.backend.cli.mission import run_mission
     run_mission(ctx.logger, action="create", objective=objective, mission_id=None,
                 roster=roster, budget=budget, triggered_by=triggered_by,
-                output_format="summary")
+                output_format="human")
 
 
 @mission.command("execute")
@@ -445,7 +442,7 @@ def mission_list(ctx):
     from modules.backend.cli.mission import run_mission
     run_mission(ctx.logger, action="list", objective=None, mission_id=None,
                 roster="default", budget=None, triggered_by="user:cli",
-                output_format="summary")
+                output_format="human")
 
 
 @mission.command("detail")
@@ -468,7 +465,7 @@ def mission_cost(ctx, mission_id):
     from modules.backend.cli.mission import run_mission
     run_mission(ctx.logger, action="cost", objective=None, mission_id=mission_id,
                 roster="default", budget=None, triggered_by="user:cli",
-                output_format="summary")
+                output_format="human")
 
 
 # =============================================================================
@@ -497,7 +494,7 @@ def playbook_list(ctx):
     """List available playbooks."""
     from modules.backend.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="list", playbook_name=None, run_id=None,
-                     triggered_by="user:cli", output_format="summary")
+                     triggered_by="user:cli", output_format="human")
 
 
 @playbook.command("detail")
@@ -507,7 +504,7 @@ def playbook_detail(ctx, name):
     """Show playbook configuration and steps."""
     from modules.backend.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="detail", playbook_name=name, run_id=None,
-                     triggered_by="user:cli", output_format="summary")
+                     triggered_by="user:cli", output_format="human")
 
 
 @playbook.command("run")
@@ -529,7 +526,7 @@ def playbook_runs(ctx, name):
     """List playbook runs."""
     from modules.backend.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="runs", playbook_name=name, run_id=None,
-                     triggered_by="user:cli", output_format="summary")
+                     triggered_by="user:cli", output_format="human")
 
 
 @playbook.command("run-detail")
@@ -539,7 +536,7 @@ def playbook_run_detail(ctx, run_id):
     """Show details for a specific playbook run."""
     from modules.backend.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="run-detail", playbook_name=None,
-                     run_id=run_id, triggered_by="user:cli", output_format="detail")
+                     run_id=run_id, triggered_by="user:cli", output_format="human")
 
 
 @playbook.command("report")
