@@ -448,6 +448,17 @@ def mission_detail(ctx, mission_id):
                 output_format=ctx.output_format)
 
 
+@mission.command("plan")
+@click.argument("mission_id")
+@click.pass_obj
+def mission_plan(ctx, mission_id):
+    """Show the TaskPlan DAG for a mission."""
+    from modules.backend.cli.mission import run_mission
+    run_mission(ctx.logger, action="plan", objective=None, mission_id=mission_id,
+                roster="default", budget=None, triggered_by="user:cli",
+                output_format=ctx.output_format)
+
+
 @mission.command("cost")
 @click.argument("mission_id")
 @click.pass_obj
