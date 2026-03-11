@@ -643,6 +643,16 @@ def project_context_history(ctx, project_id):
                 output_format=ctx.output_format)
 
 
+@project.command("summarize")
+@click.argument("project_id")
+@click.pass_obj
+def project_summarize(ctx, project_id):
+    """Run the summarization pipeline for a project."""
+    from modules.backend.cli.project import run_project
+    run_project(ctx.logger, "summarize", project_id=project_id,
+                output_format=ctx.output_format)
+
+
 # =============================================================================
 # DB group
 # =============================================================================

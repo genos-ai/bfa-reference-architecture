@@ -32,6 +32,7 @@ def run_project(
         "archive": _action_archive,
         "context-show": _action_context_show,
         "context-history": _action_context_history,
+        "summarize": _action_summarize,
     }
     fn = actions.get(action)
     if not fn:
@@ -205,3 +206,20 @@ async def _action_context_history(cli_logger, *, project_id, output_format, **_)
                       c.agent_id or "—", c.reason[:60])
 
     console.print(table)
+
+
+async def _action_summarize(cli_logger, *, project_id, **_):
+    """Run the summarization pipeline."""
+    from modules.backend.services.summarization import SummarizationService
+
+    console = get_console()
+    if not project_id:
+        console.print("[red]PROJECT_ID is required[/red]")
+        sys.exit(1)
+
+    async with SummarizationService.factory() as svc:
+        results = await svc.run_full_pipeline(project_id)
+
+    console.print("[bold]Summarization complete[/bold]")
+    console.print(f"  Decisions archived:  {results['decisions_archived']}")
+    console.print(f"  Milestones archived: {results['milestones_archived']}")

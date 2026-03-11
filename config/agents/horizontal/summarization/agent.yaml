@@ -1,0 +1,38 @@
+# =============================================================================
+# Summarization Agent Configuration
+# =============================================================================
+# Compresses mission outcomes into concise milestone summaries for the
+# fractal summarization pipeline. Uses Haiku for cost efficiency —
+# input is already structured data, output is compressed narrative.
+# =============================================================================
+
+agent_name: horizontal.summarization.agent
+agent_type: horizontal
+description: "Compresses mission outcomes into concise milestone summaries"
+enabled: true
+model: anthropic:claude-haiku-4-5-20251001
+max_input_length: 32000
+max_budget_usd: 0.05
+
+keywords: []
+
+tools: []
+
+scope:
+  read: []
+  write: []
+
+execution:
+  mode: local
+
+interface:
+  input:
+    mission_outcomes: list
+    target_length: int
+  output:
+    title: str
+    summary: str
+    key_outcomes: list
+    domain_tags: list
+
+version: "1.0.0"
