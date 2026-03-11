@@ -212,6 +212,7 @@ This means:
 
 **Test:** Can a new developer use the function correctly by reading only its signature and docstring?
 
+
 ---
 
 ## Temporary Principles

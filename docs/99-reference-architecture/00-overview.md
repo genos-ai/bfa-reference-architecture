@@ -1,11 +1,13 @@
 # Architecture Standards Overview
 
-*Version: 3.0.0*
+*Version: 3.4.0*
 *Author: Architecture Team*
 *Created: 2025-01-27*
 
 ## Changelog
 
+- 3.4.0 (2026-03-10): Added 49-agentic-codebase-intelligence.md for coding agent structural awareness — Code Map (tree-sitter + PageRank), Exemplar Registry, Task File Manifest, decomposed generator pipeline, Context Assembly Layer 3, coding agent contract
+- 3.3.0 (2026-03-10): Added 48-agentic-project-context.md for persistent cross-mission project context — Project entity, Project Context Document (PCD), three-layer memory model, agent contract, context assembly, fractal summarization
 - 3.2.0 (2026-03-03): Added Technology Stack Quick Reference — definitive technology choices across all docs for quick agent/developer lookup
 - 3.1.0 (2026-02-26): Added 47-agent-module-organization.md for agent system layout, naming conventions, agent types, shared tool architecture, layered prompt system, access control model
 - 3.0.0 (2026-02-26): Renumbered all docs into clean groups — Core Foundation (01-09), Core Operations (10-16), Optional Platform (20-28), AI-First Platform (40-46); added Architecture Profiles; removed cross-contamination (core docs no longer reference AI docs); dependency flows one way (AI→core, never core→AI)
@@ -45,13 +47,13 @@ A Python/FastAPI backend with thin clients (web, CLI, Telegram). Stateless CRUD,
 
 **Adopt:** Core Foundation (01-09) + Core Operations (10-16) + Optional Platform (20-28) as needed.
 
-**Ignore:** AI-First Platform (40-46) entirely.
+**Ignore:** AI-First Platform (40-48) entirely.
 
 ### Profile: AI-First Platform (BFA)
 
 An agent-first backend where AI agents are the primary consumers. Sessions, streaming, plans, memory, approval gates, multi-channel delivery.
 
-**Adopt:** Core Foundation (01-09) + Core Operations (10-16) + Optional Platform (20-28) as needed + AI-First Platform (40-46).
+**Adopt:** Core Foundation (01-09) + Core Operations (10-16) + Optional Platform (20-28) as needed + AI-First Platform (40-48).
 
 **The core docs are the foundation for both profiles.** AI-First docs build on top of core — they never replace it. The service layer, repository layer, and API design patterns from core apply in both profiles.
 
@@ -105,9 +107,9 @@ General-purpose capabilities. Adopt based on project needs. No AI concepts.
 | 27-tui-architecture.md | Interactive terminal interface (Textual + Textual Web) for persistent sessions, real-time streaming, dashboards |
 | 28-cli-architecture.md | CLI architecture — Click groups + subcommands, AI-first discoverability, Rich output, service lifecycle, testing |
 
-### AI-First Platform (40-47)
+### AI-First Platform (40-49)
 
-Agent architecture, session model, multi-channel delivery. Adopt for BFA projects.
+Agent architecture, session model, multi-channel delivery, persistent project context, codebase intelligence. Adopt for BFA projects.
 
 | Document | Adopt When |
 |----------|------------|
@@ -118,6 +120,8 @@ Agent architecture, session model, multi-channel delivery. Adopt for BFA project
 | 44-multi-channel-gateway.md | Delivering agent interactions through multiple messaging channels (Telegram, Slack, Discord, WebSocket) with cross-channel sessions |
 | 46-event-session-architecture.md | Interactive conversations, streaming agent responses, multi-step plans with approval gates, long-running autonomous tasks, multi-channel sessions |
 | 47-agent-module-organization.md | Agent system layout, naming conventions, agent types (vertical/horizontal), shared tool architecture, layered prompt system, access control model |
+| 48-agentic-project-context.md | Persistent cross-mission project context — Project entity, PCD (living knowledge brief), three-layer memory, agent contract (context_updates), fractal summarization, context assembly with token budgeting. Required for multi-mission workflows. |
+| 49-agentic-codebase-intelligence.md | Structural codebase awareness for coding agents — Code Map (tree-sitter + PageRank, dual JSON/Markdown format), Exemplar Registry (canonical pattern files in PCD), Task File Manifest (pre-computed file lists), decomposed generator pipeline, Context Assembly Layer 3. Recommended when project includes coding agents. |
 
 ---
 
@@ -311,7 +315,7 @@ Definitive technology choices across all docs. When building or modifying code, 
 |--------------|--------------|-----------------|
 | Core (01-16) | Other core docs | Optional, AI-First |
 | Optional Platform (20-28) | Core, other optional | AI-First |
-| AI-First (40-46) | Core, optional, other AI-First | — (unrestricted) |
+| AI-First (40-48) | Core, optional, other AI-First | — (unrestricted) |
 
 ### Dependency Tree
 
@@ -378,6 +382,36 @@ Definitive technology choices across all docs. When building or modifying code, 
 │  (core)  │ │(optional)│  │  (AI-First)      │
 └──────────┘ └──────────┘  └──────────────────┘
 
+┌─────────────────────────────────────┐
+│  48-agentic-project-context.md     │
+│  (AI-First — persistent context,   │
+│   PCD, agent contract, fractal     │
+│   summarization)                   │
+└──────────┬──┬──────────┬──────────┘
+           │  │          │
+    ┌──────┘  │   ┌──────┘
+    │         │   │
+    ▼         ▼   ▼
+┌──────────┐ ┌──────────┐  ┌──────────────────┐
+│40-agentic│ │41-pydantic│  │47-module-org     │
+│  (AI)    │ │AI (AI)    │  │  (AI)            │
+└──────────┘ └──────────┘  └──────────────────┘
+
+┌─────────────────────────────────────┐
+│  49-agentic-codebase-intelligence  │
+│  (AI-First — Code Map, exemplars,  │
+│   file manifests, coding agent     │
+│   contract extension)              │
+└──────────┬──┬──────────┬──────────┘
+           │  │          │
+    ┌──────┘  │   ┌──────┘
+    │         │   │
+    ▼         ▼   ▼
+┌──────────┐ ┌──────────┐  ┌──────────────────┐
+│48-project│ │47-module  │  │40-agentic        │
+│ context  │ │  org      │  │  (AI)            │
+└──────────┘ └──────────┘  └──────────────────┘
+
 ┌───────────────┐                       ┌───────────────┐
 │ 22-frontend   │                       │ 20-data-layer │
 │  (optional)   │                       │  (optional)   │
@@ -397,7 +431,9 @@ If adopting 41-agentic-pydanticai.md, also adopt 40-agentic-architecture.md, 24-
 If adopting 42-agent-first-infrastructure.md, ensure 03-backend-architecture.md and 05-authentication.md are in place (both are core, so always present). Doc 42 is independent of 40/41 but composes naturally with them.
 If adopting 44-multi-channel-gateway.md, ensure 03-backend-architecture.md and 25-telegram-bot-integration.md are in place. Doc 44 benefits from 40/41 for agent routing but can operate with any backend handler.
 If adopting 46-event-session-architecture.md, also adopt 03-backend-architecture.md (core, always present), 21-event-architecture.md (event primitives), 40-agentic-architecture.md (agent concepts), and 41-agentic-pydanticai.md (PydanticAI implementation). Doc 46 composes with 44 (channels become event subscribers) and 43 (service factory accepts optional Session context) but does not require them.
-If adopting any AI-First module (40-47), also adopt 47-agent-module-organization.md. Doc 47 defines the directory layout, naming conventions, and access control model that all other AI-First docs assume. Read it before building any agent.
+If adopting any AI-First module (40-48), also adopt 47-agent-module-organization.md. Doc 47 defines the directory layout, naming conventions, and access control model that all other AI-First docs assume. Read it before building any agent.
+If adopting 48-agentic-project-context.md, also adopt 40-agentic-architecture.md, 41-agentic-pydanticai.md, and 47-agent-module-organization.md. Doc 48 extends the dispatch loop from 40/41 with context assembly and agent contract hooks. The Summarization Agent follows the horizontal agent layout from 47. Required for all BFA projects running multi-mission workloads.
+If adopting 49-agentic-codebase-intelligence.md, also adopt 48-agentic-project-context.md, 47-agent-module-organization.md, and 40-agentic-architecture.md. Doc 49 extends doc 48's context assembly with Layer 3 (Code Map), extends the PCD schema with exemplar fields, and adds a coding-specific agent contract. Recommended for all BFA projects with coding agents.
 
 ---
 
@@ -434,7 +470,7 @@ For a new project:
 1. Choose your profile: **Traditional Backend** or **AI-First Platform (BFA)**
 2. Apply all Core standards (01-16)
 3. Review Optional Platform modules (20-28) against project requirements
-4. If BFA profile, adopt AI-First modules (40-47)
+4. If BFA profile, adopt AI-First modules (40-48)
 5. Document which modules are adopted in project README
 6. Follow the primitive identification process (02-primitive-identification.md)
 7. Set up project structure per 03-backend-architecture.md
