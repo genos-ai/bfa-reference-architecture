@@ -100,6 +100,7 @@ class MissionService(BaseService):
         upstream_context: dict,
         session_id: str,
         environment: str = "local",
+        project_id: str | None = None,
     ) -> Mission:
         """Create a mission from a playbook step."""
 
@@ -129,6 +130,7 @@ class MissionService(BaseService):
                 context={},
                 total_cost_usd=0.0,
                 cost_ceiling_usd=cost_ceiling_usd,
+                project_id=project_id,
             )
             self._session.add(mission)
             await self._session.flush()
@@ -237,6 +239,7 @@ class MissionService(BaseService):
                 upstream_context=mission.upstream_context,
                 cost_ceiling_usd=mission.cost_ceiling_usd,
                 session_id=mission.session_id,
+                project_id=mission.project_id,
             )
 
             mission.mission_outcome = (

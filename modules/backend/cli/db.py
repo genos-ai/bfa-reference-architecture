@@ -16,6 +16,11 @@ logger = get_logger(__name__)
 
 # Tables in dependency order (children first for safe truncation)
 ALL_TABLES = [
+    "milestone_summaries",
+    "project_decisions",
+    "context_changes",
+    "project_contexts",
+    "project_members",
     "mission_decisions",
     "task_attempts",
     "task_executions",
@@ -26,6 +31,7 @@ ALL_TABLES = [
     "playbook_runs",
     "sessions",
     "notes",
+    "projects",
 ]
 
 

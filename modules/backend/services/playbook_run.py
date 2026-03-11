@@ -56,6 +56,7 @@ class PlaybookRunService(BaseService):
         triggered_by: str = "user:cli",
         context_overrides: dict[str, Any] | None = None,
         on_progress: Any | None = None,
+        project_id: str | None = None,
     ) -> PlaybookRun:
         """Execute a playbook end-to-end.
 
@@ -104,6 +105,7 @@ class PlaybookRunService(BaseService):
             total_cost_usd=0.0,
             budget_usd=playbook.budget.max_cost_usd,
             started_at=utc_now().isoformat(),
+            project_id=project_id,
         )
         if context_overrides:
             run.context.update(context_overrides)
@@ -308,6 +310,7 @@ class PlaybookRunService(BaseService):
             cost_ceiling_usd=cost_ceiling,
             upstream_context=upstream,
             session_id=session_id,
+            project_id=run.project_id,
         )
 
         logger.info(

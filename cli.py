@@ -513,12 +513,14 @@ def playbook_detail(ctx, name):
 @playbook.command("run")
 @click.argument("name")
 @click.option("--triggered-by", default="user:cli", help="Trigger origin.")
+@click.option("--project", default=None, help="Project ID to associate with this run.")
 @click.pass_obj
-def playbook_run(ctx, name, triggered_by):
+def playbook_run(ctx, name, triggered_by, project):
     """Execute a playbook."""
     from modules.backend.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="run", playbook_name=name, run_id=None,
-                     triggered_by=triggered_by, output_format=ctx.output_format)
+                     triggered_by=triggered_by, output_format=ctx.output_format,
+                     project_id=project)
 
 
 @playbook.command("runs")

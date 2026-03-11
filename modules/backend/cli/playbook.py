@@ -22,6 +22,7 @@ def run_playbook_cli(
     run_id: str | None,
     triggered_by: str,
     output_format: str = "human",
+    project_id: str | None = None,
 ) -> None:
     """Dispatch playbook CLI actions."""
     actions = {
@@ -52,6 +53,7 @@ def run_playbook_cli(
             run_id=run_id,
             triggered_by=triggered_by,
             output_format=output_format,
+            project_id=project_id,
         ))
     except Exception as e:
         click.echo(click.style(f"Error: {e}", fg="red"), err=True)
@@ -67,7 +69,7 @@ def run_playbook_cli(
 # =============================================================================
 
 
-async def _action_list(cli_logger, *, playbook_name, run_id, triggered_by, output_format):
+async def _action_list(cli_logger, *, playbook_name, run_id, triggered_by, output_format, **_):
     """List available playbooks."""
     from modules.backend.cli.report import get_console, build_table
     from modules.backend.services.playbook import PlaybookService
@@ -103,7 +105,7 @@ async def _action_list(cli_logger, *, playbook_name, run_id, triggered_by, outpu
     console.print(table)
 
 
-async def _action_detail(cli_logger, *, playbook_name, run_id, triggered_by, output_format):
+async def _action_detail(cli_logger, *, playbook_name, run_id, triggered_by, output_format, **_):
     """Show playbook detail."""
     if not playbook_name:
         click.echo(click.style("Error: playbook name is required for detail.", fg="red"), err=True)
@@ -174,7 +176,7 @@ async def _action_detail(cli_logger, *, playbook_name, run_id, triggered_by, out
     console.print(table)
 
 
-async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output_format):
+async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output_format, project_id=None, **_):
     """Execute a playbook."""
     if not playbook_name:
         click.echo(click.style("Error: --playbook-name is required for run.", fg="red"), err=True)
@@ -255,6 +257,7 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
                 playbook_name=playbook_name,
                 triggered_by=triggered_by,
                 on_progress=on_progress,
+                project_id=project_id,
             )
 
         # Fetch missions for report rendering
@@ -287,7 +290,7 @@ async def _action_run(cli_logger, *, playbook_name, run_id, triggered_by, output
     render_mission_outcomes(console, missions)
 
 
-async def _action_runs(cli_logger, *, playbook_name, run_id, triggered_by, output_format):
+async def _action_runs(cli_logger, *, playbook_name, run_id, triggered_by, output_format, **_):
     """List playbook runs."""
     from modules.backend.cli.report import get_console, build_table, styled_status, DOTTED_ROWS
     from modules.backend.core.database import get_async_session
@@ -332,7 +335,7 @@ async def _action_runs(cli_logger, *, playbook_name, run_id, triggered_by, outpu
     console.print(table)
 
 
-async def _action_run_detail(cli_logger, *, playbook_name, run_id, triggered_by, output_format):
+async def _action_run_detail(cli_logger, *, playbook_name, run_id, triggered_by, output_format, **_):
     """Show playbook run detail with missions — uses the report renderer."""
     if not run_id:
         click.echo(click.style("Error: --run-id is required for run-detail.", fg="red"), err=True)
@@ -343,7 +346,7 @@ async def _action_run_detail(cli_logger, *, playbook_name, run_id, triggered_by,
     await render_playbook_run(run, missions, "human")
 
 
-async def _action_report(cli_logger, *, playbook_name, run_id, triggered_by, output_format):
+async def _action_report(cli_logger, *, playbook_name, run_id, triggered_by, output_format, **_):
     """Render a report for a past playbook run in the requested format."""
     if not run_id:
         click.echo(click.style("Error: --run-id is required for report.", fg="red"), err=True)
