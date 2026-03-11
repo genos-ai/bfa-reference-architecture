@@ -14,7 +14,7 @@ Each top-level class corresponds to one file in config/settings/:
     SecuritySchema     → security.yaml
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class _StrictBase(BaseModel):
@@ -313,6 +313,15 @@ class TemporalSchema(_StrictBase):
     approval_timeout_seconds: int = 14400
     escalation_timeout_seconds: int = 86400
     notification_timeout_seconds: int = 30
+
+    @model_validator(mode="after")
+    def _require_server_url_when_enabled(self) -> "TemporalSchema":
+        if self.enabled and self.server_url == "localhost:7233":
+            raise ValueError(
+                "temporal.server_url must be explicitly configured when "
+                "temporal.enabled is true (default 'localhost:7233' is not allowed)"
+            )
+        return self
 
 
 # =============================================================================

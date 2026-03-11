@@ -26,6 +26,14 @@ class TestTemporalSchema:
         with pytest.raises(Exception):
             TemporalSchema(unknown_field="oops")
 
+    def test_enabled_requires_explicit_server_url(self):
+        with pytest.raises(ValueError, match="server_url must be explicitly configured"):
+            TemporalSchema(enabled=True)
+
+    def test_disabled_allows_default_server_url(self):
+        config = TemporalSchema(enabled=False)
+        assert config.server_url == "localhost:7233"
+
     def test_custom_values(self):
         config = TemporalSchema(
             enabled=True,

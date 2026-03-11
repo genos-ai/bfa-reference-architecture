@@ -12,7 +12,10 @@ from modules.backend.core.config_schema import TemporalSchema
 
 def _mock_app_config(temporal_enabled: bool) -> MagicMock:
     config = MagicMock()
-    config.temporal = TemporalSchema(enabled=temporal_enabled)
+    kwargs = {}
+    if temporal_enabled:
+        kwargs["server_url"] = "temporal.test:7233"
+    config.temporal = TemporalSchema(enabled=temporal_enabled, **kwargs)
     return config
 
 

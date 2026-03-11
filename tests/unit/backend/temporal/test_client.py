@@ -13,6 +13,8 @@ from modules.backend.temporal.client import get_temporal_config
 
 def _mock_app_config(enabled: bool = False, **overrides) -> MagicMock:
     config = MagicMock()
+    if enabled and "server_url" not in overrides:
+        overrides["server_url"] = "temporal.test:7233"
     config.temporal = TemporalSchema(enabled=enabled, **overrides)
     return config
 
@@ -33,7 +35,7 @@ class TestGetTemporalConfig:
         ):
             config = get_temporal_config()
             assert config.enabled is True
-            assert config.server_url == "localhost:7233"
+            assert config.server_url == "temporal.test:7233"
             assert config.task_queue == "agent-missions"
 
     def test_custom_config_values(self):
