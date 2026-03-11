@@ -12,10 +12,10 @@ Priority order (last trimmed first):
   4. History (reduced/removed if over budget)
 """
 
-import json as _json
 from typing import Any
 
 from modules.backend.core.logging import get_logger
+from modules.backend.core.utils import estimate_tokens
 from modules.backend.services.history_query import HistoryQueryService
 from modules.backend.services.project_context import ProjectContextManager
 
@@ -23,12 +23,6 @@ logger = get_logger(__name__)
 
 # Default token budget for context assembly
 DEFAULT_TOKEN_BUDGET = 12_000  # ~48KB of JSON
-
-
-def _estimate_tokens(data: Any) -> int:
-    """Estimate token count for a data structure."""
-    serialized = _json.dumps(data, ensure_ascii=False) if not isinstance(data, str) else data
-    return len(serialized) // 4
 
 
 class ContextAssembler:
@@ -70,17 +64,17 @@ class ContextAssembler:
 
         # Layer 0: PCD (always, never trimmed)
         pcd = await self._context_manager.get_context(project_id)
-        pcd_tokens = _estimate_tokens(pcd)
+        pcd_tokens = estimate_tokens(pcd)
         packet["project_context"] = pcd
         remaining_budget -= pcd_tokens
 
         # Layer 1: Task definition (always, never trimmed)
-        task_tokens = _estimate_tokens(task_definition)
+        task_tokens = estimate_tokens(task_definition)
         packet["task"] = task_definition
         remaining_budget -= task_tokens
 
         # Layer 1: Resolved inputs (high priority, summarized if needed)
-        input_tokens = _estimate_tokens(resolved_inputs)
+        input_tokens = estimate_tokens(resolved_inputs)
         if input_tokens <= remaining_budget:
             packet["inputs"] = resolved_inputs
             remaining_budget -= input_tokens
@@ -94,7 +88,7 @@ class ContextAssembler:
                 for k, v in resolved_inputs.items()
             }
             packet["inputs"] = summarized
-            remaining_budget -= _estimate_tokens(summarized)
+            remaining_budget -= estimate_tokens(summarized)
 
         # Layer 2: History (optional, trimmed first)
         if remaining_budget > 500 and domain_tags:
@@ -130,7 +124,7 @@ class ContextAssembler:
             project_id, domain_tags=domain_tags, limit=3,
         )
         if failures:
-            failure_tokens = _estimate_tokens(failures)
+            failure_tokens = estimate_tokens(failures)
             if failure_tokens <= remaining_budget:
                 history["recent_failures"] = failures
                 remaining_budget -= failure_tokens
@@ -141,7 +135,7 @@ class ContextAssembler:
                 project_id, domain_tags=domain_tags, limit=5,
             )
             if executions:
-                exec_tokens = _estimate_tokens(executions)
+                exec_tokens = estimate_tokens(executions)
                 if exec_tokens <= remaining_budget:
                     history["recent_executions"] = executions
 

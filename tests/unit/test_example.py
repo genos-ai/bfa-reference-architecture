@@ -240,4 +240,4 @@ class TestActionBehavior:
         result = runner.invoke(cli, ["health"])
 
         assert "PASS" in result.output or "FAIL" in result.output
-        assert "---" in result.output
+        assert "Health Check" in result.output

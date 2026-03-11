@@ -82,7 +82,10 @@ class MissionRecord(UUIDMixin, TimestampMixin, Base):
     )
 
     project_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True,
+        String(36),
+        ForeignKey("projects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     roster_name: Mapped[str | None] = mapped_column(

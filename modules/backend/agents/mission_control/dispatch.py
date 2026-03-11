@@ -229,6 +229,9 @@ async def dispatch(
                 task_results.append(_failed_result(task, str(e)))
                 continue
 
+            # Shallow copy so context injection doesn't mutate shared upstream dicts
+            resolved_inputs = dict(resolved_inputs)
+
             # Inject context: full assembled packet (preferred) or raw PCD
             if context_assembler and project_id:
                 try:

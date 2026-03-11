@@ -7,10 +7,10 @@ since the assembler is pure orchestration over those services.
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+from modules.backend.core.utils import estimate_tokens
 from modules.backend.services.context_assembler import (
     ContextAssembler,
     DEFAULT_TOKEN_BUDGET,
-    _estimate_tokens,
 )
 
 
@@ -39,15 +39,15 @@ def assembler(mock_context_manager, mock_history_service) -> ContextAssembler:
 
 class TestEstimateTokens:
     def test_string_input(self):
-        assert _estimate_tokens("hello world") == len("hello world") // 4
+        assert estimate_tokens("hello world") == len("hello world") // 4
 
     def test_dict_input(self):
         data = {"key": "value"}
-        tokens = _estimate_tokens(data)
+        tokens = estimate_tokens(data)
         assert tokens > 0
 
     def test_empty_dict(self):
-        assert _estimate_tokens({}) == len("{}") // 4
+        assert estimate_tokens({}) == len("{}") // 4
 
 
 class TestBuild:

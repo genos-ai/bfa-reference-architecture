@@ -9,7 +9,7 @@ completed mission batches into concise records.
 
 import enum
 
-from sqlalchemy import Enum, String, Text
+from sqlalchemy import Enum, ForeignKey, String, Text
 from sqlalchemy.dialects.sqlite import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -35,7 +35,10 @@ class ProjectDecision(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "project_decisions"
 
     project_id: Mapped[str] = mapped_column(
-        String(36), nullable=False, index=True,
+        String(36),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     decision_id: Mapped[str] = mapped_column(
         String(50), nullable=False,
@@ -82,7 +85,10 @@ class MilestoneSummary(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "milestone_summaries"
 
     project_id: Mapped[str] = mapped_column(
-        String(36), nullable=False, index=True,
+        String(36),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     title: Mapped[str] = mapped_column(
         String(300), nullable=False,

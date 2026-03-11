@@ -15,6 +15,7 @@ from typing import Any, AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from modules.backend.core.logging import get_logger
+from modules.backend.core.utils import estimate_tokens
 from modules.backend.models.project_context import (
     ChangeType,
     ContextChange,
@@ -40,11 +41,6 @@ _SENTINEL = object()
 
 # Restricted paths that agents cannot modify
 _RESTRICTED_PATHS = {"version", "last_updated", "last_updated_by"}
-
-
-def _estimate_tokens(text: str) -> int:
-    """Rough token estimate: ~4 chars per token for JSON."""
-    return len(text) // 4
 
 
 def _get_nested(data: dict, path: str) -> Any:
@@ -169,25 +165,30 @@ class ProjectContextManager(BaseService):
             context_data=seed,
             version=1,
             size_characters=len(serialized),
-            size_tokens=_estimate_tokens(serialized),
+            size_tokens=estimate_tokens(serialized),
         )
         _cache[project_id] = (seed, 1, time.monotonic())
         return ctx
 
     async def get_context(self, project_id: str) -> dict:
-        """Get the PCD for a project. Uses in-memory cache with TTL."""
+        """Get the PCD for a project. Uses in-memory cache with TTL.
+
+        Always returns a deep copy so callers cannot corrupt
+        the cache or the SQLAlchemy-tracked object.
+        """
         cached = _cache.get(project_id)
         if cached:
             data, version, ts = cached
             if time.monotonic() - ts < _CACHE_TTL_SECONDS:
-                return data
+                return copy.deepcopy(data)
 
         ctx = await self._context_repo.get_by_project_id(project_id)
         if ctx is None:
             return {}
 
-        _cache[project_id] = (ctx.context_data, ctx.version, time.monotonic())
-        return ctx.context_data
+        data = copy.deepcopy(ctx.context_data)
+        _cache[project_id] = (data, ctx.version, time.monotonic())
+        return copy.deepcopy(data)
 
     async def get_context_with_version(
         self,
@@ -234,6 +235,10 @@ class ProjectContextManager(BaseService):
         current_version = ctx.version
         errors: list[str] = []
         data = copy.deepcopy(ctx.context_data)
+
+        # Phase 1: Apply mutations to in-memory copy and collect valid changes.
+        # Audit records are NOT written yet — we must check size first.
+        applied_changes: list[dict] = []
 
         for update in updates:
             op = update.get("op")
@@ -284,26 +289,20 @@ class ProjectContextManager(BaseService):
                 errors.append(f"Unknown operation: {op}")
                 continue
 
-            # Record change
-            await self._change_repo.create(
-                context_id=ctx.id,
-                version=current_version + 1,
-                change_type=change_type,
-                path=path,
-                old_value=old_value if not isinstance(old_value, type(_SENTINEL)) else None,
-                new_value=value,
-                agent_id=agent_id,
-                mission_id=mission_id,
-                task_id=task_id,
-                reason=reason,
-            )
+            applied_changes.append({
+                "change_type": change_type,
+                "path": path,
+                "old_value": old_value if not isinstance(old_value, type(_SENTINEL)) else None,
+                "new_value": value,
+                "reason": reason,
+            })
 
         # Update system fields
         data["version"] = current_version + 1
         data["last_updated"] = datetime.now(timezone.utc).isoformat()
         data["last_updated_by"] = agent_id or mission_id or "system"
 
-        # Check size
+        # Phase 2: Check size BEFORE writing any audit records.
         serialized = _json.dumps(data, ensure_ascii=False)
         new_size = len(serialized)
         if new_size > _PCD_MAX_SIZE:
@@ -312,14 +311,29 @@ class ProjectContextManager(BaseService):
                 "Prune before applying more updates."
             ]
 
-        # Optimistic concurrency write
+        # Phase 3: Size check passed — write audit records.
         new_version = current_version + 1
+        for change in applied_changes:
+            await self._change_repo.create(
+                context_id=ctx.id,
+                version=new_version,
+                change_type=change["change_type"],
+                path=change["path"],
+                old_value=change["old_value"],
+                new_value=change["new_value"],
+                agent_id=agent_id,
+                mission_id=mission_id,
+                task_id=task_id,
+                reason=change["reason"],
+            )
+
+        # Phase 4: Optimistic concurrency write.
         rows_updated = await self._context_repo.update_context(
             project_id=project_id,
             context_data=data,
             new_version=new_version,
             size_characters=new_size,
-            size_tokens=_estimate_tokens(serialized),
+            size_tokens=estimate_tokens(serialized),
         )
 
         if rows_updated == 0:
@@ -333,7 +347,7 @@ class ProjectContextManager(BaseService):
             project_id=project_id,
             new_version=new_version,
             size_characters=new_size,
-            updates_applied=len(updates) - len(errors),
+            updates_applied=len(applied_changes),
             errors=len(errors),
         )
 

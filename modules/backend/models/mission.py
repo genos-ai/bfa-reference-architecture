@@ -12,7 +12,7 @@ no playbook_run_id.
 
 import enum
 
-from sqlalchemy import Enum, Float, Integer, String, Text
+from sqlalchemy import Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.sqlite import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -72,7 +72,10 @@ class PlaybookRun(UUIDMixin, TimestampMixin, Base):
         Integer, nullable=False,
     )
     project_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True,
+        String(36),
+        ForeignKey("projects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     status: Mapped[str] = mapped_column(
         Enum(PlaybookRunState, native_enum=False),
@@ -130,7 +133,10 @@ class Mission(UUIDMixin, TimestampMixin, Base):
         String(100), nullable=True,
     )
     project_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True,
+        String(36),
+        ForeignKey("projects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     objective: Mapped[str] = mapped_column(
         Text, nullable=False,

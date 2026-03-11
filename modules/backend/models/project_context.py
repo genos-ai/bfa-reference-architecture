@@ -9,9 +9,9 @@ every PCD mutation.
 
 import enum
 
-from sqlalchemy import Enum, Integer, String, Text
+from sqlalchemy import Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.sqlite import JSON
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from modules.backend.models.base import Base, TimestampMixin, UUIDMixin
 
@@ -36,7 +36,11 @@ class ProjectContext(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "project_contexts"
 
     project_id: Mapped[str] = mapped_column(
-        String(36), nullable=False, unique=True, index=True,
+        String(36),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
     )
     context_data: Mapped[dict] = mapped_column(
         JSON, default=dict, nullable=False,
@@ -49,6 +53,13 @@ class ProjectContext(UUIDMixin, TimestampMixin, Base):
     )
     size_tokens: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False,
+    )
+
+    # Relationships
+    changes: Mapped[list["ContextChange"]] = relationship(
+        "ContextChange",
+        back_populates="context",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:
@@ -64,7 +75,10 @@ class ContextChange(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "context_changes"
 
     context_id: Mapped[str] = mapped_column(
-        String(36), nullable=False, index=True,
+        String(36),
+        ForeignKey("project_contexts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     version: Mapped[int] = mapped_column(
         Integer, nullable=False,
@@ -95,6 +109,12 @@ class ContextChange(UUIDMixin, TimestampMixin, Base):
     )
     reason: Mapped[str] = mapped_column(
         Text, nullable=False,
+    )
+
+    # Relationships
+    context: Mapped["ProjectContext"] = relationship(
+        "ProjectContext",
+        back_populates="changes",
     )
 
     def __repr__(self) -> str:

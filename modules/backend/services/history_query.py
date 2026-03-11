@@ -49,13 +49,18 @@ class HistoryQueryService(BaseService):
 
         Returns dicts with task_id, agent_name, status, domain_tags,
         cost_usd, duration_seconds, completed_at.
+
+        When domain_tags are provided, over-fetches from the DB (5x limit)
+        and post-filters in Python for SQLite JSON compatibility, then
+        trims to the requested limit.
         """
+        fetch_limit = limit * 5 if domain_tags else limit
         query = (
             select(TaskExecution)
             .join(MissionRecord, TaskExecution.mission_record_id == MissionRecord.id)
             .where(MissionRecord.project_id == project_id)
             .order_by(desc(TaskExecution.completed_at))
-            .limit(limit)
+            .limit(fetch_limit)
         )
         result = await self.session.execute(query)
         executions = list(result.scalars().all())
@@ -90,7 +95,10 @@ class HistoryQueryService(BaseService):
         """Get recent failed task attempts for a project.
 
         Returns failure reason and feedback so agents don't repeat mistakes.
+        Over-fetches when domain_tags are provided so post-filtering
+        still yields up to `limit` results.
         """
+        fetch_limit = limit * 5 if domain_tags else limit
         query = (
             select(TaskAttempt, TaskExecution)
             .join(TaskExecution, TaskAttempt.task_execution_id == TaskExecution.id)
@@ -98,7 +106,7 @@ class HistoryQueryService(BaseService):
             .where(MissionRecord.project_id == project_id)
             .where(TaskAttempt.status == TaskAttemptStatus.FAILED)
             .order_by(desc(TaskAttempt.created_at))
-            .limit(limit)
+            .limit(fetch_limit)
         )
         result = await self.session.execute(query)
         rows = result.all()
