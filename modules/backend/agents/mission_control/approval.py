@@ -17,13 +17,16 @@ async def request_approval(
     task_id: str,
     action: str,
     context: dict,
-    timeout_seconds: int = 14400,
+    timeout_seconds: int | None = None,
 ) -> dict:
     """Request approval via event bus (Tier 3 only).
 
     In Tier 4, the workflow handles approval via Temporal Signals.
     """
     config = get_app_config()
+
+    if timeout_seconds is None:
+        timeout_seconds = config.temporal.approval_timeout_seconds
 
     if config.temporal.enabled:
         raise RuntimeError(

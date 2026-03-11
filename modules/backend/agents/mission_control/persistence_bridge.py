@@ -4,7 +4,9 @@ Converts MissionOutcome (in-memory) to persisted MissionRecord (database).
 Best-effort — persistence failure does not crash the mission.
 """
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from modules.backend.agents.mission_control.outcome import (
     MissionOutcome,
@@ -12,6 +14,9 @@ from modules.backend.agents.mission_control.outcome import (
     TaskStatus,
 )
 from modules.backend.core.logging import get_logger
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = get_logger(__name__)
 
@@ -23,7 +28,7 @@ async def persist_mission_results(
     roster_name: str | None = None,
     task_plan_json: dict | None = None,
     thinking_trace: str | None = None,
-    db_session: Any,
+    db_session: AsyncSession,
 ) -> None:
     """Persist mission execution results. Best-effort — does not raise."""
     try:

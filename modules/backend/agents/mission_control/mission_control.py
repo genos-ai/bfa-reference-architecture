@@ -34,6 +34,7 @@ from modules.backend.agents.mission_control.history import (
     session_messages_to_model_history,
 )
 from modules.backend.agents.mission_control.middleware import check_guardrails
+from modules.backend.agents.mission_control.models import CollectResult, EventBusProtocol
 from modules.backend.agents.mission_control.outcome import MissionOutcome, MissionStatus
 from modules.backend.agents.mission_control.plan_validator import validate_plan
 from modules.backend.agents.mission_control.registry import get_registry
@@ -77,7 +78,7 @@ async def handle(
     message: str,
     *,
     session_service: SessionService,
-    event_bus: Any | None = None,
+    event_bus: EventBusProtocol | None = None,
     channel: str = "api",
     sender_id: str | None = None,
     mission_brief: str | None = None,
@@ -344,12 +345,8 @@ async def handle(
         )
 
 
-async def collect(session_id: str, message: str, **kwargs: Any) -> dict[str, Any]:
-    """Collect all events from handle(), return a dict.
-
-    Returns: {"agent_name": str, "output": str, "cost_usd": float,
-              "session_id": str, "thinking": str | None}
-    """
+async def collect(session_id: str, message: str, **kwargs: Any) -> CollectResult:
+    """Collect all events from handle(), return a typed result dict."""
     agent_name = ""
     output = ""
     cost_usd = 0.0
@@ -365,13 +362,13 @@ async def collect(session_id: str, message: str, **kwargs: Any) -> dict[str, Any
         elif isinstance(event, AgentResponseChunkEvent):
             pass  # chunks are already accumulated in full_content
 
-    return {
-        "agent_name": agent_name,
-        "output": output,
-        "cost_usd": cost_usd,
-        "session_id": session_id,
-        "thinking": thinking,
-    }
+    return CollectResult(
+        agent_name=agent_name,
+        output=output,
+        cost_usd=cost_usd,
+        session_id=session_id,
+        thinking=thinking,
+    )
 
 
 # =============================================================================
@@ -383,8 +380,8 @@ async def handle_mission(
     mission_id: str,
     mission_brief: str,
     *,
-    session_service: Any,
-    event_bus: Any | None = None,
+    session_service: SessionService,
+    event_bus: EventBusProtocol | None = None,
     roster_name: str = "default",
     mission_budget_usd: float = 10.0,
     upstream_context: dict | None = None,

@@ -16,6 +16,7 @@ Levels:
 
 from dataclasses import dataclass, field
 
+from modules.backend.core.config import get_app_config
 from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -31,37 +32,45 @@ class EscalationLevel:
     description: str
 
 
-ESCALATION_CHAIN = [
-    EscalationLevel(
-        level=1,
-        responder_type="automated_rule_low_risk",
-        timeout_seconds=0,
-        description="Deterministic rules for low-risk actions",
-    ),
-    EscalationLevel(
-        level=2,
-        responder_type="automated_rule_medium_risk",
-        timeout_seconds=0,
-        description="Risk matrix for medium-complexity actions",
-    ),
-    EscalationLevel(
-        level=3,
-        responder_type="human",
-        timeout_seconds=14400,
-        description="Human review via Slack/email",
-    ),
-    EscalationLevel(
-        level=4,
-        responder_type="human_manager",
-        timeout_seconds=86400,
-        description="Manager escalation",
-    ),
-]
+def _build_escalation_chain() -> list[EscalationLevel]:
+    """Build escalation chain with timeouts from config."""
+    config = get_app_config()
+    return [
+        EscalationLevel(
+            level=1,
+            responder_type="automated_rule_low_risk",
+            timeout_seconds=0,
+            description="Deterministic rules for low-risk actions",
+        ),
+        EscalationLevel(
+            level=2,
+            responder_type="automated_rule_medium_risk",
+            timeout_seconds=0,
+            description="Risk matrix for medium-complexity actions",
+        ),
+        EscalationLevel(
+            level=3,
+            responder_type="human",
+            timeout_seconds=config.temporal.approval_timeout_seconds,
+            description="Human review via Slack/email",
+        ),
+        EscalationLevel(
+            level=4,
+            responder_type="human_manager",
+            timeout_seconds=config.temporal.escalation_timeout_seconds,
+            description="Manager escalation",
+        ),
+    ]
+
+
+def get_escalation_chain() -> list[EscalationLevel]:
+    """Get the full escalation chain with config-driven timeouts."""
+    return _build_escalation_chain()
 
 
 def get_escalation_level(current_level: int) -> EscalationLevel | None:
     """Get the escalation level by number."""
-    for level in ESCALATION_CHAIN:
+    for level in _build_escalation_chain():
         if level.level == current_level:
             return level
     return None
@@ -69,7 +78,7 @@ def get_escalation_level(current_level: int) -> EscalationLevel | None:
 
 def get_next_escalation(current_level: int) -> EscalationLevel | None:
     """Get the next escalation level. None if at highest."""
-    for level in ESCALATION_CHAIN:
+    for level in _build_escalation_chain():
         if level.level == current_level + 1:
             return level
     return None

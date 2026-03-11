@@ -5,9 +5,14 @@ under the 500-line target.  Everything here is an implementation detail;
 the public API lives in mission_control.py.
 """
 
+from __future__ import annotations
+
 import importlib
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from modules.backend.schemas.session import SessionResponse
 
 from pydantic_ai import UsageLimits
 from pydantic_ai.models import Model
@@ -20,7 +25,11 @@ from modules.backend.agents.deps.base import (
     QaAgentDeps,
 )
 from modules.backend.agents.mission_control.middleware import _load_mission_control_config
-from modules.backend.agents.mission_control.models import MissionControlRequest
+from modules.backend.agents.mission_control.models import (
+    EventBusProtocol,
+    ExecuteAgentFn,
+    MissionControlRequest,
+)
 from modules.backend.agents.mission_control.registry import get_registry
 from modules.backend.agents.mission_control.roster import Roster
 from modules.backend.agents.mission_control.router import RuleBasedRouter
@@ -166,7 +175,7 @@ def _import_agent_module(agent_name: str) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_agent(session: Any, message: str) -> str:
+def _resolve_agent(session: "SessionResponse", message: str) -> str:
     """Determine which agent handles this message.
 
     Priority: session.agent_id > keyword routing > fallback.
@@ -197,7 +206,7 @@ def _resolve_agent(session: Any, message: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def _publish(event_bus: Any, event: SessionEvent) -> None:
+async def _publish(event_bus: EventBusProtocol | None, event: SessionEvent) -> None:
     """Publish event to bus if available. Non-critical."""
     if event_bus is None:
         return
@@ -283,7 +292,9 @@ def _append_validation_feedback(prompt: str, errors: list[str]) -> str:
     )
 
 
-def _make_agent_executor(session_service: Any, event_bus: Any | None) -> Any:
+def _make_agent_executor(
+    session_service: SessionService, event_bus: EventBusProtocol | None,
+) -> ExecuteAgentFn:
     """Create the execute_agent_fn closure for the dispatch loop."""
     from modules.backend.agents.mission_control.cost import compute_cost_usd
 

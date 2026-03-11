@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from modules.backend.agents.mission_control.models import ExecuteAgentFn
 from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -67,7 +68,7 @@ async def run_verification_pipeline(
     task: dict[str, Any],
     agent_interface: dict[str, Any] | None,
     roster: dict[str, Any] | None = None,
-    execute_agent_fn: Any | None = None,
+    execute_agent_fn: ExecuteAgentFn | None = None,
     session_id: str | None = None,
 ) -> VerificationResult:
     """Execute the 3-tier verification pipeline.
@@ -307,7 +308,7 @@ async def _run_tier_3(
     output: dict[str, Any],
     task: dict[str, Any],
     verification_config: dict[str, Any],
-    execute_agent_fn: Any | None = None,
+    execute_agent_fn: ExecuteAgentFn | None = None,
     session_id: str | None = None,
 ) -> TierResult | Tier3Result:
     """Tier 3: AI-based quality evaluation via Verification Agent."""

@@ -67,7 +67,9 @@ class AgentMissionWorkflow:
         activity_timeout = timedelta(
             seconds=max(input.mission_budget_usd * 120, 600),
         )
-        notification_timeout = timedelta(seconds=30)
+        notification_timeout = timedelta(
+            seconds=input.notification_timeout_seconds,
+        )
 
         # Step 1: Execute the mission
         result = await workflow.execute_activity(
@@ -170,14 +172,25 @@ class AgentMissionWorkflow:
     ) -> None:
         """Wait for approval with durable escalation timer.
 
-        4 hours -> re-notify with critical urgency.
-        24 hours -> give up waiting.
+        Phase 1: wait approval_timeout_seconds, then escalate.
+        Phase 2: wait remaining time up to escalation_timeout_seconds total.
         """
-        # Wait up to 4 hours
+        approval_timeout = timedelta(
+            seconds=input.approval_timeout_seconds,
+        )
+        remaining_timeout = timedelta(
+            seconds=input.escalation_timeout_seconds
+            - input.approval_timeout_seconds,
+        )
+        total_timeout = timedelta(
+            seconds=input.escalation_timeout_seconds,
+        )
+
+        # Phase 1: wait for initial approval window
         try:
             await workflow.wait_condition(
                 lambda: self._approval is not None,
-                timeout=timedelta(hours=4),
+                timeout=approval_timeout,
             )
             return
         except TimeoutError:
@@ -190,20 +203,27 @@ class AgentMissionWorkflow:
                 channel="webhook",
                 recipient="admin",
                 title=f"ESCALATION: Mission {input.mission_id[:8]}",
-                body="Approval pending for 4 hours. Escalating.",
+                body=(
+                    f"Approval pending for "
+                    f"{input.approval_timeout_seconds // 3600} hours. "
+                    f"Escalating."
+                ),
                 action_url=f"/api/v1/missions/{input.mission_id}",
                 urgency="critical",
             ),
             start_to_close_timeout=notification_timeout,
         )
 
-        # Wait up to 24 hours total
+        # Phase 2: wait remaining time up to total escalation timeout
         try:
             await workflow.wait_condition(
                 lambda: self._approval is not None,
-                timeout=timedelta(hours=20),
+                timeout=remaining_timeout,
             )
         except TimeoutError:
             # Give up — mark as failed
             self._status.workflow_status = "failed"
-            self._status.error = "Approval timed out after 24 hours"
+            total_hours = total_timeout.total_seconds() / 3600
+            self._status.error = (
+                f"Approval timed out after {total_hours:.0f} hours"
+            )

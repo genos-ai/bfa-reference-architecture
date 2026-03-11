@@ -5,10 +5,18 @@ execute() method. This adapter wraps handle_mission() to provide
 that interface for direct (non-Temporal) execution.
 """
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from modules.backend.agents.mission_control.mission_control import handle_mission
+from modules.backend.agents.mission_control.models import EventBusProtocol
 from modules.backend.core.logging import get_logger
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from modules.backend.services.session import SessionService
 
 logger = get_logger(__name__)
 
@@ -18,9 +26,9 @@ class MissionControlDispatchAdapter:
 
     def __init__(
         self,
-        session_service: Any,
-        db_session: Any,
-        event_bus: Any | None = None,
+        session_service: SessionService,
+        db_session: AsyncSession,
+        event_bus: EventBusProtocol | None = None,
     ) -> None:
         self._session_service = session_service
         self._db_session = db_session

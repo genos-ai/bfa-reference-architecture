@@ -16,6 +16,7 @@ from typing import Any
 
 from pydantic_ai import UsageLimits
 
+from modules.backend.agents.mission_control.models import ExecuteAgentFn
 from modules.backend.agents.mission_control.outcome import (
     MissionOutcome,
     MissionStatus,
@@ -104,7 +105,7 @@ async def verify_task(
     task: TaskDefinition,
     output: dict,
     roster_entry: RosterAgentEntry,
-    execute_agent_fn: Any | None = None,
+    execute_agent_fn: ExecuteAgentFn | None = None,
     session_id: str | None = None,
 ) -> VerificationResult:
     """Run the full 3-tier verification pipeline on a completed task.
@@ -132,7 +133,7 @@ async def execute_task(
     task: TaskDefinition,
     roster_entry: RosterAgentEntry,
     resolved_inputs: dict[str, Any],
-    execute_agent_fn: Any,
+    execute_agent_fn: ExecuteAgentFn,
 ) -> dict:
     """Execute a single agent task with timeout and cost ceiling enforcement."""
     timeout = (
@@ -160,7 +161,7 @@ async def execute_task(
 async def dispatch(
     plan: TaskPlan,
     roster: Roster,
-    execute_agent_fn: Any,
+    execute_agent_fn: ExecuteAgentFn,
     mission_budget_usd: float,
 ) -> MissionOutcome:
     """Execute the dispatch loop for a validated TaskPlan.
@@ -279,7 +280,7 @@ async def _execute_with_retry(
     task: TaskDefinition,
     roster_entry: RosterAgentEntry,
     resolved_inputs: dict[str, Any],
-    execute_agent_fn: Any,
+    execute_agent_fn: ExecuteAgentFn,
 ) -> TaskResult:
     """Execute a task with 3-tier verification and retry-with-feedback."""
     retry_budget = roster_entry.constraints.retry_budget
