@@ -5,7 +5,7 @@
 # Runs the architecture agent with a compliance scan as prerequisite context.
 # =============================================================================
 
-playbook_name: code.architecture-review
+playbook_name: code.architecture-review.playbook
 description: "Deep architectural review against six engineering principles"
 objective:
   statement: "Review the codebase for architectural principle violations including unnecessary complexity, unsafe concurrency, silent failures, and more"
@@ -15,7 +15,8 @@ objective:
   regulatory_reference: null
 version: 1
 enabled: true
-project: "BFA Platform"
+project_id: "REPLACE_WITH_PROJECT_UUID"
+project_name: "BFA Platform"
 
 trigger:
   type: on_demand
@@ -35,7 +36,7 @@ context:
 steps:
   - id: code-quality
     description: "Quick compliance scan to provide baseline context"
-    capability: code.qa
+    capability: code.quality
     roster: default
     complexity_tier: simple
     cost_ceiling_usd: 0.75
@@ -44,7 +45,7 @@ steps:
       target_path: "@context.target_path"
     output_mapping:
       field_mappings:
-        - source_task: code.qa.agent
+        - source_task: code.quality.agent
           source_field: violations
           target_key: code_violations
     timeout_seconds: 120

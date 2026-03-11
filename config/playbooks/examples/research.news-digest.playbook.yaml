@@ -10,7 +10,7 @@
 # exist yet. Enable once the agents are built.
 # =============================================================================
 
-playbook_name: research.ai-news-digest
+playbook_name: research.news-digest.playbook
 description: "Curate, summarize, and deliver AI news from thought leaders"
 objective:
   statement: "Keep engineering team informed of AI developments that may affect platform architecture decisions"
@@ -20,7 +20,8 @@ objective:
   regulatory_reference: null
 version: 1
 enabled: false
-project: "AI Research"
+project_id: "REPLACE_WITH_PROJECT_UUID"
+project_name: "AI Research"
 
 trigger:
   type: on_demand

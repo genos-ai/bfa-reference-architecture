@@ -52,11 +52,11 @@ class TestTaskExecutionModel:
         execution = TaskExecution(
             mission_record_id="mission-123",
             task_id="analyze_code",
-            agent_name="code.qa.agent",
+            agent_name="code.quality.agent",
             status=TaskExecutionStatus.COMPLETED,
             cost_usd=0.005,
         )
-        assert execution.agent_name == "code.qa.agent"
+        assert execution.agent_name == "code.quality.agent"
 
     def test_task_execution_with_verification(self):
         execution = TaskExecution(

@@ -44,12 +44,12 @@ async def run_qa_agent() -> dict:
     from modules.backend.agents.deps.base import FileScope, QaAgentDeps
     from modules.backend.agents.mission_control.helpers import _build_model
     from modules.backend.agents.mission_control.registry import get_registry
-    from modules.backend.agents.vertical.code.qa.agent import create_agent, run_agent
+    from modules.backend.agents.vertical.code.quality.agent import create_agent, run_agent
 
     logger.info("=== QA Agent: starting live audit ===")
 
     registry = get_registry()
-    qa_config = registry.get("code.qa.agent")
+    qa_config = registry.get("code.quality.agent")
 
     scope = FileScope(
         read_paths=qa_config.scope.read,

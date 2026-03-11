@@ -72,7 +72,7 @@ class TestLoadRoster:
 
     def test_worker_agents_present(self):
         roster = load_roster("default")
-        assert roster.get_agent_by_name("code.qa.agent") is not None
+        assert roster.get_agent_by_name("code.quality.agent") is not None
         assert roster.get_agent_by_name("system.health.agent") is not None
 
     def test_missing_roster_raises(self):

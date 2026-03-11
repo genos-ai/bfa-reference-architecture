@@ -29,7 +29,7 @@
 #     patterns        - Filename patterns to skip (list of strings)
 # =============================================================================
 
-agent_name: code.qa.agent
+agent_name: code.quality.agent
 agent_type: vertical
 description: "Audits the codebase for compliance violations (read-only)"
 enabled: true

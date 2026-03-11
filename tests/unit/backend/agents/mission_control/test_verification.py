@@ -22,7 +22,7 @@ def basic_task():
     """A minimal task dict with verification config."""
     return {
         "task_id": "task_001",
-        "agent": "code.qa.agent",
+        "agent": "code.quality.agent",
         "instructions": "Scan the codebase for violations",
         "description": "QA scan",
         "verification": {
@@ -325,7 +325,7 @@ class TestTier3:
         """Tier 3 skips (not fails) when evaluation_criteria is empty (P2)."""
         task = {
             "task_id": "t1",
-            "agent": "code.qa.agent",
+            "agent": "code.quality.agent",
             "instructions": "Scan the codebase",
             "description": "QA scan",
             "verification": {
@@ -350,7 +350,7 @@ class TestTier3:
         """Tier 3 skips when task has no instructions or description."""
         task = {
             "task_id": "t1",
-            "agent": "code.qa.agent",
+            "agent": "code.quality.agent",
             "verification": {
                 "tier_1": {"schema_validation": True},
                 "tier_3": {
@@ -373,7 +373,7 @@ class TestTier3:
         """Tier 3 skips when agent output is empty (only _meta)."""
         task = {
             "task_id": "t1",
-            "agent": "code.qa.agent",
+            "agent": "code.quality.agent",
             "instructions": "Scan the codebase",
             "description": "QA scan",
             "verification": {

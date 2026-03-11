@@ -2,7 +2,7 @@
 Compliance Scanner Service.
 
 Deterministic rule-based scanner that audits Python codebases for
-compliance violations. Business logic for the code.qa.agent and
+compliance violations. Business logic for the code.quality.agent and
 the scripts/compliance_checker.py CLI. No LLM dependency.
 
 Usage:

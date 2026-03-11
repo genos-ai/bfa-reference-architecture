@@ -18,9 +18,9 @@ from modules.backend.services.playbook import PlaybookService
 def _make_playbook(**overrides) -> PlaybookSchema:
     """Build a valid PlaybookSchema for testing."""
     base = {
-        "playbook_name": "test.example",
+        "playbook_name": "test.example.playbook",
         "description": "Test playbook",
-        "project": "Test Project",
+        "project_id": "proj-test-uuid",
         "objective": {
             "statement": "Test objective",
             "category": "testing",
@@ -89,9 +89,9 @@ class TestMissionBriefGeneration:
         service = PlaybookService(agent_registry=registry)
 
         playbook = PlaybookSchema(
-            playbook_name="test.pipeline",
+            playbook_name="test.pipeline.playbook",
             description="Test pipeline",
-            project="Test Project",
+            project_id="proj-test-uuid",
             objective={
                 "statement": "Test", "category": "test",
                 "owner": "test", "priority": "normal",
@@ -137,17 +137,17 @@ class TestPlaybookMatching:
     def test_match_by_pattern(self):
         service = PlaybookService(agent_registry={})
         playbook = _make_playbook(
-            playbook_name="test.digest",
+            playbook_name="test.digest.playbook",
             trigger={
                 "type": "on_demand",
                 "match_patterns": ["ai news", "ai digest"],
             },
         )
-        service._playbooks = {"test.digest": playbook}
+        service._playbooks = {"test.digest.playbook": playbook}
 
         result = service.match_playbook("Show me the latest ai news")
         assert result is not None
-        assert result.playbook_name == "test.digest"
+        assert result.playbook_name == "test.digest.playbook"
 
     def test_no_match(self):
         service = PlaybookService(agent_registry={})
@@ -159,14 +159,14 @@ class TestPlaybookMatching:
     def test_disabled_playbook_not_matched(self):
         service = PlaybookService(agent_registry={})
         playbook = _make_playbook(
-            playbook_name="test.disabled",
+            playbook_name="test.disabled.playbook",
             enabled=False,
             trigger={
                 "type": "on_demand",
                 "match_patterns": ["test"],
             },
         )
-        service._playbooks = {"test.disabled": playbook}
+        service._playbooks = {"test.disabled.playbook": playbook}
 
         result = service.match_playbook("test something")
         assert result is None
@@ -179,7 +179,7 @@ class TestPlaybookMatching:
                 "match_patterns": ["AI News"],
             },
         )
-        service._playbooks = {"test.example": playbook}
+        service._playbooks = {"test.example.playbook": playbook}
 
         result = service.match_playbook("give me ai news please")
         assert result is not None
@@ -189,9 +189,9 @@ class TestUpstreamContextResolution:
     def test_resolve_context_references(self):
         service = PlaybookService(agent_registry={})
         step = PlaybookSchema(
-            playbook_name="test.ctx",
+            playbook_name="test.ctx.playbook",
             description="Test context",
-            project="Test Project",
+            project_id="proj-test-uuid",
             objective={
                 "statement": "T", "category": "t",
                 "owner": "t", "priority": "low",
@@ -226,9 +226,9 @@ class TestUpstreamContextResolution:
         """Unresolved @context.* references raise ValueError (P0.3)."""
         service = PlaybookService(agent_registry={})
         step = PlaybookSchema(
-            playbook_name="test.unresolved",
+            playbook_name="test.unresolved.playbook",
             description="Test",
-            project="Test Project",
+            project_id="proj-test-uuid",
             objective={
                 "statement": "T", "category": "t",
                 "owner": "t", "priority": "low",
@@ -252,9 +252,9 @@ class TestPlaybookLoading:
         playbooks_dir.mkdir()
 
         playbook_data = {
-            "playbook_name": "test.loaded",
+            "playbook_name": "test.loaded.playbook",
             "description": "Loaded from disk",
-            "project": "Test Project",
+            "project_id": "proj-test-uuid",
             "objective": {
                 "statement": "Test loading",
                 "category": "testing",
@@ -283,32 +283,32 @@ class TestPlaybookLoading:
         ):
             loaded = service.load_playbooks()
 
-        assert "test.loaded" in loaded
-        assert loaded["test.loaded"].description == "Loaded from disk"
+        assert "test.loaded.playbook" in loaded
+        assert loaded["test.loaded.playbook"].description == "Loaded from disk"
 
     def test_list_playbooks_enabled_only(self):
         service = PlaybookService(agent_registry={})
         service._playbooks = {
             "enabled": _make_playbook(
-                playbook_name="test.enabled", enabled=True,
+                playbook_name="test.enabled.playbook", enabled=True,
             ),
             "disabled": _make_playbook(
-                playbook_name="test.disabled", enabled=False,
+                playbook_name="test.disabled.playbook", enabled=False,
             ),
         }
 
         enabled = service.list_playbooks(enabled_only=True)
         assert len(enabled) == 1
-        assert enabled[0].playbook_name == "test.enabled"
+        assert enabled[0].playbook_name == "test.enabled.playbook"
 
     def test_list_playbooks_all(self):
         service = PlaybookService(agent_registry={})
         service._playbooks = {
             "enabled": _make_playbook(
-                playbook_name="test.enabled", enabled=True,
+                playbook_name="test.enabled.playbook", enabled=True,
             ),
             "disabled": _make_playbook(
-                playbook_name="test.disabled", enabled=False,
+                playbook_name="test.disabled.playbook", enabled=False,
             ),
         }
 
@@ -318,11 +318,11 @@ class TestPlaybookLoading:
     def test_get_playbook(self):
         service = PlaybookService(agent_registry={})
         playbook = _make_playbook()
-        service._playbooks = {"test.example": playbook}
+        service._playbooks = {"test.example.playbook": playbook}
 
-        result = service.get_playbook("test.example")
+        result = service.get_playbook("test.example.playbook")
         assert result is not None
-        assert result.playbook_name == "test.example"
+        assert result.playbook_name == "test.example.playbook"
 
     def test_get_playbook_not_found(self):
         service = PlaybookService(agent_registry={})

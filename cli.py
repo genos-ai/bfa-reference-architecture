@@ -150,7 +150,7 @@ def agent(ctx, message: str | None, name: str | None, list_agents: bool):
     \b
     Examples:
         python cli.py agent "run a health check"
-        python cli.py agent "scan code quality" --name code.qa.agent
+        python cli.py agent "scan code quality" --name code.quality.agent
         python cli.py -o jsonl agent "check health"
         python cli.py agent --list
     """

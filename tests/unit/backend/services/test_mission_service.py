@@ -354,12 +354,12 @@ class TestExtractOutputs:
                 "task_results": [
                     {
                         "task_id": "task-001",
-                        "agent_name": "code.qa.agent",
+                        "agent_name": "code.quality.agent",
                         "output_reference": {"report": "first report"},
                     },
                     {
                         "task_id": "task-002",
-                        "agent_name": "code.qa.agent",
+                        "agent_name": "code.quality.agent",
                         "output_reference": {"analysis": "second analysis"},
                     },
                 ],
@@ -367,7 +367,7 @@ class TestExtractOutputs:
             mapping = {
                 "field_mappings": [
                     {
-                        "source_task": "code.qa.agent",
+                        "source_task": "code.quality.agent",
                         "source_field": "analysis",
                         "target_key": "qa_analysis",
                     },

@@ -2,9 +2,9 @@
 """
 Compliance Checker — deterministic rule violation scanner.
 
-Scans the codebase against the rules defined in config/agents/code/qa/agent.yaml
+Scans the codebase against the rules defined in config/agents/code/quality/agent.yaml
 and outputs a table of violations. Uses ComplianceScannerService — the same
-business logic that powers code.qa.agent — without any LLM.
+business logic that powers code.quality.agent — without any LLM.
 
 Usage:
     python scripts/compliance_checker.py
@@ -63,7 +63,7 @@ def main(verbose: bool, debug: bool, rule: str | None, severity: str | None) -> 
 
     logger = get_logger(__name__)
 
-    config = get_registry().get("code.qa.agent")
+    config = get_registry().get("code.quality.agent")
     logger.info("Loaded config", extra={"rules": len(config.rules or [])})
 
     project_root = find_project_root()

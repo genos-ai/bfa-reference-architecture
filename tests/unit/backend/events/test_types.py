@@ -162,7 +162,7 @@ class TestApprovalEvents:
         event = ApprovalRequestedEvent(
             session_id=SESSION_ID,
             source="agent:qa",
-            agent_id="code.qa.agent",
+            agent_id="code.quality.agent",
             action="apply_fix",
             context={"file": "main.py"},
             allowed_decisions=["approve", "deny", "modify"],
@@ -205,7 +205,7 @@ class TestPlanEvents:
             plan_id="plan-1",
             step_id="step-1",
             step_name="Run tests",
-            assigned_agent="code.qa.agent",
+            assigned_agent="code.quality.agent",
         )
         assert event.event_type == "plan.step.started"
 

@@ -6,7 +6,7 @@
 # Planning Agent → TaskPlan → dispatch → verify pipeline.
 # =============================================================================
 
-playbook_name: system.audit
+playbook_name: system.platform-audit.playbook
 description: "Run compliance scans and health checks in parallel"
 objective:
   statement: "Audit the platform for compliance violations and system health issues"
@@ -16,7 +16,8 @@ objective:
   regulatory_reference: null
 version: 2
 enabled: true
-project: "BFA Platform"
+project_id: "REPLACE_WITH_PROJECT_UUID"
+project_name: "BFA Platform"
 
 trigger:
   type: on_demand
@@ -41,7 +42,7 @@ context:
 steps:
   - id: code-quality
     description: "Scan codebase for compliance violations"
-    capability: code.qa
+    capability: code.quality
     roster: default
     complexity_tier: simple
     cost_ceiling_usd: 0.75
@@ -51,7 +52,7 @@ steps:
       scan_rules: "@context.scan_rules"
     output_mapping:
       field_mappings:
-        - source_task: code.qa.agent
+        - source_task: code.quality.agent
           source_field: violations
           target_key: code_violations
     timeout_seconds: 120

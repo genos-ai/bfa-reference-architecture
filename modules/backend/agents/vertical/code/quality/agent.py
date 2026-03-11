@@ -1,5 +1,5 @@
 """
-QA Compliance Agent (code.qa.agent).
+QA Compliance Agent (code.quality.agent).
 
 Thin wrapper over shared tool implementations and ComplianceScannerService.
 All scanning logic lives in services/compliance.py. All tool implementations
@@ -29,7 +29,7 @@ def create_agent(model: str | Model) -> Agent[QaAgentDeps, QaAuditResult]:
     unless registry.reset() is called.
     """
 
-    instructions = assemble_instructions("code", "qa")
+    instructions = assemble_instructions("code", "quality")
 
     agent = Agent(
         model,

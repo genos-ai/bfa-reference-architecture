@@ -141,16 +141,21 @@ class PlaybookSchema(BaseModel):
 
     playbook_name: str = Field(
         ...,
-        pattern=r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_-]*)+$",
+        pattern=r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_-]*)*\.playbook$",
+        description="Unique playbook identifier. Convention: {domain}.{name}.playbook",
     )
     description: str = Field(..., min_length=1, max_length=1000)
     objective: PlaybookObjectiveSchema
     version: int = Field(default=1, ge=1)
     enabled: bool = True
-    project: str = Field(
+    project_id: str = Field(
         ...,
         min_length=1,
-        description="Project name to associate with runs. CLI --project overrides.",
+        description="Project UUID to associate with all runs spawned by this playbook.",
+    )
+    project_name: str | None = Field(
+        None,
+        description="Human-readable project name (display only, not used for resolution).",
     )
     trigger: PlaybookTriggerSchema = Field(default_factory=PlaybookTriggerSchema)
     budget: PlaybookBudgetSchema = Field(default_factory=PlaybookBudgetSchema)

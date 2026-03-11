@@ -15,7 +15,7 @@ from modules.backend.services.compliance import ComplianceScannerService
 @pytest.fixture
 def qa_config():
     """Load the real QA agent config from the registry."""
-    return get_registry().get("code.qa.agent")
+    return get_registry().get("code.quality.agent")
 
 
 @pytest.fixture
@@ -167,7 +167,7 @@ class TestConfigLoading:
     """Tests for agent config loading from YAML."""
 
     def test_loads_config_from_yaml(self, qa_config):
-        assert qa_config.agent_name == "code.qa.agent"
+        assert qa_config.agent_name == "code.quality.agent"
         assert qa_config.enabled is True
 
     def test_config_has_rules(self, qa_config):

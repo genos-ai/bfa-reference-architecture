@@ -120,14 +120,14 @@ class TestSaveTaskExecution:
         execution = await service.save_task_execution(
             mission_record_id=mission.id,
             task_id="analyze_code",
-            agent_name="code.qa.agent",
+            agent_name="code.quality.agent",
             status="completed",
             cost_usd=0.01,
         )
 
         assert execution.id is not None
         assert execution.task_id == "analyze_code"
-        assert execution.agent_name == "code.qa.agent"
+        assert execution.agent_name == "code.quality.agent"
         assert execution.status == TaskExecutionStatus.COMPLETED
 
     @pytest.mark.asyncio

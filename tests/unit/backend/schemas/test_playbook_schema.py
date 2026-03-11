@@ -20,9 +20,9 @@ from modules.backend.schemas.playbook import (
 def _minimal_playbook(**overrides):
     """Build a minimal valid playbook dict."""
     base = {
-        "playbook_name": "test.example",
+        "playbook_name": "test.example.playbook",
         "description": "Test playbook",
-        "project": "Test Project",
+        "project_id": "proj-test-uuid",
         "objective": {
             "statement": "Test objective",
             "category": "testing",
@@ -194,7 +194,7 @@ class TestPlaybookObjectiveSchema:
 class TestPlaybookSchema:
     def test_minimal_valid(self):
         playbook = PlaybookSchema(**_minimal_playbook())
-        assert playbook.playbook_name == "test.example"
+        assert playbook.playbook_name == "test.example.playbook"
         assert len(playbook.steps) == 1
         assert playbook.version == 1
         assert playbook.enabled is True

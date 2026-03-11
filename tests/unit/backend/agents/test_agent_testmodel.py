@@ -22,7 +22,7 @@ def qa_deps():
     """Build QaAgentDeps for testing with a permissive scope."""
     from modules.backend.agents.mission_control.registry import get_registry
 
-    config = get_registry().get("code.qa.agent")
+    config = get_registry().get("code.quality.agent")
     return QaAgentDeps(
         project_root=find_project_root(),
         scope=FileScope(read_paths=["*"], write_paths=["*"]),
@@ -55,13 +55,13 @@ def _reset_agent_instances():
 
 
 class TestQaAgentWithTestModel:
-    """Tests for code.qa.agent using deterministic TestModel."""
+    """Tests for code.quality.agent using deterministic TestModel."""
 
     @pytest.mark.asyncio
     async def test_returns_qa_audit_result_schema(self, qa_deps):
         """TestModel with call_tools='none' validates schema output
         without executing tools (tool tests cover execution separately)."""
-        from modules.backend.agents.vertical.code.qa.agent import create_agent
+        from modules.backend.agents.vertical.code.quality.agent import create_agent
 
         agent = create_agent(TestModel(call_tools=[]))
 
@@ -75,7 +75,7 @@ class TestQaAgentWithTestModel:
 
     @pytest.mark.asyncio
     async def test_usage_is_tracked(self, qa_deps):
-        from modules.backend.agents.vertical.code.qa.agent import create_agent
+        from modules.backend.agents.vertical.code.quality.agent import create_agent
 
         agent = create_agent(TestModel(call_tools=[]))
 
@@ -87,7 +87,7 @@ class TestQaAgentWithTestModel:
     @pytest.mark.asyncio
     async def test_run_agent_interface(self, qa_deps):
         """Test the standard run_agent() entry point used by the coordinator."""
-        from modules.backend.agents.vertical.code.qa.agent import create_agent, run_agent
+        from modules.backend.agents.vertical.code.quality.agent import create_agent, run_agent
 
         agent = create_agent(TestModel(call_tools=[]))
         result = await run_agent("scan everything", qa_deps, agent)

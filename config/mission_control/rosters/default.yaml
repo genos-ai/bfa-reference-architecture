@@ -8,7 +8,7 @@
 #     Do not list them here unless overriding defaults.
 
 agents:
-  - agent_name: code.qa.agent
+  - agent_name: code.quality.agent
     agent_version: "1.0.0"
     description: >
       Audits Python codebases for compliance violations including import

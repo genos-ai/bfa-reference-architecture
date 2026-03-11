@@ -18,7 +18,7 @@ class SessionCreate(BaseModel):
         default=None,
         max_length=100,
         description="Primary agent to assign to this session",
-        examples=["code.qa"],
+        examples=["code.quality"],
     )
     cost_budget_usd: float | None = Field(
         default=None,
