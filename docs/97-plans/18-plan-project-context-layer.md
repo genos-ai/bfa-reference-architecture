@@ -1,10 +1,12 @@
 # Implementation Plan: Project Context Layer (Persistent Cross-Mission Memory)
 
 *Created: 2026-03-10*
+*Updated: 2026-03-11 — Added Pre-Phase 0 (seam bug fixes, execution_id, identity model)*
 *Status: Pending*
 *Phase: 9 of 9 (AI-First Platform Build)*
 *Depends on: Phase 4 (Mission Control Dispatch), Phase 6 (Plan Persistence), Phase 8 (Playbooks & Missions)*
 *Blocked by: Phase 8*
+*Pre-requisite: Pre-Phase 0 (dispatch seam fixes + execution_id) must be completed before Sub-Phase 1*
 
 ---
 
@@ -14,7 +16,23 @@ Build the persistent project context layer — the system that allows ephemeral 
 
 The architecture uses three layers of memory: Layer 0 (PCD — always loaded, ~15KB, actively curated), Layer 1 (mission context — existing TaskPlan + upstream_context, unchanged), and Layer 2 (project history — structured queries over past decisions, outcomes, and failures). Context is assembled per-task within a token budget by a new `ContextAssembler` service. Over time, a `SummarizationService` compresses old history at decreasing granularity (task → mission → milestone → PCD) so context scales with project lifetime, not linearly with history size.
 
-This plan is implemented in five sub-phases, each independently valuable and deployable. No existing tables are removed. No existing services are replaced. The context layer is additive.
+A **Pre-Phase 0** addresses six dispatch seam bugs and introduces `execution_id` — a globally unique correlation ID assigned at dispatch time that threads through TaskResult, TaskExecution, logs, and events. This fixes the foundation before the context layer builds on it.
+
+This plan is implemented in five sub-phases (plus Pre-Phase 0), each independently valuable and deployable. No existing tables are removed. No existing services are replaced. The context layer is additive.
+
+### Identity Model (5 Layers)
+
+The complete identity hierarchy from user boundary to task execution:
+
+| Layer | ID | Type | Assigned By | Scope | Purpose |
+|-------|------|------|-------------|-------|---------|
+| 1 | `project_id` | UUID | User (via CLI/API) | Cross-session | Organizational boundary for all work |
+| 2 | `step.id` | string | YAML author | Within playbook | DAG node label, dependency references |
+| 3 | `mission.id` | UUID | Database | Per execution | DB record, lifecycle tracking |
+| 4 | `task_id` | string | Planning Agent (LLM) | Within TaskPlan | DAG node label, upstream references |
+| 5 | `execution_id` | UUID | Dispatch loop (code) | Global | Cross-cutting correlation for logs, events, tracing |
+
+**Key design decision:** `task_id` (layer 4) is NOT a stable identity — the Planning Agent assigns fresh IDs each run (e.g., `task-001`, `task-002`). The `execution_id` (layer 5) is the globally unique, code-assigned UUID that enables cross-project tracking, monitoring dashboards, and end-to-end tracing. `task_id` is already persisted where needed (in `MissionRecord.task_plan_json` as JSONB and `TaskExecution.task_id` as a string column) and does not need its own DB table.
 
 **Dev mode: breaking changes allowed to new code only.** Existing mission and playbook functionality is preserved. New `project_id` columns are added to existing tables but are nullable during migration to avoid breaking existing data.
 
@@ -41,6 +59,15 @@ This plan is implemented in five sub-phases, each independently valuable and dep
 - Anti-pattern: Do NOT delete raw history data during summarization. Mark as summarized, exclude from default queries.
 
 ## What to Build
+
+### Pre-Phase 0: Dispatch Seam Fixes & Execution ID
+- `modules/backend/agents/mission_control/dispatch.py` — MODIFY: enforce `mission_budget_usd`, deliver retry feedback to agents, assign `execution_id` per task at dispatch time
+- `modules/backend/agents/mission_control/outcome.py` — MODIFY: add `execution_id` field to `TaskResult`
+- `modules/backend/models/mission_record.py` — MODIFY: add `execution_id` to `TaskExecution`
+- `modules/backend/agents/mission_control/persistence_bridge.py` — MODIFY: persist `execution_id` from TaskResult to TaskExecution
+- `modules/backend/services/playbook.py` — MODIFY: fail loudly on unresolved `@context.*` references (raise `ValueError` instead of silent passthrough)
+- `modules/backend/services/mission.py` — MODIFY: fix `extract_outputs` silent empty returns (log warning), fix `by_agent` dict overwrite on duplicate agents
+- `modules/backend/agents/mission_control/mission_control.py` — MODIFY: either route on `complexity_tier` or remove it from the chain
 
 ### Sub-Phase 1: Project Entity
 - `modules/backend/models/project.py` — NEW: `Project`, `ProjectMember`, `ProjectStatus` models
@@ -94,9 +121,18 @@ This plan is implemented in five sub-phases, each independently valuable and dep
 10. **No RAG, no vector embeddings, no semantic search.** All history retrieval uses structured queries by domain tag, component key, time range, or failure status. Agents need precise data, not fuzzy matches.
 11. **The dispatch loop is the single integration point.** Context assembly happens before task execution, context_updates extraction happens after. No parallel systems, no separate event loops.
 12. **Each sub-phase is independently deployable.** Sub-phase 1 (Project entity) works without any context layer. Sub-phase 2 (PCD) works without agent automation. Each phase adds value.
+13. **execution_id is assigned by deterministic code, not the LLM.** The dispatch loop assigns a UUID per task execution. This separates global correlation (execution_id, code-assigned) from DAG identity (task_id, LLM-assigned). execution_id threads through TaskResult → TaskExecution → ContextChange → logs for end-to-end tracing.
+14. **Pre-Phase 0 fixes dispatch seam bugs before building on top.** Six bugs at layer boundaries (budget enforcement, retry feedback, @context.* resolution, complexity_tier usage, extract_outputs reliability, execution_id) must be fixed before the context layer can safely integrate with dispatch.
 
 ## Success Criteria
 
+- [ ] `mission_budget_usd` enforced in dispatch — tasks cancelled when budget exceeded
+- [ ] Retry feedback delivered to agents (not dead code)
+- [ ] Unresolved `@context.*` references raise `ValueError` (not silent passthrough)
+- [ ] `complexity_tier` used in routing or removed from chain
+- [ ] `extract_outputs` handles duplicate agents and logs warnings on missing data
+- [ ] `execution_id` (UUID) assigned per task at dispatch time, persisted to `TaskExecution`
+- [ ] All Pre-Phase 0 tests pass
 - [ ] Projects can be created, listed, detailed, and archived via CLI
 - [ ] Missions and playbook runs are scoped to projects via `project_id`
 - [ ] PCD can be viewed and manually updated via CLI
@@ -125,6 +161,212 @@ This plan is implemented in five sub-phases, each independently valuable and dep
 |---|------|---------------|
 | 0.1 | Commit any uncommitted work | `git status`, then commit if needed |
 | 0.2 | Create feature branch | `git checkout -b feature/project-context-layer` |
+
+---
+
+## Pre-Phase 0: Dispatch Seam Fixes & Execution ID
+
+These fixes address six bugs discovered at layer boundaries in the Playbook → Mission → Mission Control → Agents chain. They must be completed before the context layer can reliably build on top of dispatch.
+
+### Step P0.1: Enforce mission_budget_usd in Dispatch
+
+**File**: `modules/backend/agents/mission_control/dispatch.py` — MODIFY
+
+**Bug:** `mission_budget_usd: float` parameter is accepted by `dispatch()` (line 165) but never referenced in the function body. Cost ceiling is not enforced during execution.
+
+**Fix:** Add running cost tracking in the dispatch loop. After each task completes, accumulate `cost_usd` from `_meta`. If cumulative cost exceeds `mission_budget_usd`, cancel remaining tasks and return `MissionStatus.FAILED` with a budget-exceeded error.
+
+```python
+# In the dispatch loop, after task completion:
+cumulative_cost += task_result.cost_usd
+if mission_budget_usd and cumulative_cost > mission_budget_usd:
+    logger.warning(
+        "Mission budget exceeded, cancelling remaining tasks",
+        extra={
+            "cumulative_cost": cumulative_cost,
+            "budget": mission_budget_usd,
+        },
+    )
+    # Cancel remaining tasks, set outcome status to FAILED
+    break
+```
+
+**Tests:** Add test `test_budget_enforcement_cancels_remaining_tasks` — two tasks, budget of $0.05, each task costs $0.04. Second task should not execute.
+
+---
+
+### Step P0.2: Deliver Retry Feedback to Agents
+
+**File**: `modules/backend/agents/mission_control/dispatch.py` — MODIFY
+
+**Bug:** In `_execute_with_retry()` (lines 279-413), a local `instructions` variable is built with feedback from prior failures, but `execute_task()` reads `task.instructions` (a frozen Pydantic field). The retry feedback is dead code — it's constructed but never delivered to the agent.
+
+**Fix:** Pass the enriched `instructions` (with feedback) to `execute_agent_fn` instead of `task.instructions`. The `execute_agent_fn` callable's `instructions` parameter should receive the feedback-enriched version on retries.
+
+```python
+# In _execute_with_retry, pass enriched instructions:
+result = await execute_agent_fn(
+    agent_name=entry.agent_name,
+    instructions=instructions,  # NOT task.instructions — includes retry feedback
+    inputs=resolved_inputs,
+    usage_limits=usage_limits,
+)
+```
+
+**Tests:** Update `test_retry_records_feedback_in_history` to also verify that the agent received enriched instructions on retry (capture `instructions` arg in mock).
+
+---
+
+### Step P0.3: Fail Loudly on Unresolved @context.* References
+
+**File**: `modules/backend/services/playbook.py` — MODIFY
+
+**Bug:** In `resolve_upstream_context()` (lines 296-314), when a `@context.*` reference can't be resolved, the literal string (e.g., `"@context.missing_key"`) is silently passed through as the value. Downstream agents receive a string instead of actual data.
+
+**Fix:** Raise `ValueError` when a `@context.*` reference cannot be resolved. The playbook orchestrator should catch this and fail the step with a clear error, not silently pass garbage to agents.
+
+```python
+# Replace the warning + passthrough with a hard failure:
+if isinstance(value, str) and value.startswith("@context."):
+    context_key = value[len("@context."):]
+    if context_key in upstream:
+        resolved_input[key] = upstream[context_key]
+    else:
+        raise ValueError(
+            f"Step '{step.id}' has unresolvable @context reference: "
+            f"'{value}' (available: {list(upstream.keys())})"
+        )
+```
+
+**Tests:** Add test `test_unresolved_context_reference_raises` — step references `@context.missing`, verify `ValueError` is raised with helpful message.
+
+---
+
+### Step P0.4: Resolve complexity_tier Usage
+
+**File**: `modules/backend/agents/mission_control/mission_control.py` — MODIFY
+
+**Bug:** `complexity_tier` is stored on the Mission model and passed through from playbook steps, but `handle_mission()` never reads it. It's dead data.
+
+**Fix:** Either:
+- **(A)** Use `complexity_tier` to select agent configuration (e.g., model size, token limits, retry budget) — pass it to roster loading or agent executor construction.
+- **(B)** Remove `complexity_tier` from the chain if there's no near-term routing use.
+
+**Recommended:** Option (A) — use it in roster loading to select model tiers. A `simple` tier uses smaller/cheaper models, `complex` uses larger models. This aligns with the existing `RosterConstraintsSchema`.
+
+**Tests:** Add test that verifies different complexity tiers produce different agent configurations (or if option B, remove the field and verify no references remain).
+
+---
+
+### Step P0.5: Fix extract_outputs Reliability
+
+**File**: `modules/backend/services/mission.py` — MODIFY
+
+**Bug 1:** `extract_outputs()` (line 351-352) returns `{}` silently when `output_mapping` or `mission_outcome` is missing. Callers have no way to distinguish "no outputs mapped" from "mapping failed."
+
+**Bug 2:** The `by_agent` dict (line 376) overwrites when multiple tasks use the same agent. Only the last task's output survives for agent-name-based lookups.
+
+**Fix 1:** Log a warning when returning empty due to missing mapping/outcome, so operators can diagnose pipeline issues:
+
+```python
+if not output_mapping:
+    logger.debug("No output_mapping configured", extra={"mission_id": mission.id})
+    return {}
+if not mission.mission_outcome:
+    logger.warning(
+        "Mission has no outcome for output extraction",
+        extra={"mission_id": mission.id},
+    )
+    return {}
+```
+
+**Fix 2:** Change `by_agent` to collect lists instead of overwriting:
+
+```python
+by_agent: dict[str, list[dict]] = {}
+# ...
+agent = tr.get("agent_name", "")
+by_agent.setdefault(agent, []).append(tr.get("output_reference", {}))
+```
+
+Then in the lookup, try all entries for a given agent name.
+
+**Tests:** Add tests for both scenarios: empty output_mapping logs debug, missing outcome logs warning, duplicate agents both accessible.
+
+---
+
+### Step P0.6: Add execution_id to TaskResult and Dispatch
+
+**File**: `modules/backend/agents/mission_control/outcome.py` — MODIFY
+
+Add `execution_id` field to `TaskResult`:
+
+```python
+class TaskResult(BaseModel):
+    """Result of executing a single task."""
+
+    # ... existing fields ...
+    execution_id: str = Field(
+        default="",
+        description="Globally unique execution ID assigned at dispatch time",
+    )
+```
+
+**File**: `modules/backend/agents/mission_control/dispatch.py` — MODIFY
+
+In the dispatch loop, before executing each task, assign a UUID:
+
+```python
+import uuid
+
+# In the dispatch loop, before _execute_with_retry:
+execution_id = str(uuid.uuid4())
+
+# Pass to TaskResult construction:
+task_result.execution_id = execution_id
+```
+
+**File**: `modules/backend/models/mission_record.py` — MODIFY
+
+Add `execution_id` to `TaskExecution`:
+
+```python
+    execution_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True,
+    )
+```
+
+**File**: `modules/backend/agents/mission_control/persistence_bridge.py` — MODIFY
+
+In `persist_mission_results`, copy `execution_id` from `TaskResult` to `TaskExecution`:
+
+```python
+task_execution = TaskExecution(
+    # ... existing fields ...
+    execution_id=task_result.execution_id,
+)
+```
+
+**Tests:** Add test `test_execution_id_assigned_per_task` — dispatch a plan with 2 tasks, verify each TaskResult has a unique non-empty `execution_id`. Add test `test_execution_id_persisted` — verify TaskExecution row has the same `execution_id` as the TaskResult.
+
+---
+
+### Step P0.7: Tests for Pre-Phase 0
+
+All Pre-Phase 0 changes must have unit tests before proceeding. Summary of required tests:
+
+| # | Test | File |
+|---|------|------|
+| P0.7.1 | Budget enforcement cancels remaining tasks | `tests/unit/backend/mission_control/test_dispatch.py` |
+| P0.7.2 | Retry feedback delivered to agent (not dead code) | `tests/unit/backend/mission_control/test_dispatch.py` |
+| P0.7.3 | Unresolved @context.* raises ValueError | `tests/unit/backend/services/test_playbook.py` |
+| P0.7.4 | complexity_tier routing (or removal) | `tests/unit/backend/mission_control/test_mission_control.py` |
+| P0.7.5 | extract_outputs with duplicate agents | `tests/unit/backend/services/test_mission.py` |
+| P0.7.6 | extract_outputs logs warning on missing outcome | `tests/unit/backend/services/test_mission.py` |
+| P0.7.7 | execution_id assigned per task, globally unique | `tests/unit/backend/mission_control/test_dispatch.py` |
+| P0.7.8 | execution_id persisted to TaskExecution | `tests/unit/backend/mission_control/test_persistence.py` |
+
+**Verify**: `pytest tests/unit/backend/ -x` — all tests pass, including new Pre-Phase 0 tests.
 
 ---
 
@@ -1018,6 +1260,9 @@ class ContextChange(UUIDMixin, TimestampMixin, Base):
     task_id: Mapped[str | None] = mapped_column(
         String(100), nullable=True,
     )
+    execution_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True,
+    )
     reason: Mapped[str] = mapped_column(
         Text, nullable=False,
     )
@@ -1698,18 +1943,21 @@ def project_context_history(ctx, project_id):
 
 **File**: `modules/backend/agents/mission_control/outcome.py` — MODIFY
 
-Add `context_updates` field to `TaskResult`:
+Add `context_updates` field to `TaskResult` (note: `execution_id` was already added in Pre-Phase 0 Step P0.6):
 
 ```python
 class TaskResult(BaseModel):
     """Result of executing a single task."""
 
     # ... existing fields ...
+    # execution_id: str  ← already added in Pre-Phase 0
     context_updates: list[dict] = Field(
         default_factory=list,
         description="Structured patches to the PCD proposed by this agent",
     )
 ```
+
+The `execution_id` enables tracing context_updates back to the specific task execution that produced them. When `ContextCurator` persists changes, it records the `execution_id` alongside `agent_id`, `mission_id`, and `task_id` in the `ContextChange` audit trail.
 
 ---
 
@@ -1814,6 +2062,7 @@ In the dispatch loop, after `completed_outputs[task_id] = result.output_referenc
                         agent_id=result.agent_name,
                         mission_id=plan.mission_id,
                         task_id=result.task_id,
+                        execution_id=result.execution_id,  # from Pre-Phase 0
                     )
                 except Exception as e:
                     logger.warning(
@@ -2776,6 +3025,16 @@ async def _action_summarize(cli_logger, *, project_id, output_format, **_):
 
 | File | Action | Est. Lines | Sub-Phase |
 |------|--------|-----------|-----------|
+| `modules/backend/agents/mission_control/dispatch.py` | MODIFY | +40 | P0 |
+| `modules/backend/agents/mission_control/outcome.py` | MODIFY | +5 | P0 |
+| `modules/backend/agents/mission_control/mission_control.py` | MODIFY | +15 | P0 |
+| `modules/backend/agents/mission_control/persistence_bridge.py` | MODIFY | +5 | P0 |
+| `modules/backend/models/mission_record.py` | MODIFY | +5 | P0 |
+| `modules/backend/services/playbook.py` | MODIFY | +5 | P0 |
+| `modules/backend/services/mission.py` | MODIFY | +15 | P0 |
+| `tests/unit/backend/mission_control/test_dispatch.py` | MODIFY | +60 | P0 |
+| `tests/unit/backend/services/test_playbook.py` | NEW/MODIFY | +30 | P0 |
+| `tests/unit/backend/services/test_mission.py` | MODIFY | +40 | P0 |
 | `config/settings/projects.yaml` | NEW | 15 | 1 |
 | `modules/backend/core/config_schema.py` | MODIFY | +15 | 1 |
 | `modules/backend/core/config.py` | MODIFY | +10 | 1 |
@@ -2816,9 +3075,9 @@ async def _action_summarize(cli_logger, *, project_id, output_format, **_):
 | `modules/backend/cli/project.py` | MODIFY | +20 | 5 |
 | `cli.py` | MODIFY | +10 | 5 |
 
-**Total new files:** 18
-**Total modified files:** 14 (some modified in multiple sub-phases)
-**Estimated new code:** ~2,400 lines
+**Total new files:** 18 (+ 1 new test file in Pre-Phase 0)
+**Total modified files:** 17 (some modified in multiple sub-phases, +7 in Pre-Phase 0)
+**Estimated new code:** ~2,620 lines (~220 in Pre-Phase 0, ~2,400 in Sub-Phases 1-5)
 
 ---
 
