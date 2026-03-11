@@ -44,37 +44,6 @@ agents:
       retry_budget: 2
       parallelism: safe
 
-  - agent_name: code.architecture.agent
-    agent_version: "1.0.0"
-    description: >
-      Deep architectural review agent. Reads source code and evaluates against
-      six engineering principles: unnecessary complexity, unsafe concurrency,
-      brittle coupling, leaky boundaries, silent failures, and duplication.
-      Compares findings against a checked-in baseline and only reports new
-      violations. Read-only (P13).
-    model:
-      name: "anthropic:claude-haiku-4-5-20251001"
-      temperature: 0.0
-      max_tokens: 8192
-    tools:
-      - filesystem.read_file
-      - filesystem.list_files
-    interface:
-      input:
-        target_path: string
-      output:
-        summary: string
-        total_findings: integer
-        findings: "list[object]"
-        files_reviewed: integer
-        new_findings: integer
-        baseline_findings: integer
-    constraints:
-      timeout_seconds: 600
-      cost_ceiling_usd: 5.00
-      retry_budget: 1
-      parallelism: safe
-
   - agent_name: system.health.agent
     agent_version: "1.0.0"
     description: >

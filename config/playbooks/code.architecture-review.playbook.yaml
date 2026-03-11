@@ -15,8 +15,8 @@ objective:
   regulatory_reference: null
 version: 1
 enabled: true
-project_id: "REPLACE_WITH_PROJECT_UUID"
-project_name: "BFA Platform"
+project_id: "d4bb2073-d86a-465b-805f-9400d4c2449d"
+project_name: "system-audit-and-health-check"
 
 trigger:
   type: on_demand
