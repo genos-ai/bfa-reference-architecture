@@ -95,6 +95,23 @@ class ContextCuratorProtocol(Protocol):
     ) -> tuple[int, list[str]]: ...
 
 
+class ContextAssemblerProtocol(Protocol):
+    """Interface for context assembler used by dispatch.
+
+    Builds full context packets (PCD + history) for agent tasks.
+    """
+
+    async def build(
+        self,
+        project_id: str,
+        task_definition: dict,
+        resolved_inputs: dict,
+        *,
+        domain_tags: list[str] | None = ...,
+        token_budget: int = ...,
+    ) -> dict: ...
+
+
 class CollectResult(TypedDict):
     """Return type of mission_control.collect()."""
 

@@ -464,15 +464,22 @@ async def handle_mission(
             planning_trace_reference=thinking_trace,
         )
 
-    # Construct ContextCurator if project is set and DB session is available
+    # Construct context services if project is set and DB session is available
     context_curator = None
+    context_assembler = None
     _db = db_session or getattr(session_service, "_session", None)
     if project_id and _db:
+        from modules.backend.services.context_assembler import ContextAssembler
         from modules.backend.services.context_curator import ContextCurator
+        from modules.backend.services.history_query import HistoryQueryService
         from modules.backend.services.project_context import ProjectContextManager
 
         pcd_manager = ProjectContextManager(_db)
         context_curator = ContextCurator(pcd_manager)
+        context_assembler = ContextAssembler(
+            context_manager=pcd_manager,
+            history_service=HistoryQueryService(_db),
+        )
 
     # Execute dispatch loop
     outcome = await dispatch(
@@ -482,6 +489,7 @@ async def handle_mission(
         mission_budget_usd=mission_budget_usd,
         project_id=project_id,
         context_curator=context_curator,
+        context_assembler=context_assembler,
     )
 
     outcome.planning_trace_reference = thinking_trace

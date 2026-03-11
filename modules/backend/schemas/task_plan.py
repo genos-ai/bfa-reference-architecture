@@ -114,6 +114,10 @@ class TaskDefinition(BaseModel):
     dependencies: list[str] = Field(default_factory=list)
     verification: TaskVerification = Field(default_factory=TaskVerification)
     constraints: TaskConstraints = Field(default_factory=TaskConstraints)
+    domain_tags: list[str] = Field(
+        default_factory=list,
+        description="Domain tags for structured history queries (e.g. ['auth', 'api'])",
+    )
 
 
 class ExecutionHints(BaseModel):

@@ -248,6 +248,12 @@ class TaskExecution(UUIDMixin, TimestampMixin, Base):
         comment="Globally unique execution ID assigned at dispatch time",
     )
 
+    domain_tags: Mapped[list | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Domain tags for structured history queries",
+    )
+
     mission_record: Mapped["MissionRecord"] = relationship(
         "MissionRecord",
         back_populates="task_executions",

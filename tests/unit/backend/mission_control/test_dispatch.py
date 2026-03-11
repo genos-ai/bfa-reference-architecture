@@ -732,3 +732,140 @@ class TestDispatch:
         outcome = await dispatch(plan, roster, mock_execute, 10.0)
         assert outcome.status == MissionStatus.SUCCESS
         assert "project_context" not in received_inputs[0]
+
+    # ---- Sub-Phase 4 tests: Context Assembly ----
+
+    @pytest.mark.asyncio
+    async def test_assembler_builds_full_context_packet(self):
+        """4.4: When assembler is provided, agents receive assembled context."""
+        plan = _plan([{**_task("t1"), "domain_tags": ["api"]}])
+        roster = Roster(agents=[_entry("agent_a")])
+        received_inputs = []
+
+        mock_assembler = MagicMock()
+        mock_assembler.build = AsyncMock(return_value={
+            "project_context": {"identity": {"name": "proj"}},
+            "task": {"task_id": "t1"},
+            "inputs": {},
+            "history": {"recent_failures": []},
+        })
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            received_inputs.append(inputs)
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        outcome = await dispatch(
+            plan, roster, mock_execute, 10.0,
+            project_id="proj-1",
+            context_assembler=mock_assembler,
+        )
+        assert outcome.status == MissionStatus.SUCCESS
+        # Assembler output replaces simple PCD injection
+        assert "project_context" in received_inputs[0]
+        assert "history" in received_inputs[0]["project_context"]
+        mock_assembler.build.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_assembler_receives_domain_tags(self):
+        """4.4: Assembler is called with domain_tags from task definition."""
+        plan = _plan([{**_task("t1"), "domain_tags": ["auth", "api"]}])
+        roster = Roster(agents=[_entry("agent_a")])
+
+        mock_assembler = MagicMock()
+        mock_assembler.build = AsyncMock(return_value={"project_context": {}})
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        await dispatch(
+            plan, roster, mock_execute, 10.0,
+            project_id="proj-1",
+            context_assembler=mock_assembler,
+        )
+        call_kwargs = mock_assembler.build.call_args
+        assert call_kwargs.kwargs.get("domain_tags") == ["auth", "api"]
+
+    @pytest.mark.asyncio
+    async def test_assembler_fallback_to_pcd_on_failure(self):
+        """4.4: When assembler fails, falls back to raw PCD from curator."""
+        plan = _plan([_task("t1")])
+        roster = Roster(agents=[_entry("agent_a")])
+        received_inputs = []
+
+        mock_curator = _mock_curator(project_context={
+            "identity": {"name": "fallback-project"},
+        })
+        mock_assembler = MagicMock()
+        mock_assembler.build = AsyncMock(side_effect=RuntimeError("DB error"))
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            received_inputs.append(inputs)
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        outcome = await dispatch(
+            plan, roster, mock_execute, 10.0,
+            project_id="proj-1",
+            context_curator=mock_curator,
+            context_assembler=mock_assembler,
+        )
+        assert outcome.status == MissionStatus.SUCCESS
+        # Should fall back to raw PCD
+        assert received_inputs[0]["project_context"]["identity"]["name"] == "fallback-project"
+
+    @pytest.mark.asyncio
+    async def test_assembler_not_called_without_project_id(self):
+        """4.4: Assembler is not called when project_id is None."""
+        plan = _plan([_task("t1")])
+        roster = Roster(agents=[_entry("agent_a")])
+
+        mock_assembler = MagicMock()
+        mock_assembler.build = AsyncMock()
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        outcome = await dispatch(
+            plan, roster, mock_execute, 10.0,
+            context_assembler=mock_assembler,
+        )
+        assert outcome.status == MissionStatus.SUCCESS
+        mock_assembler.build.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_assembler_failure_does_not_fail_task(self):
+        """4.4: Assembler failure is non-fatal — task still executes."""
+        plan = _plan([_task("t1")])
+        roster = Roster(agents=[_entry("agent_a")])
+
+        mock_assembler = MagicMock()
+        mock_assembler.build = AsyncMock(side_effect=RuntimeError("timeout"))
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        outcome = await dispatch(
+            plan, roster, mock_execute, 10.0,
+            project_id="proj-1",
+            context_assembler=mock_assembler,
+        )
+        assert outcome.status == MissionStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    async def test_domain_tags_empty_passed_as_none(self):
+        """4.4: Empty domain_tags are passed as None to assembler."""
+        plan = _plan([_task("t1")])  # no domain_tags
+        roster = Roster(agents=[_entry("agent_a")])
+
+        mock_assembler = MagicMock()
+        mock_assembler.build = AsyncMock(return_value={"project_context": {}})
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        await dispatch(
+            plan, roster, mock_execute, 10.0,
+            project_id="proj-1",
+            context_assembler=mock_assembler,
+        )
+        call_kwargs = mock_assembler.build.call_args
+        assert call_kwargs.kwargs.get("domain_tags") is None

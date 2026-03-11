@@ -17,7 +17,11 @@ from typing import Any
 
 from pydantic_ai import UsageLimits
 
-from modules.backend.agents.mission_control.models import ContextCuratorProtocol, ExecuteAgentFn
+from modules.backend.agents.mission_control.models import (
+    ContextAssemblerProtocol,
+    ContextCuratorProtocol,
+    ExecuteAgentFn,
+)
 from modules.backend.agents.mission_control.outcome import (
     MissionOutcome,
     MissionStatus,
@@ -172,6 +176,7 @@ async def dispatch(
     *,
     project_id: str | None = None,
     context_curator: ContextCuratorProtocol | None = None,
+    context_assembler: ContextAssemblerProtocol | None = None,
 ) -> MissionOutcome:
     """Execute the dispatch loop for a validated TaskPlan.
 
@@ -224,8 +229,24 @@ async def dispatch(
                 task_results.append(_failed_result(task, str(e)))
                 continue
 
-            # Inject PCD into agent inputs so agents have project context
-            if project_context:
+            # Inject context: full assembled packet (preferred) or raw PCD
+            if context_assembler and project_id:
+                try:
+                    assembled = await context_assembler.build(
+                        project_id=project_id,
+                        task_definition=task.model_dump(),
+                        resolved_inputs=resolved_inputs,
+                        domain_tags=task.domain_tags or None,
+                    )
+                    resolved_inputs["project_context"] = assembled
+                except Exception:
+                    logger.warning(
+                        "Context assembly failed, falling back to PCD",
+                        extra={"task_id": task.task_id, "project_id": project_id},
+                    )
+                    if project_context:
+                        resolved_inputs["project_context"] = project_context
+            elif project_context:
                 resolved_inputs["project_context"] = project_context
 
             layer_tasks.append(task)

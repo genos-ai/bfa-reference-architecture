@@ -75,6 +75,14 @@ async def persist_mission_results(
             }
             exec_status = task_status_map.get(task_result.status, "failed")
 
+            # Look up domain_tags from the original TaskPlan
+            domain_tags = None
+            if task_plan_json and "tasks" in task_plan_json:
+                for task_def in task_plan_json["tasks"]:
+                    if task_def.get("task_id") == task_result.task_id:
+                        domain_tags = task_def.get("domain_tags") or None
+                        break
+
             execution = await service.save_task_execution(
                 mission_record_id=record.id,
                 task_id=task_result.task_id,
@@ -86,6 +94,7 @@ async def persist_mission_results(
                 duration_seconds=task_result.duration_seconds,
                 verification_outcome=verification_dict,
                 execution_id=task_result.execution_id or None,
+                domain_tags=domain_tags,
             )
 
             for retry_entry in task_result.retry_history:
