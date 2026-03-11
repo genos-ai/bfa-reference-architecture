@@ -388,6 +388,8 @@ async def handle_mission(
     mission_budget_usd: float = 10.0,
     upstream_context: dict | None = None,
     session_id: str | None = None,
+    project_id: str | None = None,
+    db_session: Any | None = None,
 ) -> MissionOutcome:
     """Dispatch entry point for complex multi-agent missions.
 
@@ -462,12 +464,24 @@ async def handle_mission(
             planning_trace_reference=thinking_trace,
         )
 
+    # Construct ContextCurator if project is set and DB session is available
+    context_curator = None
+    _db = db_session or getattr(session_service, "_session", None)
+    if project_id and _db:
+        from modules.backend.services.context_curator import ContextCurator
+        from modules.backend.services.project_context import ProjectContextManager
+
+        pcd_manager = ProjectContextManager(_db)
+        context_curator = ContextCurator(pcd_manager)
+
     # Execute dispatch loop
     outcome = await dispatch(
         plan=plan,
         roster=roster,
         execute_agent_fn=_make_agent_executor(session_service, event_bus),
         mission_budget_usd=mission_budget_usd,
+        project_id=project_id,
+        context_curator=context_curator,
     )
 
     outcome.planning_trace_reference = thinking_trace

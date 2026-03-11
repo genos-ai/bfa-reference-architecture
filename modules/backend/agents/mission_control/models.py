@@ -76,6 +76,25 @@ class ExecuteAgentFn(Protocol):
     ) -> Awaitable[dict]: ...
 
 
+class ContextCuratorProtocol(Protocol):
+    """Interface for context curator used by dispatch.
+
+    Keeps the dispatch loop decoupled from PCD service internals.
+    """
+
+    async def get_project_context(self, project_id: str) -> dict: ...
+
+    async def apply_task_updates(
+        self,
+        project_id: str,
+        task_result_context_updates: list[dict],
+        *,
+        agent_id: str | None = ...,
+        mission_id: str | None = ...,
+        task_id: str | None = ...,
+    ) -> tuple[int, list[str]]: ...
+
+
 class CollectResult(TypedDict):
     """Return type of mission_control.collect()."""
 

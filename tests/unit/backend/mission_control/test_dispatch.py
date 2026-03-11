@@ -1,6 +1,7 @@
 """Tests for the dispatch loop — topological sort, parallel execution, verification."""
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -49,6 +50,14 @@ def _plan(tasks: list[dict], **kw) -> TaskPlan:
         "tasks": tasks,
         **kw,
     })
+
+
+def _mock_curator(project_context: dict | None = None) -> MagicMock:
+    """Build a mock ContextCurator satisfying ContextCuratorProtocol."""
+    curator = MagicMock()
+    curator.get_project_context = AsyncMock(return_value=project_context or {})
+    curator.apply_task_updates = AsyncMock(return_value=(2, []))
+    return curator
 
 
 def _task(
@@ -556,3 +565,170 @@ class TestDispatch:
         outcome = await dispatch(plan, roster, mock_execute, 10.0)
         assert outcome.task_results[0].status == TaskStatus.FAILED
         assert outcome.task_results[0].execution_id != ""
+
+    # ---- Sub-Phase 3 tests: Agent Contract ----
+
+    @pytest.mark.asyncio
+    async def test_context_updates_extracted_from_output(self):
+        """3.1/3.3: context_updates are extracted from agent output into TaskResult."""
+        plan = _plan([_task("t1")])
+        roster = Roster(agents=[_entry("agent_a")])
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            return {
+                "result": "done", "confidence": 0.9,
+                "context_updates": [
+                    {"op": "add", "path": "identity.tech_stack",
+                     "value": ["python"], "reason": "discovered"},
+                ],
+                "_meta": {},
+            }
+
+        outcome = await dispatch(plan, roster, mock_execute, 10.0)
+        assert outcome.status == MissionStatus.SUCCESS
+        assert len(outcome.task_results[0].context_updates) == 1
+        assert outcome.task_results[0].context_updates[0]["op"] == "add"
+
+    @pytest.mark.asyncio
+    async def test_context_updates_not_in_output_reference(self):
+        """3.3: context_updates are popped from output_reference (not leaked)."""
+        plan = _plan([_task("t1")])
+        roster = Roster(agents=[_entry("agent_a")])
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            return {
+                "result": "done", "confidence": 0.9,
+                "context_updates": [{"op": "add", "path": "x", "value": 1, "reason": "y"}],
+                "_meta": {},
+            }
+
+        outcome = await dispatch(plan, roster, mock_execute, 10.0)
+        assert "context_updates" not in outcome.task_results[0].output_reference
+
+    @pytest.mark.asyncio
+    async def test_context_updates_empty_by_default(self):
+        """3.1: TaskResult has empty context_updates when agent returns none."""
+        plan = _plan([_task("t1")])
+        roster = Roster(agents=[_entry("agent_a")])
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        outcome = await dispatch(plan, roster, mock_execute, 10.0)
+        assert outcome.task_results[0].context_updates == []
+
+    @pytest.mark.asyncio
+    async def test_context_curator_called_on_success(self):
+        """3.3: ContextCurator.apply_task_updates called after successful task."""
+        plan = _plan([_task("t1")])
+        roster = Roster(agents=[_entry("agent_a")])
+        mock_curator = _mock_curator()
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            return {
+                "result": "done", "confidence": 0.9,
+                "context_updates": [
+                    {"op": "add", "path": "x", "value": 1, "reason": "test"},
+                ],
+                "_meta": {},
+            }
+
+        outcome = await dispatch(
+            plan, roster, mock_execute, 10.0,
+            project_id="proj-1",
+            context_curator=mock_curator,
+        )
+        assert outcome.status == MissionStatus.SUCCESS
+        mock_curator.apply_task_updates.assert_called_once()
+        call_args = mock_curator.apply_task_updates.call_args
+        assert call_args[0][0] == "proj-1"
+        assert call_args[0][1][0]["op"] == "add"
+
+    @pytest.mark.asyncio
+    async def test_context_curator_not_called_without_project_id(self):
+        """3.3: No curator calls when project_id is None."""
+        plan = _plan([_task("t1")])
+        roster = Roster(agents=[_entry("agent_a")])
+        mock_curator = _mock_curator()
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            return {
+                "result": "done", "confidence": 0.9,
+                "context_updates": [
+                    {"op": "add", "path": "x", "value": 1, "reason": "test"},
+                ],
+                "_meta": {},
+            }
+
+        outcome = await dispatch(
+            plan, roster, mock_execute, 10.0,
+            context_curator=mock_curator,
+        )
+        assert outcome.status == MissionStatus.SUCCESS
+        mock_curator.apply_task_updates.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_context_curator_failure_does_not_fail_task(self):
+        """3.3: ContextCurator failure is non-fatal — task still succeeds."""
+        plan = _plan([_task("t1")])
+        roster = Roster(agents=[_entry("agent_a")])
+        mock_curator = _mock_curator()
+        mock_curator.apply_task_updates = AsyncMock(
+            side_effect=RuntimeError("DB error"),
+        )
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            return {
+                "result": "done", "confidence": 0.9,
+                "context_updates": [
+                    {"op": "add", "path": "x", "value": 1, "reason": "test"},
+                ],
+                "_meta": {},
+            }
+
+        outcome = await dispatch(
+            plan, roster, mock_execute, 10.0,
+            project_id="proj-1",
+            context_curator=mock_curator,
+        )
+        assert outcome.status == MissionStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    async def test_project_context_injected_into_inputs(self):
+        """3.4: PCD is passed to agents as project_context in inputs."""
+        plan = _plan([_task("t1")])
+        roster = Roster(agents=[_entry("agent_a")])
+        received_inputs = []
+
+        mock_curator = _mock_curator(project_context={
+            "identity": {"name": "test-project"},
+            "version": 1,
+        })
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            received_inputs.append(inputs)
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        outcome = await dispatch(
+            plan, roster, mock_execute, 10.0,
+            project_id="proj-1",
+            context_curator=mock_curator,
+        )
+        assert outcome.status == MissionStatus.SUCCESS
+        assert "project_context" in received_inputs[0]
+        assert received_inputs[0]["project_context"]["identity"]["name"] == "test-project"
+
+    @pytest.mark.asyncio
+    async def test_no_project_context_without_curator(self):
+        """3.4: No project_context in inputs when curator is None."""
+        plan = _plan([_task("t1")])
+        roster = Roster(agents=[_entry("agent_a")])
+        received_inputs = []
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            received_inputs.append(inputs)
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        outcome = await dispatch(plan, roster, mock_execute, 10.0)
+        assert outcome.status == MissionStatus.SUCCESS
+        assert "project_context" not in received_inputs[0]

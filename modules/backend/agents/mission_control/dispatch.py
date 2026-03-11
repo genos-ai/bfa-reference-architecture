@@ -17,7 +17,7 @@ from typing import Any
 
 from pydantic_ai import UsageLimits
 
-from modules.backend.agents.mission_control.models import ExecuteAgentFn
+from modules.backend.agents.mission_control.models import ContextCuratorProtocol, ExecuteAgentFn
 from modules.backend.agents.mission_control.outcome import (
     MissionOutcome,
     MissionStatus,
@@ -169,6 +169,9 @@ async def dispatch(
     roster: Roster,
     execute_agent_fn: ExecuteAgentFn,
     mission_budget_usd: float,
+    *,
+    project_id: str | None = None,
+    context_curator: ContextCuratorProtocol | None = None,
 ) -> MissionOutcome:
     """Execute the dispatch loop for a validated TaskPlan.
 
@@ -181,6 +184,18 @@ async def dispatch(
     """
     start_time = time.monotonic()
     layers = topological_sort(plan)
+
+    # Load PCD for agent context (if project is set)
+    project_context: dict | None = None
+    if project_id and context_curator:
+        try:
+            pcd = await context_curator.get_project_context(project_id)
+            project_context = pcd or None
+        except Exception:
+            logger.warning(
+                "Failed to load PCD for dispatch (non-fatal)",
+                extra={"project_id": project_id},
+            )
 
     completed_outputs: dict[str, dict] = {}
     task_results: list[TaskResult] = []
@@ -209,6 +224,10 @@ async def dispatch(
                 task_results.append(_failed_result(task, str(e)))
                 continue
 
+            # Inject PCD into agent inputs so agents have project context
+            if project_context:
+                resolved_inputs["project_context"] = project_context
+
             layer_tasks.append(task)
             coros.append(
                 _execute_with_retry(
@@ -235,6 +254,24 @@ async def dispatch(
 
             if task_result.status == TaskStatus.SUCCESS:
                 completed_outputs[task.task_id] = task_result.output_reference
+
+                # Apply context_updates to PCD (non-fatal)
+                if context_curator and project_id and task_result.context_updates:
+                    try:
+                        await context_curator.apply_task_updates(
+                            project_id,
+                            task_result.context_updates,
+                            agent_id=task_result.agent_name,
+                            mission_id=plan.mission_id,
+                            task_id=task_result.task_id,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Context update failed (non-fatal)",
+                            extra={
+                                "task_id": task_result.task_id,
+                            },
+                        )
 
             total_cost += task_result.cost_usd
             total_input_tokens += task_result.token_usage.input
@@ -421,6 +458,9 @@ async def _execute_with_retry(
                 execution_id=execution_id,
             )
 
+        # Extract context_updates from agent output (if any)
+        context_updates = output.pop("context_updates", [])
+
         # Success
         return TaskResult(
             task_id=task.task_id,
@@ -434,6 +474,7 @@ async def _execute_with_retry(
             retry_count=attempt,
             retry_history=retry_history,
             execution_id=execution_id,
+            context_updates=context_updates if isinstance(context_updates, list) else [],
         )
 
     # Should not reach here, but defensive

@@ -125,6 +125,10 @@ class TaskResult(BaseModel):
         default="",
         description="Globally unique execution ID assigned at dispatch time",
     )
+    context_updates: list[dict] = Field(
+        default_factory=list,
+        description="Structured patches to the PCD proposed by this agent",
+    )
 
 
 class MissionOutcome(BaseModel):
