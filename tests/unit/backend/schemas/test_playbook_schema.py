@@ -22,6 +22,7 @@ def _minimal_playbook(**overrides):
     base = {
         "playbook_name": "test.example",
         "description": "Test playbook",
+        "project": "Test Project",
         "objective": {
             "statement": "Test objective",
             "category": "testing",

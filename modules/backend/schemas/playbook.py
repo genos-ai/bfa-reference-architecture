@@ -147,6 +147,11 @@ class PlaybookSchema(BaseModel):
     objective: PlaybookObjectiveSchema
     version: int = Field(default=1, ge=1)
     enabled: bool = True
+    project: str = Field(
+        ...,
+        min_length=1,
+        description="Project name to associate with runs. CLI --project overrides.",
+    )
     trigger: PlaybookTriggerSchema = Field(default_factory=PlaybookTriggerSchema)
     budget: PlaybookBudgetSchema = Field(default_factory=PlaybookBudgetSchema)
     context: dict[str, Any] = Field(default_factory=dict)

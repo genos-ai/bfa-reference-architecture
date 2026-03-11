@@ -15,6 +15,7 @@ objective:
   regulatory_reference: null
 version: 1
 enabled: true
+project: "BFA Platform"
 
 trigger:
   type: on_demand

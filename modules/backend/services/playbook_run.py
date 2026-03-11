@@ -81,6 +81,19 @@ class PlaybookRunService(BaseService):
                 f"Playbook capability errors: {'; '.join(errors)}"
             )
 
+        # Resolve project: CLI --project (UUID) > playbook YAML project (name)
+        if not project_id and playbook.project:
+            from modules.backend.services.project import ProjectService
+            project_svc = ProjectService(self._session)
+            project = await project_svc.get_project_by_name(playbook.project)
+            if not project:
+                raise ValueError(
+                    f"Playbook references project '{playbook.project}' "
+                    f"which does not exist. Create it first with: "
+                    f"python cli.py project create --name '{playbook.project}'"
+                )
+            project_id = project.id
+
         # Create session for the playbook run
         from modules.backend.services.session import SessionService
         from modules.backend.schemas.session import SessionCreate

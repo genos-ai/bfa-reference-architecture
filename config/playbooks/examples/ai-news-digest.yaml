@@ -20,6 +20,7 @@ objective:
   regulatory_reference: null
 version: 1
 enabled: false
+project: "AI Research"
 
 trigger:
   type: on_demand

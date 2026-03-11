@@ -20,6 +20,7 @@ def _make_playbook(**overrides) -> PlaybookSchema:
     base = {
         "playbook_name": "test.example",
         "description": "Test playbook",
+        "project": "Test Project",
         "objective": {
             "statement": "Test objective",
             "category": "testing",
@@ -90,6 +91,7 @@ class TestMissionBriefGeneration:
         playbook = PlaybookSchema(
             playbook_name="test.pipeline",
             description="Test pipeline",
+            project="Test Project",
             objective={
                 "statement": "Test", "category": "test",
                 "owner": "test", "priority": "normal",
@@ -189,6 +191,7 @@ class TestUpstreamContextResolution:
         step = PlaybookSchema(
             playbook_name="test.ctx",
             description="Test context",
+            project="Test Project",
             objective={
                 "statement": "T", "category": "t",
                 "owner": "t", "priority": "low",
@@ -225,6 +228,7 @@ class TestUpstreamContextResolution:
         step = PlaybookSchema(
             playbook_name="test.unresolved",
             description="Test",
+            project="Test Project",
             objective={
                 "statement": "T", "category": "t",
                 "owner": "t", "priority": "low",
@@ -250,6 +254,7 @@ class TestPlaybookLoading:
         playbook_data = {
             "playbook_name": "test.loaded",
             "description": "Loaded from disk",
+            "project": "Test Project",
             "objective": {
                 "statement": "Test loading",
                 "category": "testing",
