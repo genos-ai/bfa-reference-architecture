@@ -88,6 +88,7 @@ def cli(ctx, verbose: bool, debug: bool, output_format: str):
     Diagnostics:     health, config, info, credits
     Development:     test, migrate, db
     Agents:          agent, mission, playbook
+    Projects:        project
     """
     ctx.ensure_object(dict)
     ctx.obj = CliContext(verbose, debug, output_format)
@@ -548,6 +549,72 @@ def playbook_report(ctx, run_id):
     from modules.backend.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="report", playbook_name=None,
                      run_id=run_id, triggered_by="user:cli", output_format=ctx.output_format)
+
+
+# =============================================================================
+# Project group
+# =============================================================================
+
+
+@cli.group("project", cls=ShowHelpOnMissingArgs, invoke_without_command=True)
+@click.pass_context
+def project(ctx):
+    """Create, list, and manage projects.
+
+    \b
+    Examples:
+        python cli.py project create --name my-project --description "My project"
+        python cli.py project list
+        python cli.py project detail <id>
+        python cli.py project archive <id>
+    """
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@project.command("create")
+@click.option("--name", required=True, help="Unique project name.")
+@click.option("--description", required=True, help="Project purpose.")
+@click.option("--roster", default="default", help="Default agent roster.")
+@click.option("--budget", type=float, default=None, help="Budget ceiling (USD).")
+@click.option("--repo-url", default=None, help="Repository URL.")
+@click.option("--repo-root", default=None, help="Local repo root path.")
+@click.pass_obj
+def project_create(ctx, name, description, roster, budget, repo_url, repo_root):
+    """Create a new project."""
+    from modules.backend.cli.project import run_project
+    run_project(ctx.logger, "create", name=name, description=description,
+                roster=roster, budget=budget, repo_url=repo_url,
+                repo_root=repo_root, output_format=ctx.output_format)
+
+
+@project.command("list")
+@click.pass_obj
+def project_list(ctx):
+    """List all active projects."""
+    from modules.backend.cli.project import run_project
+    run_project(ctx.logger, "list", output_format=ctx.output_format)
+
+
+@project.command("detail")
+@click.argument("project_id", required=False)
+@click.option("--name", default=None, help="Look up by project name.")
+@click.pass_obj
+def project_detail(ctx, project_id, name):
+    """Show project details."""
+    from modules.backend.cli.project import run_project
+    run_project(ctx.logger, "detail", project_id=project_id, name=name,
+                output_format=ctx.output_format)
+
+
+@project.command("archive")
+@click.argument("project_id")
+@click.pass_obj
+def project_archive(ctx, project_id):
+    """Archive a project."""
+    from modules.backend.cli.project import run_project
+    run_project(ctx.logger, "archive", project_id=project_id,
+                output_format=ctx.output_format)
 
 
 # =============================================================================

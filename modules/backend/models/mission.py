@@ -71,6 +71,9 @@ class PlaybookRun(UUIDMixin, TimestampMixin, Base):
     playbook_version: Mapped[int] = mapped_column(
         Integer, nullable=False,
     )
+    project_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True,
+    )
     status: Mapped[str] = mapped_column(
         Enum(PlaybookRunState, native_enum=False),
         default=PlaybookRunState.PENDING,
@@ -125,6 +128,9 @@ class Mission(UUIDMixin, TimestampMixin, Base):
     )
     playbook_step_id: Mapped[str | None] = mapped_column(
         String(100), nullable=True,
+    )
+    project_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True,
     )
     objective: Mapped[str] = mapped_column(
         Text, nullable=False,

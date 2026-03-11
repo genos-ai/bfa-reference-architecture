@@ -33,6 +33,7 @@ from modules.backend.core.config_schema import (
     LoggingSchema,
     MissionsSchema,
     PlaybooksSchema,
+    ProjectsSchema,
     SecuritySchema,
     SessionsSchema,
     TemporalSchema,
@@ -134,6 +135,7 @@ class AppConfig:
         self._missions = _load_validated_optional(MissionsSchema, "missions.yaml")
         self._temporal = _load_validated_optional(TemporalSchema, "temporal.yaml")
         self._playbooks = _load_validated_optional(PlaybooksSchema, "playbooks.yaml")
+        self._projects = _load_validated_optional(ProjectsSchema, "projects.yaml")
 
     @property
     def application(self) -> ApplicationSchema:
@@ -189,6 +191,11 @@ class AppConfig:
     def playbooks(self) -> PlaybooksSchema:
         """Playbook and mission settings."""
         return self._playbooks
+
+    @property
+    def projects(self) -> ProjectsSchema:
+        """Project system settings."""
+        return self._projects
 
 
 @lru_cache

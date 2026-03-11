@@ -49,6 +49,7 @@ def show_info(logger, output_format: str = "human") -> None:
     click.echo("  agent           Send a message to an agent")
     click.echo("  mission         Create, execute, and inspect missions")
     click.echo("  playbook        List, run, and inspect playbooks")
+    click.echo("  project         Create, list, and manage projects")
     click.echo("  db              Database inspection and management")
     click.echo()
     click.echo("Examples:")

@@ -340,3 +340,21 @@ class PlaybooksSchema(_StrictBase):
     max_budget_usd: float = 100.00
     max_concurrent_missions: int = 10
     enable_playbook_matching: bool = True
+
+
+# =============================================================================
+# projects.yaml
+# =============================================================================
+
+
+class ProjectsSchema(_StrictBase):
+    """Project system configuration."""
+
+    default_budget_ceiling_usd: float | None = None
+    max_projects_per_owner: int = 50
+    pcd_max_size_bytes: int = 20_480  # 20KB
+    pcd_target_size_bytes: int = 15_360  # 15KB
+    pcd_prune_threshold_pct: int = 80
+    pcd_alert_threshold_pct: int = 90
+    history_summarize_after_days: int = 30
+    enable_context_assembly: bool = True

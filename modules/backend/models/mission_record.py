@@ -81,6 +81,10 @@ class MissionRecord(UUIDMixin, TimestampMixin, Base):
         comment="Session that triggered this mission",
     )
 
+    project_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True,
+    )
+
     roster_name: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
