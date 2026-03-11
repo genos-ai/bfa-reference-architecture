@@ -311,3 +311,149 @@ class TestDispatch:
         assert outcome.total_cost_usd == pytest.approx(0.1, abs=0.001)
         assert outcome.total_tokens.input == 200
         assert outcome.total_tokens.output == 100
+
+    @pytest.mark.asyncio
+    async def test_timeout_retry_then_exhaustion(self):
+        """Timeout retries up to retry_budget then reports TIMEOUT status."""
+        plan = _plan([_task("t1")])
+        entry = _entry("agent_a")
+        entry.constraints.timeout_seconds = 1
+        entry.constraints.retry_budget = 2
+        roster = Roster(agents=[entry])
+        call_count = 0
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            nonlocal call_count
+            call_count += 1
+            await asyncio.sleep(10)  # always timeout
+
+        outcome = await dispatch(plan, roster, mock_execute, 10.0)
+        assert outcome.task_results[0].status == TaskStatus.TIMEOUT
+        assert call_count == 3  # initial + 2 retries
+        assert len(outcome.task_results[0].retry_history) == 2
+
+    @pytest.mark.asyncio
+    async def test_execution_error_retries_then_fails(self):
+        """Execution errors retry up to budget, then fail with history."""
+        plan = _plan([_task("t1")])
+        entry = _entry("agent_a")
+        entry.constraints.retry_budget = 2
+        roster = Roster(agents=[entry])
+        call_count = 0
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            nonlocal call_count
+            call_count += 1
+            raise RuntimeError(f"Error on attempt {call_count}")
+
+        outcome = await dispatch(plan, roster, mock_execute, 10.0)
+        assert outcome.task_results[0].status == TaskStatus.FAILED
+        assert call_count == 3  # initial + 2 retries
+        assert len(outcome.task_results[0].retry_history) == 2
+        assert "Error on attempt 1" in outcome.task_results[0].retry_history[0].failure_reason
+
+    @pytest.mark.asyncio
+    async def test_verification_failure_exhausts_retry_budget(self):
+        """Verification failure retries, then fails with verification outcome."""
+        plan = _plan([_task("t1")])
+        entry = _entry("agent_a")
+        entry.constraints.retry_budget = 1
+        roster = Roster(agents=[entry])
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            # Always missing 'confidence' — tier 1 always fails
+            return {"result": "done", "_meta": {}}
+
+        outcome = await dispatch(plan, roster, mock_execute, 10.0)
+        assert outcome.task_results[0].status == TaskStatus.FAILED
+        assert outcome.task_results[0].retry_count == 1
+        assert outcome.task_results[0].verification_outcome is not None
+
+    @pytest.mark.asyncio
+    async def test_timeout_retry_then_success(self):
+        """Task recovers after timeout on first attempt."""
+        plan = _plan([_task("t1")])
+        entry = _entry("agent_a")
+        entry.constraints.timeout_seconds = 1
+        entry.constraints.retry_budget = 1
+        roster = Roster(agents=[entry])
+        call_count = 0
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                await asyncio.sleep(10)  # timeout first attempt
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        outcome = await dispatch(plan, roster, mock_execute, 10.0)
+        assert outcome.task_results[0].status == TaskStatus.SUCCESS
+        assert outcome.task_results[0].retry_count == 1
+        assert len(outcome.task_results[0].retry_history) == 1
+
+    @pytest.mark.asyncio
+    async def test_agent_not_in_roster_fails_task(self):
+        """Task referencing unknown agent is marked failed."""
+        plan = _plan([_task("t1", agent="unknown_agent")])
+        roster = Roster(agents=[_entry("agent_a")])
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        outcome = await dispatch(plan, roster, mock_execute, 10.0)
+        assert outcome.status == MissionStatus.FAILED
+        assert outcome.task_results[0].status == TaskStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_failed_upstream_skips_dependent(self):
+        """Downstream task fails when upstream has no output."""
+        tasks = [
+            {**_task("a"), "instructions": "task_a"},
+            {
+                **_task("b", deps=["a"]),
+                "inputs": {
+                    "static": {},
+                    "from_upstream": {
+                        "data": {"source_task": "a", "source_field": "result"},
+                    },
+                },
+            },
+        ]
+        plan = _plan(tasks)
+        entry = _entry("agent_a")
+        entry.constraints.retry_budget = 0
+        roster = Roster(agents=[entry])
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            if instructions == "task_a":
+                raise RuntimeError("Agent a failed")
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        outcome = await dispatch(plan, roster, mock_execute, 10.0)
+        assert outcome.status == MissionStatus.FAILED
+        # Both tasks should fail — a from error, b from missing upstream
+        assert all(r.status == TaskStatus.FAILED for r in outcome.task_results)
+
+    @pytest.mark.asyncio
+    async def test_retry_records_feedback_in_history(self):
+        """Retry history records failure reason and feedback."""
+        plan = _plan([_task("t1")])
+        entry = _entry("agent_a")
+        entry.constraints.retry_budget = 1
+        roster = Roster(agents=[entry])
+        call_count = 0
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("First attempt failed")
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        outcome = await dispatch(plan, roster, mock_execute, 10.0)
+        assert outcome.task_results[0].status == TaskStatus.SUCCESS
+        assert call_count == 2
+        assert len(outcome.task_results[0].retry_history) == 1
+        history_entry = outcome.task_results[0].retry_history[0]
+        assert "First attempt failed" in history_entry.failure_reason
+        assert history_entry.feedback_provided is not None

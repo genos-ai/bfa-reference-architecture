@@ -72,6 +72,87 @@ class TestAgentConfigSchema:
         assert dumped["agent_name"] == "code.qa.agent"
 
 
+class TestAgentConfigMalformed:
+    """Tests for malformed agent config data."""
+
+    def test_wrong_type_for_enabled(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            AgentConfigSchema(
+                agent_name="test.agent",
+                agent_type="vertical",
+                description="test",
+                enabled="not_a_bool",
+                model="anthropic:test",
+                max_input_length=1000,
+                max_budget_usd=1.0,
+                execution={"mode": "local"},
+            )
+
+    def test_wrong_type_for_max_input_length(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            AgentConfigSchema(
+                agent_name="test.agent",
+                agent_type="vertical",
+                description="test",
+                enabled=True,
+                model="anthropic:test",
+                max_input_length="not_an_int",
+                max_budget_usd=1.0,
+                execution={"mode": "local"},
+            )
+
+
+class TestFeaturesSchemaValidation:
+    """Tests for features.yaml schema validation."""
+
+    def test_rejects_unknown_feature_flag(self):
+        from pydantic import ValidationError
+
+        from modules.backend.core.config_schema import FeaturesSchema
+
+        with pytest.raises(ValidationError, match="extra"):
+            FeaturesSchema(
+                auth_require_email_verification=True,
+                auth_allow_api_key_creation=True,
+                auth_rate_limit_enabled=True,
+                auth_require_api_authentication=True,
+                api_detailed_errors=False,
+                api_request_logging=True,
+                channel_telegram_enabled=False,
+                channel_slack_enabled=False,
+                channel_discord_enabled=False,
+                channel_whatsapp_enabled=False,
+                gateway_enabled=True,
+                gateway_websocket_enabled=True,
+                gateway_pairing_enabled=True,
+                agent_coordinator_enabled=True,
+                agent_streaming_enabled=True,
+                mcp_enabled=False,
+                a2a_enabled=False,
+                security_startup_checks_enabled=True,
+                security_headers_enabled=True,
+                security_cors_enforce_production=False,
+                experimental_background_tasks_enabled=False,
+                events_publish_enabled=True,
+                typo_feature_flag=True,
+            )
+
+    def test_rejects_missing_feature_flag(self):
+        from pydantic import ValidationError
+
+        from modules.backend.core.config_schema import FeaturesSchema
+
+        with pytest.raises(ValidationError):
+            FeaturesSchema(
+                auth_require_email_verification=True,
+                # Missing all other required fields
+            )
+
+
 class TestMissionControlConfigSchema:
     """Tests for mission control YAML schema validation."""
 

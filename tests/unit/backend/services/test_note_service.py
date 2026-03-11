@@ -1,270 +1,260 @@
 """
-Unit Tests for Note Service.
+Tests for Note Service.
 
-Tests the NoteService business logic with mocked dependencies.
+Tests NoteService business logic against a real database session.
+Mock only what we don't operate (nothing here — pure DB tests).
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from modules.backend.services.note import NoteService
-from modules.backend.schemas.note import NoteCreate, NoteUpdate
 from modules.backend.core.exceptions import NotFoundError
+from modules.backend.schemas.note import NoteCreate, NoteUpdate
+from modules.backend.services.note import NoteService
+
+
+@pytest.fixture
+def service(db_session: AsyncSession) -> NoteService:
+    """NoteService wired to a real test database session."""
+    return NoteService(db_session)
 
 
 class TestNoteServiceCreate:
     """Tests for note creation."""
 
-    @pytest.fixture
-    def mock_session(self):
-        """Create mock database session."""
-        return AsyncMock()
-
-    @pytest.fixture
-    def service(self, mock_session):
-        """Create NoteService with mocked session."""
-        return NoteService(mock_session)
-
     @pytest.mark.asyncio
     async def test_create_note_success(self, service):
-        """Should create a note with title and content."""
-        # Arrange
-        mock_note = MagicMock()
-        mock_note.id = "note-123"
-        mock_note.title = "Test Note"
-        mock_note.content = "Test content"
+        """Should persist a note and return it with a generated ID."""
+        data = NoteCreate(title="Test Note", content="Test content")
+        note = await service.create_note(data)
 
-        with patch.object(service.repo, "create", return_value=mock_note) as mock_create:
-            # Act
-            data = NoteCreate(title="Test Note", content="Test content")
-            result = await service.create_note(data)
-
-            # Assert
-            mock_create.assert_called_once_with(
-                title="Test Note",
-                content="Test content",
-            )
-            assert result.id == "note-123"
+        assert note.id is not None
+        assert note.title == "Test Note"
+        assert note.content == "Test content"
+        assert note.is_archived is False
 
     @pytest.mark.asyncio
     async def test_create_note_without_content(self, service):
-        """Should create a note with only title."""
-        mock_note = MagicMock()
-        mock_note.id = "note-456"
+        """Should create a note with only a title."""
+        data = NoteCreate(title="Title Only")
+        note = await service.create_note(data)
 
-        with patch.object(service.repo, "create", return_value=mock_note):
-            data = NoteCreate(title="Title Only")
-            result = await service.create_note(data)
+        assert note.id is not None
+        assert note.title == "Title Only"
+        assert note.content is None
 
-            assert result.id == "note-456"
+    @pytest.mark.asyncio
+    async def test_created_note_is_retrievable(self, service):
+        """Created note should be fetchable by ID."""
+        data = NoteCreate(title="Retrievable", content="Check")
+        created = await service.create_note(data)
+
+        fetched = await service.get_note(created.id)
+        assert fetched.id == created.id
+        assert fetched.title == "Retrievable"
 
 
 class TestNoteServiceGet:
     """Tests for getting notes."""
 
-    @pytest.fixture
-    def service(self):
-        """Create NoteService with mocked session."""
-        return NoteService(AsyncMock())
-
     @pytest.mark.asyncio
     async def test_get_note_success(self, service):
-        """Should return note when found."""
-        mock_note = MagicMock()
-        mock_note.id = "note-123"
-        mock_note.title = "Found Note"
+        """Should return the correct note by ID."""
+        data = NoteCreate(title="Found Note", content="Body")
+        created = await service.create_note(data)
 
-        with patch.object(service.repo, "get_by_id", return_value=mock_note):
-            result = await service.get_note("note-123")
-
-            assert result.id == "note-123"
-            assert result.title == "Found Note"
+        result = await service.get_note(created.id)
+        assert result.id == created.id
+        assert result.title == "Found Note"
 
     @pytest.mark.asyncio
     async def test_get_note_not_found(self, service):
-        """Should raise NotFoundError when note doesn't exist."""
-        with patch.object(
-            service.repo, "get_by_id", side_effect=NotFoundError("Note not found")
-        ):
-            with pytest.raises(NotFoundError):
-                await service.get_note("nonexistent")
+        """Should raise NotFoundError for nonexistent ID."""
+        with pytest.raises(NotFoundError):
+            await service.get_note("nonexistent-id")
 
 
 class TestNoteServiceList:
     """Tests for listing notes."""
 
-    @pytest.fixture
-    def service(self):
-        """Create NoteService with mocked session."""
-        return NoteService(AsyncMock())
-
     @pytest.mark.asyncio
     async def test_list_notes_active_only(self, service):
-        """Should list only active notes by default."""
-        mock_notes = [MagicMock(), MagicMock()]
+        """Should list only non-archived notes by default."""
+        await service.create_note(NoteCreate(title="Active"))
+        archived = await service.create_note(NoteCreate(title="Archived"))
+        await service.archive_note(archived.id)
 
-        with patch.object(
-            service.repo, "get_all_active", return_value=mock_notes
-        ) as mock_get:
-            result = await service.list_notes()
-
-            mock_get.assert_called_once_with(limit=50, offset=0)
-            assert len(result) == 2
+        result = await service.list_notes()
+        titles = [n.title for n in result]
+        assert "Active" in titles
+        assert "Archived" not in titles
 
     @pytest.mark.asyncio
     async def test_list_notes_include_archived(self, service):
         """Should include archived notes when requested."""
-        mock_notes = [MagicMock(), MagicMock(), MagicMock()]
+        await service.create_note(NoteCreate(title="Active"))
+        archived = await service.create_note(NoteCreate(title="Archived"))
+        await service.archive_note(archived.id)
 
-        with patch.object(service.repo, "get_all", return_value=mock_notes) as mock_get:
-            result = await service.list_notes(include_archived=True)
-
-            mock_get.assert_called_once_with(limit=50, offset=0)
-            assert len(result) == 3
+        result = await service.list_notes(include_archived=True)
+        titles = [n.title for n in result]
+        assert "Active" in titles
+        assert "Archived" in titles
 
     @pytest.mark.asyncio
     async def test_list_notes_with_pagination(self, service):
-        """Should pass pagination parameters."""
-        with patch.object(service.repo, "get_all_active", return_value=[]) as mock_get:
-            await service.list_notes(limit=10, offset=20)
+        """Should respect limit and offset parameters."""
+        for i in range(5):
+            await service.create_note(NoteCreate(title=f"Note {i}"))
 
-            mock_get.assert_called_once_with(limit=10, offset=20)
+        result = await service.list_notes(limit=2, offset=0)
+        assert len(result) == 2
+
+    @pytest.mark.asyncio
+    async def test_list_notes_paginated_returns_total(self, service):
+        """Paginated listing should return total count."""
+        for i in range(3):
+            await service.create_note(NoteCreate(title=f"Note {i}"))
+
+        notes, total = await service.list_notes_paginated(limit=2, offset=0)
+        assert len(notes) == 2
+        assert total == 3
 
 
 class TestNoteServiceUpdate:
     """Tests for updating notes."""
 
-    @pytest.fixture
-    def service(self):
-        """Create NoteService with mocked session."""
-        return NoteService(AsyncMock())
-
     @pytest.mark.asyncio
     async def test_update_note_title(self, service):
-        """Should update note title."""
-        mock_note = MagicMock()
-        mock_note.id = "note-123"
-        mock_note.title = "Updated Title"
+        """Should update the title and persist it."""
+        created = await service.create_note(NoteCreate(title="Original"))
 
-        with patch.object(service.repo, "update", return_value=mock_note) as mock_update:
-            data = NoteUpdate(title="Updated Title")
-            result = await service.update_note("note-123", data)
+        data = NoteUpdate(title="Updated Title")
+        result = await service.update_note(created.id, data)
 
-            mock_update.assert_called_once_with("note-123", title="Updated Title")
-            assert result.title == "Updated Title"
+        assert result.title == "Updated Title"
+
+        # Verify persistence
+        fetched = await service.get_note(created.id)
+        assert fetched.title == "Updated Title"
 
     @pytest.mark.asyncio
     async def test_update_note_multiple_fields(self, service):
         """Should update multiple fields at once."""
-        mock_note = MagicMock()
+        created = await service.create_note(
+            NoteCreate(title="Old", content="Old content"),
+        )
 
-        with patch.object(service.repo, "update", return_value=mock_note) as mock_update:
-            data = NoteUpdate(title="New Title", content="New Content", is_archived=True)
-            await service.update_note("note-123", data)
+        data = NoteUpdate(title="New", content="New content", is_archived=True)
+        result = await service.update_note(created.id, data)
 
-            mock_update.assert_called_once_with(
-                "note-123",
-                title="New Title",
-                content="New Content",
-                is_archived=True,
-            )
+        assert result.title == "New"
+        assert result.content == "New content"
+        assert result.is_archived is True
 
     @pytest.mark.asyncio
     async def test_update_note_no_changes(self, service):
         """Should return existing note when no fields provided."""
-        mock_note = MagicMock()
+        created = await service.create_note(NoteCreate(title="Unchanged"))
 
-        with patch.object(service.repo, "get_by_id", return_value=mock_note):
-            with patch.object(service.repo, "update") as mock_update:
-                data = NoteUpdate()  # No fields set
-                result = await service.update_note("note-123", data)
+        data = NoteUpdate()  # No fields set
+        result = await service.update_note(created.id, data)
 
-                mock_update.assert_not_called()
-                assert result is mock_note
+        assert result.id == created.id
+        assert result.title == "Unchanged"
+
+    @pytest.mark.asyncio
+    async def test_update_nonexistent_note_raises(self, service):
+        """Should raise NotFoundError for nonexistent ID."""
+        data = NoteUpdate(title="Won't work")
+        with pytest.raises(NotFoundError):
+            await service.update_note("nonexistent-id", data)
 
 
 class TestNoteServiceDelete:
     """Tests for deleting notes."""
 
-    @pytest.fixture
-    def service(self):
-        """Create NoteService with mocked session."""
-        return NoteService(AsyncMock())
-
     @pytest.mark.asyncio
     async def test_delete_note_success(self, service):
-        """Should delete note."""
-        with patch.object(service.repo, "delete", return_value=None) as mock_delete:
-            await service.delete_note("note-123")
+        """Should remove the note from the database."""
+        created = await service.create_note(NoteCreate(title="To Delete"))
 
-            mock_delete.assert_called_once_with("note-123")
+        await service.delete_note(created.id)
+
+        with pytest.raises(NotFoundError):
+            await service.get_note(created.id)
 
     @pytest.mark.asyncio
     async def test_delete_note_not_found(self, service):
-        """Should raise NotFoundError when note doesn't exist."""
-        with patch.object(
-            service.repo, "delete", side_effect=NotFoundError("Note not found")
-        ):
-            with pytest.raises(NotFoundError):
-                await service.delete_note("nonexistent")
+        """Should raise NotFoundError for nonexistent ID."""
+        with pytest.raises(NotFoundError):
+            await service.delete_note("nonexistent-id")
 
 
 class TestNoteServiceArchive:
     """Tests for archiving notes."""
 
-    @pytest.fixture
-    def service(self):
-        """Create NoteService with mocked session."""
-        return NoteService(AsyncMock())
-
     @pytest.mark.asyncio
     async def test_archive_note(self, service):
-        """Should archive a note."""
-        mock_note = MagicMock()
-        mock_note.is_archived = True
+        """Should set is_archived to True."""
+        created = await service.create_note(NoteCreate(title="To Archive"))
 
-        with patch.object(service.repo, "archive", return_value=mock_note):
-            result = await service.archive_note("note-123")
+        result = await service.archive_note(created.id)
+        assert result.is_archived is True
 
-            assert result.is_archived is True
+        # Verify persistence
+        fetched = await service.get_note(created.id)
+        assert fetched.is_archived is True
 
     @pytest.mark.asyncio
     async def test_unarchive_note(self, service):
-        """Should unarchive a note."""
-        mock_note = MagicMock()
-        mock_note.is_archived = False
+        """Should set is_archived back to False."""
+        created = await service.create_note(NoteCreate(title="To Unarchive"))
+        await service.archive_note(created.id)
 
-        with patch.object(service.repo, "unarchive", return_value=mock_note):
-            result = await service.unarchive_note("note-123")
+        result = await service.unarchive_note(created.id)
+        assert result.is_archived is False
 
-            assert result.is_archived is False
+    @pytest.mark.asyncio
+    async def test_archive_nonexistent_raises(self, service):
+        """Should raise NotFoundError for nonexistent ID."""
+        with pytest.raises(NotFoundError):
+            await service.archive_note("nonexistent-id")
 
 
 class TestNoteServiceSearch:
     """Tests for searching notes."""
 
-    @pytest.fixture
-    def service(self):
-        """Create NoteService with mocked session."""
-        return NoteService(AsyncMock())
+    @pytest.mark.asyncio
+    async def test_search_notes_by_title(self, service):
+        """Should find notes matching the query (case-insensitive)."""
+        await service.create_note(NoteCreate(title="Python Guide"))
+        await service.create_note(NoteCreate(title="Java Guide"))
+        await service.create_note(NoteCreate(title="Unrelated"))
+
+        result = await service.search_notes("guide")
+        titles = [n.title for n in result]
+        assert "Python Guide" in titles
+        assert "Java Guide" in titles
+        assert "Unrelated" not in titles
 
     @pytest.mark.asyncio
-    async def test_search_notes(self, service):
-        """Should search notes by title."""
-        mock_notes = [MagicMock(), MagicMock()]
+    async def test_search_notes_excludes_archived(self, service):
+        """Search should not return archived notes."""
+        await service.create_note(NoteCreate(title="Active Guide"))
+        archived = await service.create_note(NoteCreate(title="Archived Guide"))
+        await service.archive_note(archived.id)
 
-        with patch.object(
-            service.repo, "search_by_title", return_value=mock_notes
-        ) as mock_search:
-            result = await service.search_notes("test query")
-
-            mock_search.assert_called_once_with("test query", limit=50)
-            assert len(result) == 2
+        result = await service.search_notes("guide")
+        titles = [n.title for n in result]
+        assert "Active Guide" in titles
+        assert "Archived Guide" not in titles
 
     @pytest.mark.asyncio
     async def test_search_notes_with_limit(self, service):
-        """Should pass limit to search."""
-        with patch.object(service.repo, "search_by_title", return_value=[]):
-            await service.search_notes("query", limit=10)
+        """Should respect the limit parameter."""
+        for i in range(5):
+            await service.create_note(NoteCreate(title=f"Match {i}"))
 
-            service.repo.search_by_title.assert_called_once_with("query", limit=10)
+        result = await service.search_notes("Match", limit=2)
+        assert len(result) == 2
