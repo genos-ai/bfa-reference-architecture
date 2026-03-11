@@ -617,6 +617,32 @@ def project_archive(ctx, project_id):
                 output_format=ctx.output_format)
 
 
+@project.group("context", cls=ShowHelpOnMissingArgs)
+def project_context():
+    """View and manage the Project Context Document (PCD)."""
+    pass
+
+
+@project_context.command("show")
+@click.argument("project_id")
+@click.pass_obj
+def project_context_show(ctx, project_id):
+    """Show the PCD for a project."""
+    from modules.backend.cli.project import run_project
+    run_project(ctx.logger, "context-show", project_id=project_id,
+                output_format=ctx.output_format)
+
+
+@project_context.command("history")
+@click.argument("project_id")
+@click.pass_obj
+def project_context_history(ctx, project_id):
+    """Show PCD change audit trail."""
+    from modules.backend.cli.project import run_project
+    run_project(ctx.logger, "context-history", project_id=project_id,
+                output_format=ctx.output_format)
+
+
 # =============================================================================
 # DB group
 # =============================================================================

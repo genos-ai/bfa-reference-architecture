@@ -29,6 +29,8 @@ from sqlalchemy.pool import StaticPool
 from redis.asyncio import Redis as AsyncRedis
 
 from modules.backend.models.base import Base
+import modules.backend.models.project  # noqa: F401 — register tables
+import modules.backend.models.project_context  # noqa: F401 — register tables
 from tests.test_config import get_test_database_url as _get_test_database_url
 from tests.test_config import get_test_redis_url as _get_test_redis_url
 

@@ -30,6 +30,8 @@ def run_project(
         "list": _action_list,
         "detail": _action_detail,
         "archive": _action_archive,
+        "context-show": _action_context_show,
+        "context-history": _action_context_history,
     }
     fn = actions.get(action)
     if not fn:
@@ -149,3 +151,57 @@ async def _action_archive(cli_logger, *, project_id, **_):
         project = await svc.archive_project(project_id)
 
     console.print(f"[yellow]Project archived:[/yellow] {project.name} ({project.id})")
+
+
+async def _action_context_show(cli_logger, *, project_id, output_format, **_):
+    """Show the PCD for a project."""
+    import json as _json
+    from modules.backend.services.project_context import ProjectContextManager
+
+    console = get_console()
+    if not project_id:
+        console.print("[red]PROJECT_ID is required[/red]")
+        sys.exit(1)
+
+    async with ProjectContextManager.factory() as mgr:
+        data = await mgr.get_context(project_id)
+        size = await mgr.get_context_size(project_id)
+
+    if not data:
+        console.print("[dim]No PCD found for this project.[/dim]")
+        return
+
+    console.print(f"[bold]Project Context Document[/bold]  (v{size['version']}, "
+                  f"{size['size_characters']} chars, {size['pct_of_max']:.0f}% of cap)")
+    console.print()
+    console.print(_json.dumps(data, indent=2, ensure_ascii=False))
+
+
+async def _action_context_history(cli_logger, *, project_id, output_format, **_):
+    """Show PCD change history."""
+    from modules.backend.services.project_context import ProjectContextManager
+
+    console = get_console()
+    if not project_id:
+        console.print("[red]PROJECT_ID is required[/red]")
+        sys.exit(1)
+
+    async with ProjectContextManager.factory() as mgr:
+        changes = await mgr.get_history(project_id, limit=20)
+
+    if not changes:
+        console.print("[dim]No changes recorded.[/dim]")
+        return
+
+    table = build_table("PCD Changes", columns=[
+        ("Version", {"width": 8}),
+        ("Type", {"width": 10}),
+        ("Path", {"style": "cyan", "width": 40}),
+        ("Agent", {"width": 25}),
+        ("Reason", {"ratio": 1}),
+    ])
+    for c in changes:
+        table.add_row(str(c.version), c.change_type, c.path,
+                      c.agent_id or "—", c.reason[:60])
+
+    console.print(table)

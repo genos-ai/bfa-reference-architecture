@@ -84,6 +84,15 @@ class ProjectService(BaseService):
             role=ProjectMemberRole.OWNER,
         )
 
+        # Create seed PCD
+        from modules.backend.services.project_context import ProjectContextManager
+        pcd_manager = ProjectContextManager(self._session)
+        await pcd_manager.create_context(
+            project_id=project.id,
+            project_name=name,
+            description=description,
+        )
+
         self._log_operation(
             "Project created",
             project_id=project.id,
