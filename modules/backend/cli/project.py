@@ -255,5 +255,6 @@ async def _action_summarize(cli_logger, *, project_id, **_):
         results = await svc.run_full_pipeline(project_id)
 
     console.print("[bold]Summarization complete[/bold]")
-    console.print(f"  Decisions archived:  {results['decisions_archived']}")
-    console.print(f"  Milestones archived: {results['milestones_archived']}")
+    console.print(f"  Decisions archived:    {results['decisions_archived']}")
+    console.print(f"  Missions summarized:   {results['missions_summarized']}")
+    console.print(f"  Milestones archived:   {results['milestones_archived']}")

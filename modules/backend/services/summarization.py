@@ -12,7 +12,16 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator
 
+from sqlalchemy import select, update, and_, desc
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from modules.backend.core.logging import get_logger
+from modules.backend.models.mission_record import (
+    MissionRecord,
+    MissionRecordStatus,
+    TaskExecution,
+)
 from modules.backend.models.project_history import DecisionStatus
 from modules.backend.repositories.project_history import (
     MilestoneSummaryRepository,
@@ -20,8 +29,6 @@ from modules.backend.repositories.project_history import (
 )
 from modules.backend.services.base import BaseService
 from modules.backend.services.project_context import ProjectContextManager
-
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = get_logger(__name__)
 
@@ -175,6 +182,124 @@ class SummarizationService(BaseService):
 
         return len(to_archive)
 
+    async def summarize_mission_records(
+        self,
+        project_id: str,
+        max_age_days: int = 30,
+        batch_size: int = 10,
+    ) -> int:
+        """Compress old completed mission records into milestone summaries.
+
+        Finds MissionRecords older than max_age_days that haven't been
+        summarized yet, groups them into batches, and creates
+        MilestoneSummary records. Marks originals as summarized=True.
+
+        Raw data is never deleted — only excluded from default queries.
+        Returns count of missions summarized.
+        """
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=max_age_days)
+        ).isoformat()
+
+        result = await self.session.execute(
+            select(MissionRecord)
+            .options(selectinload(MissionRecord.task_executions))
+            .where(
+                and_(
+                    MissionRecord.project_id == project_id,
+                    MissionRecord.summarized == False,  # noqa: E712
+                    MissionRecord.status.in_([
+                        MissionRecordStatus.COMPLETED,
+                        MissionRecordStatus.FAILED,
+                    ]),
+                    MissionRecord.completed_at < cutoff,
+                )
+            )
+            .order_by(desc(MissionRecord.completed_at))
+            .limit(batch_size * 5)
+        )
+        records = list(result.scalars().all())
+
+        if not records:
+            return 0
+
+        # Process in batches
+        total_summarized = 0
+        for i in range(0, len(records), batch_size):
+            batch = records[i : i + batch_size]
+            mission_ids = [r.id for r in batch]
+            objectives = [
+                r.objective_statement or "(no objective)"
+                for r in batch
+            ]
+            statuses = [r.status for r in batch]
+
+            # Determine period range
+            completed_dates = [
+                r.completed_at for r in batch if r.completed_at
+            ]
+            period_start = min(completed_dates) if completed_dates else None
+            period_end = max(completed_dates) if completed_dates else None
+
+            # Collect domain tags from task executions
+            all_domain_tags: set[str] = set()
+            for r in batch:
+                if r.task_executions:
+                    for te in r.task_executions:
+                        if te.domain_tags:
+                            all_domain_tags.update(te.domain_tags)
+
+            # Build deterministic summary (no LLM needed for structured data)
+            completed_count = sum(
+                1 for s in statuses if s == MissionRecordStatus.COMPLETED
+            )
+            failed_count = sum(
+                1 for s in statuses if s == MissionRecordStatus.FAILED
+            )
+            total_cost = sum(r.total_cost_usd for r in batch)
+
+            summary_parts = [
+                f"{len(batch)} missions ({completed_count} completed, "
+                f"{failed_count} failed). Total cost: ${total_cost:.4f}.",
+            ]
+            for obj in objectives[:5]:
+                summary_parts.append(f"- {obj[:100]}")
+            if len(objectives) > 5:
+                summary_parts.append(f"  ... and {len(objectives) - 5} more")
+
+            await self._milestone_repo.create(
+                project_id=project_id,
+                title=f"Missions batch ({len(batch)} missions)",
+                summary="\n".join(summary_parts),
+                mission_ids=mission_ids,
+                key_outcomes={
+                    "completed": completed_count,
+                    "failed": failed_count,
+                    "total_cost_usd": round(total_cost, 4),
+                    "objectives": objectives[:10],
+                },
+                domain_tags=sorted(all_domain_tags),
+                period_start=period_start,
+                period_end=period_end,
+            )
+
+            # Mark missions as summarized
+            await self.session.execute(
+                update(MissionRecord)
+                .where(MissionRecord.id.in_(mission_ids))
+                .values(summarized=True)
+            )
+
+            total_summarized += len(batch)
+
+        self._log_operation(
+            "Mission records summarized",
+            project_id=project_id,
+            missions_summarized=total_summarized,
+        )
+
+        return total_summarized
+
     async def run_full_pipeline(
         self,
         project_id: str,
@@ -185,10 +310,14 @@ class SummarizationService(BaseService):
         """
         results = {
             "decisions_archived": 0,
+            "missions_summarized": 0,
             "milestones_archived": 0,
         }
 
         results["decisions_archived"] = await self.prune_pcd_decisions(
+            project_id,
+        )
+        results["missions_summarized"] = await self.summarize_mission_records(
             project_id,
         )
         results["milestones_archived"] = await self.prune_completed_workstreams(

@@ -247,3 +247,93 @@ class TestGetMissionSummaries:
     async def test_empty_for_unknown_project(self, history_service):
         summaries = await history_service.get_mission_summaries("nonexistent")
         assert summaries == []
+
+
+class TestSummarizedFiltering:
+    """Tests that summarized missions are excluded from default queries."""
+
+    @pytest.mark.asyncio
+    async def test_executions_exclude_summarized_by_default(
+        self, history_service, db_session,
+    ):
+        m1 = await _create_mission(db_session, project_id="proj-sf")
+        m2 = await _create_mission(db_session, project_id="proj-sf")
+        m2.summarized = True
+        await db_session.flush()
+
+        await _create_execution(db_session, m1.id, task_id="active-task")
+        await _create_execution(db_session, m2.id, task_id="summarized-task")
+
+        results = await history_service.get_recent_task_executions("proj-sf")
+        assert len(results) == 1
+        assert results[0]["task_id"] == "active-task"
+
+    @pytest.mark.asyncio
+    async def test_executions_include_summarized_when_requested(
+        self, history_service, db_session,
+    ):
+        m1 = await _create_mission(db_session, project_id="proj-sf2")
+        m2 = await _create_mission(db_session, project_id="proj-sf2")
+        m2.summarized = True
+        await db_session.flush()
+
+        await _create_execution(db_session, m1.id, task_id="active")
+        await _create_execution(db_session, m2.id, task_id="old")
+
+        results = await history_service.get_recent_task_executions(
+            "proj-sf2", include_summarized=True,
+        )
+        assert len(results) == 2
+
+    @pytest.mark.asyncio
+    async def test_failures_exclude_summarized_by_default(
+        self, history_service, db_session,
+    ):
+        m1 = await _create_mission(db_session, project_id="proj-sf3")
+        m2 = await _create_mission(db_session, project_id="proj-sf3")
+        m2.summarized = True
+        await db_session.flush()
+
+        e1 = await _create_execution(db_session, m1.id, task_id="active")
+        e2 = await _create_execution(db_session, m2.id, task_id="old")
+        await _create_failed_attempt(db_session, e1.id)
+        await _create_failed_attempt(db_session, e2.id)
+
+        failures = await history_service.get_recent_failures("proj-sf3")
+        assert len(failures) == 1
+        assert failures[0]["task_id"] == "active"
+
+    @pytest.mark.asyncio
+    async def test_mission_summaries_exclude_summarized_by_default(
+        self, history_service, db_session,
+    ):
+        m1 = await _create_mission(
+            db_session, project_id="proj-sf4", objective="Active",
+        )
+        m2 = await _create_mission(
+            db_session, project_id="proj-sf4", objective="Old",
+        )
+        m2.summarized = True
+        await db_session.flush()
+
+        summaries = await history_service.get_mission_summaries("proj-sf4")
+        assert len(summaries) == 1
+        assert summaries[0]["objective"] == "Active"
+
+    @pytest.mark.asyncio
+    async def test_mission_summaries_include_summarized_when_requested(
+        self, history_service, db_session,
+    ):
+        m1 = await _create_mission(
+            db_session, project_id="proj-sf5", objective="Active",
+        )
+        m2 = await _create_mission(
+            db_session, project_id="proj-sf5", objective="Old",
+        )
+        m2.summarized = True
+        await db_session.flush()
+
+        summaries = await history_service.get_mission_summaries(
+            "proj-sf5", include_summarized=True,
+        )
+        assert len(summaries) == 2

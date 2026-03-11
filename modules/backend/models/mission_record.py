@@ -12,7 +12,7 @@ are persisted here.
 
 import enum
 
-from sqlalchemy import Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.sqlite import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -145,6 +145,13 @@ class MissionRecord(UUIDMixin, TimestampMixin, Base):
     completed_at: Mapped[str | None] = mapped_column(
         String(30),
         nullable=True,
+    )
+
+    summarized: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        comment="True when compressed into a milestone summary by the summarization pipeline",
     )
 
     parent_mission_id: Mapped[str | None] = mapped_column(

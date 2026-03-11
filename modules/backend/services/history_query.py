@@ -43,6 +43,7 @@ class HistoryQueryService(BaseService):
         project_id: str,
         *,
         domain_tags: list[str] | None = None,
+        include_summarized: bool = False,
         limit: int = 10,
     ) -> list[dict]:
         """Get recent task executions, optionally filtered by domain tags.
@@ -50,6 +51,7 @@ class HistoryQueryService(BaseService):
         Returns dicts with task_id, agent_name, status, domain_tags,
         cost_usd, duration_seconds, completed_at.
 
+        By default excludes executions from summarized missions.
         When domain_tags are provided, over-fetches from the DB (5x limit)
         and post-filters in Python for SQLite JSON compatibility, then
         trims to the requested limit.
@@ -59,9 +61,10 @@ class HistoryQueryService(BaseService):
             select(TaskExecution)
             .join(MissionRecord, TaskExecution.mission_record_id == MissionRecord.id)
             .where(MissionRecord.project_id == project_id)
-            .order_by(desc(TaskExecution.completed_at))
-            .limit(fetch_limit)
         )
+        if not include_summarized:
+            query = query.where(MissionRecord.summarized == False)  # noqa: E712
+        query = query.order_by(desc(TaskExecution.completed_at)).limit(fetch_limit)
         result = await self.session.execute(query)
         executions = list(result.scalars().all())
 
@@ -90,11 +93,13 @@ class HistoryQueryService(BaseService):
         project_id: str,
         *,
         domain_tags: list[str] | None = None,
+        include_summarized: bool = False,
         limit: int = 5,
     ) -> list[dict]:
         """Get recent failed task attempts for a project.
 
         Returns failure reason and feedback so agents don't repeat mistakes.
+        By default excludes failures from summarized missions.
         Over-fetches when domain_tags are provided so post-filtering
         still yields up to `limit` results.
         """
@@ -105,9 +110,10 @@ class HistoryQueryService(BaseService):
             .join(MissionRecord, TaskExecution.mission_record_id == MissionRecord.id)
             .where(MissionRecord.project_id == project_id)
             .where(TaskAttempt.status == TaskAttemptStatus.FAILED)
-            .order_by(desc(TaskAttempt.created_at))
-            .limit(fetch_limit)
         )
+        if not include_summarized:
+            query = query.where(MissionRecord.summarized == False)  # noqa: E712
+        query = query.order_by(desc(TaskAttempt.created_at)).limit(fetch_limit)
         result = await self.session.execute(query)
         rows = result.all()
 
@@ -131,15 +137,22 @@ class HistoryQueryService(BaseService):
         self,
         project_id: str,
         *,
+        include_summarized: bool = False,
         limit: int = 10,
     ) -> list[dict]:
-        """Get recent mission outcome summaries for a project."""
-        result = await self.session.execute(
+        """Get recent mission outcome summaries for a project.
+
+        By default excludes missions that have been compressed
+        into milestone summaries by the summarization pipeline.
+        """
+        query = (
             select(MissionRecord)
             .where(MissionRecord.project_id == project_id)
-            .order_by(desc(MissionRecord.completed_at))
-            .limit(limit)
         )
+        if not include_summarized:
+            query = query.where(MissionRecord.summarized == False)  # noqa: E712
+        query = query.order_by(desc(MissionRecord.completed_at)).limit(limit)
+        result = await self.session.execute(query)
         records = list(result.scalars().all())
 
         return [
