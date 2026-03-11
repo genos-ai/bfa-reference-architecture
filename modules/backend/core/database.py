@@ -9,6 +9,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from modules.backend.core.logging import get_logger
@@ -88,7 +89,7 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     async with session_factory() as session:
         try:
             yield session
-        except Exception:
+        except SQLAlchemyError:
             await session.rollback()
             raise
 
@@ -107,6 +108,6 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         try:
             yield session
             await session.commit()
-        except Exception:
+        except SQLAlchemyError:
             await session.rollback()
             raise

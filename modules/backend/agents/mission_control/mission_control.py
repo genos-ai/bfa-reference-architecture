@@ -10,8 +10,10 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from pydantic_ai import UserError
+from sqlalchemy.exc import SQLAlchemyError
 
 from modules.backend.agents.mission_control.cost import compute_cost_usd, estimate_cost
+from modules.backend.core.exceptions import ApplicationError
 from modules.backend.agents.mission_control.dispatch import dispatch
 from modules.backend.agents.mission_control.persistence_bridge import persist_mission_results
 from modules.backend.agents.mission_control.helpers import (
@@ -262,7 +264,7 @@ async def handle(
                                 )
                                 yield result_event
                                 await _publish(event_bus, result_event)
-            except Exception:
+            except (AttributeError, TypeError, KeyError, ValueError):
                 logger.debug("Failed to extract tool events", exc_info=True)
 
         # 8. Yield complete event
@@ -292,7 +294,7 @@ async def handle(
                 output_tokens=output_tokens,
                 cost_usd=cost_usd,
             )
-        except Exception:
+        except (SQLAlchemyError, ApplicationError):
             logger.warning("Failed to update session cost", exc_info=True)
 
         # 10. Yield cost update event
@@ -330,7 +332,7 @@ async def handle(
         # 12. Touch activity
         try:
             await session_service.touch_activity(session_id)
-        except Exception:
+        except (SQLAlchemyError, ApplicationError):
             logger.debug("Failed to touch session activity", exc_info=True)
 
     except Exception as exc:
