@@ -100,9 +100,19 @@ class BaseService:
                 "Database integrity error",
                 extra={"operation": operation, "error": str(e)},
             )
-            # Check for unique constraint violation
-            error_str = str(e).lower()
-            if "unique" in error_str or "duplicate" in error_str:
+            # Check for unique constraint violation via DB driver
+            orig = e.orig
+            is_unique = (
+                # psycopg / psycopg2: UniqueViolation (SQLSTATE 23505)
+                getattr(orig, "pgcode", None) == "23505"
+                # SQLite: UNIQUE constraint failed
+                or (
+                    hasattr(orig, "args")
+                    and orig.args
+                    and "UNIQUE constraint failed" in str(orig.args[0])
+                )
+            )
+            if is_unique:
                 raise ConflictError("Resource already exists")
             raise DatabaseError(f"Database constraint violation: {operation}")
         except SQLAlchemyError as e:

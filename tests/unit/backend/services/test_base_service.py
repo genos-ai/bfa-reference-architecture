@@ -79,12 +79,15 @@ class TestExecuteDbOperation:
 
     @pytest.mark.asyncio
     async def test_raises_conflict_on_duplicate_key(self, service):
-        """Should raise ConflictError on duplicate key error."""
+        """Should raise ConflictError on PostgreSQL unique violation (pgcode 23505)."""
+        pg_orig = Exception("duplicate key value violates unique constraint")
+        pg_orig.pgcode = "23505"
+
         async def failing_operation():
             raise IntegrityError(
                 "statement",
                 {},
-                Exception("duplicate key value"),
+                pg_orig,
             )
 
         with pytest.raises(ConflictError):

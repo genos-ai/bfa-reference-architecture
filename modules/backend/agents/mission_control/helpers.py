@@ -64,7 +64,8 @@ def _build_model(config_model: str | AgentModelSchema) -> Model:
         provider = AnthropicProvider(api_key=settings.anthropic_api_key)
         return AnthropicModel(bare_name, provider=provider)
 
-    raise ValueError(f"Unsupported model provider in '{model_name}'. Expected 'anthropic:model_name'.")
+    from modules.backend.core.exceptions import ValidationError
+    raise ValidationError(f"Unsupported model provider in '{model_name}'. Expected 'anthropic:model_name'.")
 
 
 def assemble_instructions(category: str, name: str) -> str:
@@ -197,8 +198,9 @@ def _resolve_agent(session: "SessionResponse", message: str) -> str:
     if fallback and registry.has(fallback):
         return fallback
 
+    from modules.backend.core.exceptions import ValidationError
     available = ", ".join(c["agent_name"] for c in registry.list_all()) or "none"
-    raise ValueError(f"No agent matched. Available agents: {available}.")
+    raise ValidationError(f"No agent matched. Available agents: {available}.")
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +314,8 @@ def _make_agent_executor(
         registry = get_registry()
         agent_config = registry.get(agent_name)
         if agent_config is None:
-            raise ValueError(f"Agent '{agent_name}' not found in registry")
+            from modules.backend.core.exceptions import ValidationError
+            raise ValidationError(f"Agent '{agent_name}' not found in registry")
 
         module = _import_agent_module(agent_name)
         model = _build_model(agent_config.model)
