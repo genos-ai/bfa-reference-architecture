@@ -235,7 +235,7 @@ async def dispatch(
                     assembled = await context_assembler.build(
                         project_id=project_id,
                         task_definition=task.model_dump(),
-                        resolved_inputs=resolved_inputs,
+                        resolved_inputs=dict(resolved_inputs),
                         domain_tags=task.domain_tags or None,
                     )
                     resolved_inputs["project_context"] = assembled
