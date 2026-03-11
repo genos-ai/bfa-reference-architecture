@@ -309,3 +309,70 @@ class TestListAndGetMissions:
         from modules.backend.core.exceptions import NotFoundError
         with pytest.raises(NotFoundError):
             await service.get_mission("nonexistent-id")
+
+
+class TestExtractOutputs:
+    """P0.5: extract_outputs reliability fixes."""
+
+    def _make_mission(self, outcome=None):
+        mission = MagicMock()
+        mission.id = "test-mission"
+        mission.mission_outcome = outcome
+        mission.result_summary = "Test summary"
+        return mission
+
+    def test_no_output_mapping_returns_empty(self, db_session: AsyncSession):
+        """Returns {} and logs debug when output_mapping is None."""
+        with patch(
+            "modules.backend.services.mission.get_app_config",
+            return_value=_mock_app_config(),
+        ):
+            service = MissionService(session=db_session)
+            mission = self._make_mission(outcome={"task_results": []})
+            result = service.extract_outputs(mission, None)
+            assert result == {}
+
+    def test_no_outcome_returns_empty(self, db_session: AsyncSession):
+        """Returns {} and logs warning when mission has no outcome."""
+        with patch(
+            "modules.backend.services.mission.get_app_config",
+            return_value=_mock_app_config(),
+        ):
+            service = MissionService(session=db_session)
+            mission = self._make_mission(outcome=None)
+            result = service.extract_outputs(mission, {"field_mappings": []})
+            assert result == {}
+
+    def test_duplicate_agents_both_accessible(self, db_session: AsyncSession):
+        """Multiple tasks with same agent_name are all searchable."""
+        with patch(
+            "modules.backend.services.mission.get_app_config",
+            return_value=_mock_app_config(),
+        ):
+            service = MissionService(session=db_session)
+            mission = self._make_mission(outcome={
+                "task_results": [
+                    {
+                        "task_id": "task-001",
+                        "agent_name": "code.qa.agent",
+                        "output_reference": {"report": "first report"},
+                    },
+                    {
+                        "task_id": "task-002",
+                        "agent_name": "code.qa.agent",
+                        "output_reference": {"analysis": "second analysis"},
+                    },
+                ],
+            })
+            mapping = {
+                "field_mappings": [
+                    {
+                        "source_task": "code.qa.agent",
+                        "source_field": "analysis",
+                        "target_key": "qa_analysis",
+                    },
+                ],
+            }
+            result = service.extract_outputs(mission, mapping)
+            # Should find 'analysis' from the second entry, not be overwritten
+            assert result["qa_analysis"] == "second analysis"

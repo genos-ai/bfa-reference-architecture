@@ -121,6 +121,10 @@ class TaskResult(BaseModel):
     )
     retry_count: int = 0
     retry_history: list[RetryHistoryEntry] = Field(default_factory=list)
+    execution_id: str = Field(
+        default="",
+        description="Globally unique execution ID assigned at dispatch time",
+    )
 
 
 class MissionOutcome(BaseModel):

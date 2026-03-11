@@ -319,3 +319,44 @@ class TestGetCostBreakdown:
         assert breakdown.total_input_tokens == 100
         assert breakdown.total_output_tokens == 50
         assert breakdown.model_costs.get("test") == 0.05
+
+
+class TestExecutionId:
+    """P0.6: execution_id persistence."""
+
+    @pytest.mark.asyncio
+    async def test_execution_id_persisted(self, service):
+        """execution_id flows from save_task_execution to TaskExecution row."""
+        mission = await service.save_mission(
+            session_id="sess-eid",
+            status="completed",
+            total_cost_usd=0.01,
+        )
+
+        execution = await service.save_task_execution(
+            mission_record_id=mission.id,
+            task_id="t1",
+            agent_name="agent_a",
+            status="completed",
+            execution_id="eid-1234-5678",
+        )
+
+        assert execution.execution_id == "eid-1234-5678"
+
+    @pytest.mark.asyncio
+    async def test_execution_id_defaults_none(self, service):
+        """execution_id is None when not provided."""
+        mission = await service.save_mission(
+            session_id="sess-eid2",
+            status="completed",
+            total_cost_usd=0.01,
+        )
+
+        execution = await service.save_task_execution(
+            mission_record_id=mission.id,
+            task_id="t1",
+            agent_name="agent_a",
+            status="completed",
+        )
+
+        assert execution.execution_id is None

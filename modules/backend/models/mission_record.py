@@ -237,6 +237,13 @@ class TaskExecution(UUIDMixin, TimestampMixin, Base):
         nullable=True,
     )
 
+    execution_id: Mapped[str | None] = mapped_column(
+        String(36),
+        nullable=True,
+        index=True,
+        comment="Globally unique execution ID assigned at dispatch time",
+    )
+
     mission_record: Mapped["MissionRecord"] = relationship(
         "MissionRecord",
         back_populates="task_executions",

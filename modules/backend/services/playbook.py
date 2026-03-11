@@ -301,15 +301,10 @@ class PlaybookService:
                 if context_key in upstream:
                     resolved_input[key] = upstream[context_key]
                 else:
-                    logger.warning(
-                        "Unresolved @context reference in step input",
-                        extra={
-                            "step_id": step.id,
-                            "reference": value,
-                            "available_keys": list(upstream.keys()),
-                        },
+                    raise ValueError(
+                        f"Step '{step.id}' has unresolvable @context reference: "
+                        f"'{value}' (available: {list(upstream.keys())})"
                     )
-                    resolved_input[key] = value
             else:
                 resolved_input[key] = value
 

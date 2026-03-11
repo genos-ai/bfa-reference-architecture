@@ -348,7 +348,17 @@ class MissionService(BaseService):
         Agent assigns dynamic task IDs like 'task-001' that won't
         match playbook-defined source_task names).
         """
-        if not output_mapping or not mission.mission_outcome:
+        if not output_mapping:
+            self._log_debug(
+                "No output_mapping configured",
+                mission_id=mission.id,
+            )
+            return {}
+        if not mission.mission_outcome:
+            logger.warning(
+                "Mission has no outcome for output extraction",
+                extra={"mission_id": mission.id},
+            )
             return {}
 
         extracted: dict[str, Any] = {}
@@ -363,9 +373,9 @@ class MissionService(BaseService):
         field_mappings = output_mapping.get("field_mappings", [])
         raw_results = outcome.get("task_results", [])
 
-        # Build lookup indices: by task_id and by agent_name
+        # Build lookup indices: by task_id and by agent_name (list for duplicates)
         by_task_id: dict[str, dict] = {}
-        by_agent: dict[str, dict] = {}
+        by_agent: dict[str, list[dict]] = {}
         if isinstance(raw_results, list):
             for tr in raw_results:
                 if isinstance(tr, dict):
@@ -373,7 +383,9 @@ class MissionService(BaseService):
                         "output_reference", {},
                     )
                     agent = tr.get("agent_name", "")
-                    by_agent[agent] = tr.get("output_reference", {})
+                    by_agent.setdefault(agent, []).append(
+                        tr.get("output_reference", {}),
+                    )
         elif isinstance(raw_results, dict):
             # Legacy: already a dict keyed by task name
             by_task_id = raw_results
@@ -383,10 +395,17 @@ class MissionService(BaseService):
             source_field = mapping["source_field"]
             target_key = mapping["target_key"]
 
-            # Try exact task_id match, then agent_name match
+            # Try exact task_id match first
             task_output = by_task_id.get(source_task)
+            # Then try agent_name match (search all entries for that agent)
             if task_output is None:
-                task_output = by_agent.get(source_task)
+                agent_outputs = by_agent.get(source_task, [])
+                for candidate in agent_outputs:
+                    if isinstance(candidate, dict) and source_field in candidate:
+                        task_output = candidate
+                        break
+                else:
+                    task_output = agent_outputs[0] if agent_outputs else None
 
             if task_output is not None:
                 if isinstance(task_output, dict) and source_field in task_output:

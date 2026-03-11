@@ -85,6 +85,7 @@ async def persist_mission_results(
                 cost_usd=task_result.cost_usd,
                 duration_seconds=task_result.duration_seconds,
                 verification_outcome=verification_dict,
+                execution_id=task_result.execution_id or None,
             )
 
             for retry_entry in task_result.retry_history:

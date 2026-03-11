@@ -11,6 +11,7 @@ invoked through the standard agent execution path.
 
 import asyncio
 import time
+import uuid
 from collections import deque
 from typing import Any
 
@@ -134,8 +135,13 @@ async def execute_task(
     roster_entry: RosterAgentEntry,
     resolved_inputs: dict[str, Any],
     execute_agent_fn: ExecuteAgentFn,
+    instructions: str | None = None,
 ) -> dict:
-    """Execute a single agent task with timeout and cost ceiling enforcement."""
+    """Execute a single agent task with timeout and cost ceiling enforcement.
+
+    Args:
+        instructions: Override for task.instructions (used to deliver retry feedback).
+    """
     timeout = (
         task.constraints.timeout_override_seconds
         or roster_entry.constraints.timeout_seconds
@@ -150,7 +156,7 @@ async def execute_task(
     return await asyncio.wait_for(
         execute_agent_fn(
             agent_name=task.agent,
-            instructions=task.instructions,
+            instructions=instructions or task.instructions,
             inputs=resolved_inputs,
             usage_limits=usage_limits,
         ),
@@ -210,6 +216,7 @@ async def dispatch(
                     roster_entry=roster_entry,
                     resolved_inputs=resolved_inputs,
                     execute_agent_fn=execute_agent_fn,
+                    execution_id=str(uuid.uuid4()),
                 )
             )
 
@@ -234,7 +241,19 @@ async def dispatch(
             total_output_tokens += task_result.token_usage.output
             total_thinking_tokens += task_result.token_usage.thinking
 
+        # Check budget after each layer completes
+        if mission_budget_usd and total_cost > mission_budget_usd:
+            logger.warning(
+                "Mission budget exceeded, cancelling remaining tasks",
+                extra={
+                    "cumulative_cost": total_cost,
+                    "budget": mission_budget_usd,
+                },
+            )
+            break
+
     # Determine mission status
+    budget_exceeded = bool(mission_budget_usd and total_cost > mission_budget_usd)
     total_tasks = len(plan.tasks)
     successful_tasks = sum(
         1 for r in task_results if r.status == TaskStatus.SUCCESS
@@ -250,7 +269,9 @@ async def dispatch(
         for cp_id in critical_path_ids
     ) if critical_path_ids else True
 
-    if successful_tasks == total_tasks:
+    if budget_exceeded:
+        status = MissionStatus.FAILED
+    elif successful_tasks == total_tasks:
         status = MissionStatus.SUCCESS
     elif (
         success_ratio >= plan.execution_hints.min_success_threshold
@@ -281,6 +302,7 @@ async def _execute_with_retry(
     roster_entry: RosterAgentEntry,
     resolved_inputs: dict[str, Any],
     execute_agent_fn: ExecuteAgentFn,
+    execution_id: str = "",
 ) -> TaskResult:
     """Execute a task with 3-tier verification and retry-with-feedback."""
     retry_budget = roster_entry.constraints.retry_budget
@@ -296,6 +318,7 @@ async def _execute_with_retry(
                 roster_entry=roster_entry,
                 resolved_inputs=resolved_inputs,
                 execute_agent_fn=execute_agent_fn,
+                instructions=instructions,
             )
         except asyncio.TimeoutError:
             duration = time.monotonic() - task_start
@@ -322,6 +345,7 @@ async def _execute_with_retry(
                 duration_seconds=round(duration, 2),
                 retry_count=attempt,
                 retry_history=retry_history,
+                execution_id=execution_id,
             )
         except Exception as e:
             duration = time.monotonic() - task_start
@@ -344,6 +368,7 @@ async def _execute_with_retry(
 
             return _failed_result(
                 task, str(e), retry_count=attempt, retry_history=retry_history,
+                execution_id=execution_id,
             )
 
         duration = time.monotonic() - task_start
@@ -393,6 +418,7 @@ async def _execute_with_retry(
                 verification_outcome=build_verification_outcome(verification),
                 retry_count=attempt,
                 retry_history=retry_history,
+                execution_id=execution_id,
             )
 
         # Success
@@ -407,6 +433,7 @@ async def _execute_with_retry(
             verification_outcome=build_verification_outcome(verification),
             retry_count=attempt,
             retry_history=retry_history,
+            execution_id=execution_id,
         )
 
     # Should not reach here, but defensive
@@ -427,6 +454,7 @@ def _failed_result(
     reason: str,
     retry_count: int = 0,
     retry_history: list[RetryHistoryEntry] | None = None,
+    execution_id: str = "",
 ) -> TaskResult:
     """Create a failed TaskResult."""
     return TaskResult(
@@ -439,6 +467,7 @@ def _failed_result(
         duration_seconds=0.0,
         retry_count=retry_count,
         retry_history=retry_history or [],
+        execution_id=execution_id,
     )
 
 

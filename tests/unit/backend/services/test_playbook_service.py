@@ -219,7 +219,8 @@ class TestUpstreamContextResolution:
         assert result["_step_input"]["articles"] == ["article1", "article2"]
         assert result["_step_input"]["static"] == "hello"
 
-    def test_unresolved_reference_preserved(self):
+    def test_unresolved_reference_raises(self):
+        """Unresolved @context.* references raise ValueError (P0.3)."""
         service = PlaybookService(agent_registry={})
         step = PlaybookSchema(
             playbook_name="test.unresolved",
@@ -236,8 +237,8 @@ class TestUpstreamContextResolution:
             ],
         ).steps[0]
 
-        result = service.resolve_upstream_context(step, {}, {})
-        assert result["_step_input"]["data"] == "@context.missing_key"
+        with pytest.raises(ValueError, match="unresolvable @context reference"):
+            service.resolve_upstream_context(step, {}, {})
 
 
 class TestPlaybookLoading:

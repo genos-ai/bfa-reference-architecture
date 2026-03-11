@@ -47,12 +47,33 @@ class MissionControlDispatchAdapter:
         mission_id = f"mission-{session_id}" if session_id else "mission-adhoc"
         budget = cost_ceiling_usd or 10.0
 
+        # Select roster based on complexity_tier if a tier-specific roster exists
+        roster_name = roster_ref
+        if complexity_tier != "simple":
+            import os
+            from modules.backend.core.config import find_project_root
+
+            tier_roster = (
+                find_project_root()
+                / "config" / "mission_control" / "rosters"
+                / f"{roster_ref}-{complexity_tier}.yaml"
+            )
+            if os.path.exists(tier_roster):
+                roster_name = f"{roster_ref}-{complexity_tier}"
+                logger.info(
+                    "Using complexity-tier roster",
+                    extra={
+                        "complexity_tier": complexity_tier,
+                        "roster": roster_name,
+                    },
+                )
+
         outcome = await handle_mission(
             mission_id=mission_id,
             mission_brief=mission_brief,
             session_service=self._session_service,
             event_bus=self._event_bus,
-            roster_name=roster_ref,
+            roster_name=roster_name,
             mission_budget_usd=budget,
             upstream_context=upstream_context,
             session_id=session_id,

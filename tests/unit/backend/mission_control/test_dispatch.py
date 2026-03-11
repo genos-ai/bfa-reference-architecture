@@ -262,10 +262,12 @@ class TestDispatch:
             tasks,
             execution_hints={"min_success_threshold": 0.5, "critical_path": ["a"]},
         )
-        roster = Roster(agents=[_entry("agent_a")])
+        entry = _entry("agent_a")
+        entry.constraints.retry_budget = 0
+        roster = Roster(agents=[entry])
 
         async def mock_execute(agent_name, instructions, inputs, usage_limits):
-            if instructions == "task_b":
+            if "task_b" in instructions:
                 raise RuntimeError("Agent b failed")
             return {"result": "done", "confidence": 0.9, "_meta": {}}
 
@@ -288,7 +290,7 @@ class TestDispatch:
         roster = Roster(agents=[entry])
 
         async def mock_execute(agent_name, instructions, inputs, usage_limits):
-            if instructions == "task_a":
+            if "task_a" in instructions:
                 raise RuntimeError("Agent a (critical) failed")
             return {"result": "done", "confidence": 0.9, "_meta": {}}
 
@@ -425,7 +427,7 @@ class TestDispatch:
         roster = Roster(agents=[entry])
 
         async def mock_execute(agent_name, instructions, inputs, usage_limits):
-            if instructions == "task_a":
+            if "task_a" in instructions:
                 raise RuntimeError("Agent a failed")
             return {"result": "done", "confidence": 0.9, "_meta": {}}
 
@@ -457,3 +459,100 @@ class TestDispatch:
         history_entry = outcome.task_results[0].retry_history[0]
         assert "First attempt failed" in history_entry.failure_reason
         assert history_entry.feedback_provided is not None
+
+    # ---- Pre-Phase 0 tests ----
+
+    @pytest.mark.asyncio
+    async def test_budget_enforcement_cancels_remaining_tasks(self):
+        """P0.1: Budget exceeded after first layer cancels remaining tasks."""
+        tasks = [
+            _task("a"),
+            _task("b", deps=["a"]),
+        ]
+        plan = _plan(tasks)
+        roster = Roster(agents=[_entry("agent_a")])
+        call_count = 0
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            nonlocal call_count
+            call_count += 1
+            return {
+                "result": "done", "confidence": 0.9,
+                "_meta": {"input_tokens": 100, "output_tokens": 50, "cost_usd": 0.06},
+            }
+
+        outcome = await dispatch(plan, roster, mock_execute, mission_budget_usd=0.05)
+        assert outcome.status == MissionStatus.FAILED
+        # Only first task should execute — budget exceeded after layer 1
+        assert call_count == 1
+        assert outcome.total_cost_usd == pytest.approx(0.06, abs=0.001)
+
+    @pytest.mark.asyncio
+    async def test_budget_zero_allows_all_tasks(self):
+        """P0.1: Budget of 0 means no budget enforcement."""
+        plan = _plan([_task("a"), _task("b")])
+        roster = Roster(agents=[_entry("agent_a")])
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            return {
+                "result": "done", "confidence": 0.9,
+                "_meta": {"cost_usd": 5.0},
+            }
+
+        outcome = await dispatch(plan, roster, mock_execute, mission_budget_usd=0)
+        assert outcome.status == MissionStatus.SUCCESS
+        assert len(outcome.task_results) == 2
+
+    @pytest.mark.asyncio
+    async def test_retry_feedback_delivered_to_agent(self):
+        """P0.2: Enriched instructions with feedback are delivered on retry."""
+        plan = _plan([_task("t1")])
+        entry = _entry("agent_a")
+        entry.constraints.retry_budget = 1
+        roster = Roster(agents=[entry])
+        received_instructions = []
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            received_instructions.append(instructions)
+            if len(received_instructions) == 1:
+                raise RuntimeError("First attempt failed")
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        outcome = await dispatch(plan, roster, mock_execute, 10.0)
+        assert outcome.task_results[0].status == TaskStatus.SUCCESS
+        assert len(received_instructions) == 2
+        # Second call should have feedback appended
+        assert "FEEDBACK FROM PREVIOUS ATTEMPT" in received_instructions[1]
+        assert "First attempt failed" in received_instructions[1]
+
+    @pytest.mark.asyncio
+    async def test_execution_id_assigned_per_task(self):
+        """P0.6: Each task gets a unique non-empty execution_id."""
+        plan = _plan([_task("a"), _task("b")])
+        roster = Roster(agents=[_entry("agent_a")])
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            return {"result": "done", "confidence": 0.9, "_meta": {}}
+
+        outcome = await dispatch(plan, roster, mock_execute, 10.0)
+        assert len(outcome.task_results) == 2
+        ids = [r.execution_id for r in outcome.task_results]
+        # All non-empty
+        assert all(eid for eid in ids)
+        # All unique
+        assert len(set(ids)) == 2
+
+    @pytest.mark.asyncio
+    async def test_execution_id_on_failed_task(self):
+        """P0.6: Failed tasks also get an execution_id."""
+        plan = _plan([_task("t1")])
+        entry = _entry("agent_a")
+        entry.constraints.retry_budget = 0
+        roster = Roster(agents=[entry])
+
+        async def mock_execute(agent_name, instructions, inputs, usage_limits):
+            raise RuntimeError("fail")
+
+        outcome = await dispatch(plan, roster, mock_execute, 10.0)
+        assert outcome.task_results[0].status == TaskStatus.FAILED
+        assert outcome.task_results[0].execution_id != ""

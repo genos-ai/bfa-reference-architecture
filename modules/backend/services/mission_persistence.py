@@ -124,6 +124,7 @@ class MissionPersistenceService(BaseService):
         verification_outcome: dict | None = None,
         started_at: str | None = None,
         completed_at: str | None = None,
+        execution_id: str | None = None,
     ) -> TaskExecution:
         """Persist a single task execution result."""
         config = get_app_config().missions
@@ -155,6 +156,7 @@ class MissionPersistenceService(BaseService):
             verification_outcome=verification_outcome,
             started_at=started_at,
             completed_at=completed_at,
+            execution_id=execution_id,
         )
 
         self._session.add(execution)
