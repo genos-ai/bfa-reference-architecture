@@ -3,8 +3,8 @@
 import pytest
 
 from modules.backend.agents.mission_control.roster import (
-    PLANNING_AGENT_ENTRY,
-    VERIFICATION_AGENT_ENTRY,
+    PLANNING_AGENT_NAME,
+    VERIFICATION_AGENT_NAME,
     Roster,
     RosterAgentEntry,
     RosterInterfaceSchema,
@@ -58,16 +58,16 @@ class TestRoster:
 class TestLoadRoster:
     def test_load_default_roster(self):
         roster = load_roster("default")
-        assert len(roster.agents) >= 2
+        assert len(roster.agents) >= 4  # 2 worker + planning + verification
 
-    def test_auto_includes_planning_agent(self):
+    def test_planning_agent_loaded_from_yaml(self):
         roster = load_roster("default")
-        planning = roster.get_agent_by_name("horizontal.planning.agent")
+        planning = roster.get_agent_by_name(PLANNING_AGENT_NAME)
         assert planning is not None
 
-    def test_auto_includes_verification_agent(self):
+    def test_verification_agent_loaded_from_yaml(self):
         roster = load_roster("default")
-        verification = roster.get_agent_by_name("horizontal.verification.agent")
+        verification = roster.get_agent_by_name(VERIFICATION_AGENT_NAME)
         assert verification is not None
 
     def test_worker_agents_present(self):

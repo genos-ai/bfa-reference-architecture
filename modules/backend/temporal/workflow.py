@@ -23,6 +23,7 @@ from modules.backend.temporal.models import (
 )
 
 with workflow.unsafe.imports_passed_through():
+    from modules.backend.core.config import get_app_config
     from modules.backend.temporal import activities
 
 
@@ -64,8 +65,13 @@ class AgentMissionWorkflow:
         self._status.mission_id = input.mission_id
         self._status.workflow_status = "running"
 
+        temporal_config = get_app_config().temporal
         activity_timeout = timedelta(
-            seconds=max(input.mission_budget_usd * 120, 600),
+            seconds=max(
+                input.mission_budget_usd
+                * temporal_config.budget_timeout_multiplier_seconds,
+                temporal_config.min_activity_timeout_seconds,
+            ),
         )
         notification_timeout = timedelta(
             seconds=input.notification_timeout_seconds,
@@ -77,9 +83,13 @@ class AgentMissionWorkflow:
             input,
             start_to_close_timeout=activity_timeout,
             retry_policy=workflow.RetryPolicy(
-                maximum_attempts=2,
-                initial_interval=timedelta(seconds=5),
-                maximum_interval=timedelta(seconds=60),
+                maximum_attempts=temporal_config.execution_retry_max_attempts,
+                initial_interval=timedelta(
+                    seconds=temporal_config.execution_retry_initial_interval_seconds,
+                ),
+                maximum_interval=timedelta(
+                    seconds=temporal_config.execution_retry_max_interval_seconds,
+                ),
                 non_retryable_error_types=["BudgetExceededError"],
             ),
         )
@@ -96,8 +106,12 @@ class AgentMissionWorkflow:
                 input.roster_name,
                 result.outcome_json,
             ],
-            start_to_close_timeout=timedelta(seconds=30),
-            retry_policy=workflow.RetryPolicy(maximum_attempts=3),
+            start_to_close_timeout=timedelta(
+                seconds=temporal_config.persistence_timeout_seconds,
+            ),
+            retry_policy=workflow.RetryPolicy(
+                maximum_attempts=temporal_config.persistence_retry_max_attempts,
+            ),
         )
 
         # Step 3: If mission failed, optionally wait for approval to retry
@@ -152,8 +166,12 @@ class AgentMissionWorkflow:
                         input.roster_name,
                         retry_result.outcome_json,
                     ],
-                    start_to_close_timeout=timedelta(seconds=30),
-                    retry_policy=workflow.RetryPolicy(maximum_attempts=3),
+                    start_to_close_timeout=timedelta(
+                        seconds=temporal_config.persistence_timeout_seconds,
+                    ),
+                    retry_policy=workflow.RetryPolicy(
+                        maximum_attempts=temporal_config.persistence_retry_max_attempts,
+                    ),
                 )
 
         # Final status

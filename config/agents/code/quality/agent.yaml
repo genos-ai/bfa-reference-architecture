@@ -60,6 +60,10 @@ tools:
   - compliance.scan_file_sizes
   - compliance.scan_cli_options
   - compliance.scan_config_files
+  - codemap.generate_code_map
+  - codemap.load_code_map
+  - codemap.get_dependency_analysis
+  - codemap.run_quality_score
 
 scope:
   read:
@@ -69,6 +73,8 @@ scope:
     - "*.py"
     - "*.md"
     - "requirements.txt"
+    - "CODEMAP.md"
+    - ".codemap/"
   write: []
 
 rules:

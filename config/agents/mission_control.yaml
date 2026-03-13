@@ -21,6 +21,13 @@
 #     max_cost_per_user_daily  - Max USD per user per day (decimal)
 #     task_timeout_seconds     - Wall-clock timeout per task (integer)
 #     plan_timeout_seconds     - Wall-clock timeout per plan (integer)
+#   dispatch              - Dispatch loop defaults (object)
+#     default_request_limit    - Safety-cap LLM requests per task (integer)
+#     token_cost_factor        - Tokens per dollar of cost ceiling (integer)
+#   escalation            - Deterministic risk thresholds (object)
+#     max_auto_approve_cost_usd   - Max cost for auto-approval (decimal)
+#     max_medium_approve_cost_usd - Max cost for medium-risk approval (decimal)
+#     max_auto_approve_retries    - Max retries auto-approved (integer)
 #   guardrails            - Input validation settings (object)
 #     max_input_length    - Maximum input character count (integer)
 #     injection_patterns  - Regex patterns to block (list of strings)
@@ -77,6 +84,15 @@ redis_ttl:
   approval: 86400
   lock: 30
   result: 3600
+
+dispatch:
+  default_request_limit: 50
+  token_cost_factor: 333333  # tokens per dollar of cost ceiling (1M/3)
+
+escalation:
+  max_auto_approve_cost_usd: 1.00
+  max_medium_approve_cost_usd: 10.00
+  max_auto_approve_retries: 3
 
 approval:
   poll_interval_seconds: 2

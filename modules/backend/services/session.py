@@ -389,7 +389,7 @@ class SessionService(BaseService):
                 stream=f"sessions:session-{event_type.split('.')[-1]}",
                 event=envelope,
             )
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             # Event publishing is non-critical — log and continue
             logger.warning(
                 "Failed to publish session event",

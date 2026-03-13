@@ -26,11 +26,21 @@ max_budget_usd: 5.00
 execution:
   mode: local
 
+scope:
+  read:
+    - "modules/"
+    - "config/"
+    - "docs/"
+    - "CODEMAP.md"
+    - ".codemap/"
+  write: []
+
 interface:
   input:
     mission_brief: string
     roster: object
     upstream_context: object
+    code_map: object
   output:
     task_plan: object
 

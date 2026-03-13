@@ -52,7 +52,6 @@ async def execute_mission(input: MissionWorkflowInput) -> MissionExecutionResult
                 mission_id=input.mission_id,
                 mission_brief=input.mission_brief,
                 session_service=session_service,
-                event_bus=None,  # No real-time streaming in Tier 4
                 roster_name=input.roster_name,
                 mission_budget_usd=input.mission_budget_usd,
             )
@@ -116,7 +115,7 @@ async def persist_mission_outcome(
             )
             await db.commit()
         return True
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         activity.logger.error(
             "Failed to persist mission results",
             extra={"mission_id": mission_id, "error": str(e)},

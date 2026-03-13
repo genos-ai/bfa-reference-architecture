@@ -313,6 +313,14 @@ class TemporalSchema(_StrictBase):
     approval_timeout_seconds: int = 14400
     escalation_timeout_seconds: int = 86400
     notification_timeout_seconds: int = 30
+    # Workflow-level retry and timeout tuning
+    budget_timeout_multiplier_seconds: int = 120
+    min_activity_timeout_seconds: int = 600
+    persistence_timeout_seconds: int = 30
+    persistence_retry_max_attempts: int = 3
+    execution_retry_max_attempts: int = 2
+    execution_retry_initial_interval_seconds: int = 5
+    execution_retry_max_interval_seconds: int = 60
 
     @model_validator(mode="after")
     def _require_server_url_when_enabled(self) -> "TemporalSchema":

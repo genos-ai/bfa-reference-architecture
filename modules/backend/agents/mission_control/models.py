@@ -15,7 +15,22 @@ from typing import Any, Protocol, TypedDict, runtime_checkable
 
 from pydantic_ai import UsageLimits
 
+from modules.backend.core.protocols import MissionDispatchProtocol, SessionServiceProtocol
 from modules.backend.events.types import SessionEvent
+
+# Re-export protocols so existing imports from models.py continue to work
+__all__ = [
+    "MissionControlRequest",
+    "MissionControlResponse",
+    "EventBusProtocol",
+    "ExecuteAgentFn",
+    "NoOpEventBus",
+    "SessionServiceProtocol",
+    "MissionDispatchProtocol",
+    "ContextCuratorProtocol",
+    "ContextAssemblerProtocol",
+    "CollectResult",
+]
 
 
 @dataclass
@@ -61,6 +76,17 @@ class EventBusProtocol(Protocol):
     async def publish(self, event: SessionEvent) -> None: ...
 
 
+class NoOpEventBus:
+    """Null-object event bus — satisfies EventBusProtocol, does nothing.
+
+    Use as the default instead of None to eliminate None-checks at
+    every publish call site.
+    """
+
+    async def publish(self, event: SessionEvent) -> None:
+        pass
+
+
 class ExecuteAgentFn(Protocol):
     """Callable protocol for agent execution used by dispatch and verification.
 
@@ -98,7 +124,7 @@ class ContextCuratorProtocol(Protocol):
 class ContextAssemblerProtocol(Protocol):
     """Interface for context assembler used by dispatch.
 
-    Builds full context packets (PCD + history) for agent tasks.
+    Builds full context packets (PCD + history + Code Map) for agent tasks.
     """
 
     async def build(
@@ -109,6 +135,7 @@ class ContextAssemblerProtocol(Protocol):
         *,
         domain_tags: list[str] | None = ...,
         token_budget: int = ...,
+        code_map_max_tokens: int | None = ...,
     ) -> dict: ...
 
 

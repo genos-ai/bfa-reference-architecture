@@ -15,7 +15,7 @@ from pydantic_ai.models import Model
 from modules.backend.agents.mission_control.helpers import assemble_instructions
 from modules.backend.agents.deps.base import QaAgentDeps
 from modules.backend.agents.schemas import QaAuditResult
-from modules.backend.agents.tools import compliance, filesystem
+from modules.backend.agents.tools import codemap, compliance, filesystem
 from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -112,6 +112,43 @@ def create_agent(model: str | Model) -> Agent[QaAgentDeps, QaAuditResult]:
         """Read a source file and return its contents with line numbers."""
         ctx.deps.emit({"type": "tool_start", "tool": "read_source_file", "detail": file_path})
         return await filesystem.read_file(ctx.deps.project_root, file_path, ctx.deps.scope)
+
+    # ── Code Map & PQI tools ──────────────────────────────────────────
+
+    @agent.tool
+    async def generate_code_map_tool(ctx: RunContext[QaAgentDeps]) -> dict:
+        """Generate a fresh Code Map for the codebase. Fast (~2-5s)."""
+        ctx.deps.emit({"type": "tool_start", "tool": "generate_code_map"})
+        result = await codemap.generate_code_map(ctx.deps.project_root, ctx.deps.scope)
+        ctx.deps.emit({"type": "tool_done", "tool": "generate_code_map", "detail": f"{result.get('files', 0)} files"})
+        return result
+
+    @agent.tool
+    async def load_code_map_tool(ctx: RunContext[QaAgentDeps]) -> dict:
+        """Load the Code Map JSON (generates if missing or stale)."""
+        ctx.deps.emit({"type": "tool_start", "tool": "load_code_map"})
+        result = await codemap.load_code_map(ctx.deps.project_root, ctx.deps.scope)
+        files = len(result.get("modules", {})) if "error" not in result else 0
+        ctx.deps.emit({"type": "tool_done", "tool": "load_code_map", "detail": f"{files} modules"})
+        return result
+
+    @agent.tool
+    async def get_dependency_analysis_tool(ctx: RunContext[QaAgentDeps]) -> dict:
+        """Analyze import graph for circular deps and key modules."""
+        ctx.deps.emit({"type": "tool_start", "tool": "get_dependency_analysis"})
+        result = await codemap.get_dependency_analysis(ctx.deps.project_root, ctx.deps.scope)
+        cycles = len(result.get("circular_dependencies", []))
+        ctx.deps.emit({"type": "tool_done", "tool": "get_dependency_analysis", "detail": f"{cycles} cycles"})
+        return result
+
+    @agent.tool
+    async def run_quality_score_tool(ctx: RunContext[QaAgentDeps]) -> dict:
+        """Run the PyQuality Index (PQI) scorer. Returns composite 0-100 score."""
+        ctx.deps.emit({"type": "tool_start", "tool": "run_quality_score"})
+        result = await codemap.run_quality_score(ctx.deps.project_root, ctx.deps.scope)
+        score = result.get("composite_score", "?")
+        ctx.deps.emit({"type": "tool_done", "tool": "run_quality_score", "detail": f"PQI {score}"})
+        return result
 
     logger.info("QA compliance agent created (read-only audit)", extra={"model": str(model)})
     return agent

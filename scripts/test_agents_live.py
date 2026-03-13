@@ -425,7 +425,6 @@ async def run_mission() -> dict:
         mission_id=mission_id,
         mission_brief=SELF_AUDIT_MISSION_BRIEF,
         session_service=None,
-        event_bus=None,
         roster_name="default",
         mission_budget_usd=10.0,
     )

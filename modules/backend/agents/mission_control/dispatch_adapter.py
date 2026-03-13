@@ -7,16 +7,17 @@ that interface for direct (non-Temporal) execution.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
 from modules.backend.agents.mission_control.mission_control import handle_mission
-from modules.backend.agents.mission_control.models import EventBusProtocol
+from modules.backend.agents.mission_control.models import EventBusProtocol, NoOpEventBus
+from modules.backend.core.config import find_project_root
+from modules.backend.core.protocols import SessionServiceProtocol
 from modules.backend.core.logging import get_logger
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
-
-    from modules.backend.services.session import SessionService
 
 logger = get_logger(__name__)
 
@@ -26,9 +27,9 @@ class MissionControlDispatchAdapter:
 
     def __init__(
         self,
-        session_service: SessionService,
+        session_service: SessionServiceProtocol,
         db_session: AsyncSession,
-        event_bus: EventBusProtocol | None = None,
+        event_bus: EventBusProtocol = NoOpEventBus(),
     ) -> None:
         self._session_service = session_service
         self._db_session = db_session
@@ -51,9 +52,6 @@ class MissionControlDispatchAdapter:
         # Select roster based on complexity_tier if a tier-specific roster exists
         roster_name = roster_ref
         if complexity_tier != "simple":
-            import os
-            from modules.backend.core.config import find_project_root
-
             tier_roster = (
                 find_project_root()
                 / "config" / "mission_control" / "rosters"

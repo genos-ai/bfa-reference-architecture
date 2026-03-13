@@ -11,3 +11,11 @@ activity_retry_max_attempts: 3
 approval_timeout_seconds: 14400
 escalation_timeout_seconds: 86400
 notification_timeout_seconds: 30
+# Workflow-level retry and timeout tuning
+budget_timeout_multiplier_seconds: 120    # seconds per dollar of mission budget
+min_activity_timeout_seconds: 600         # floor for activity timeout
+persistence_timeout_seconds: 30           # timeout for persist activities
+persistence_retry_max_attempts: 3         # retries for persist activities
+execution_retry_max_attempts: 2           # retries for execute_mission activity
+execution_retry_initial_interval_seconds: 5
+execution_retry_max_interval_seconds: 60

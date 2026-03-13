@@ -87,65 +87,16 @@ class Roster(BaseModel):
         return [a.agent_name for a in self.agents]
 
 
-PLANNING_AGENT_ENTRY = RosterAgentEntry(
-    agent_name="horizontal.planning.agent",
-    agent_version="1.0.0",
-    description="Decomposes mission briefs into executable task plans.",
-    model=RosterModelSchema(
-        name="anthropic:claude-opus-4-20250514",
-        temperature=0.0,
-        max_tokens=16384,
-    ),
-    tools=[],
-    interface=RosterInterfaceSchema(
-        input={
-            "mission_brief": "string",
-            "roster": "object",
-            "upstream_context": "object",
-        },
-        output={"task_plan": "object"},
-    ),
-    constraints=RosterConstraintsSchema(
-        timeout_seconds=300,
-        cost_ceiling_usd=5.0,
-        retry_budget=2,
-        parallelism="unsafe",
-    ),
-)
-
-VERIFICATION_AGENT_ENTRY = RosterAgentEntry(
-    agent_name="horizontal.verification.agent",
-    agent_version="1.0.0",
-    description="Evaluates agent output quality against criteria. Used in Tier 3 verification.",
-    model=RosterModelSchema(
-        name="anthropic:claude-opus-4-20250514",
-        temperature=0.0,
-        max_tokens=8192,
-    ),
-    tools=[],
-    interface=RosterInterfaceSchema(
-        input={
-            "task_instructions": "string",
-            "evaluation_criteria": "list[string]",
-            "agent_output": "object",
-        },
-        output={
-            "overall_score": "float",
-            "pass": "bool",
-            "criteria_results": "list[object]",
-        },
-    ),
-    constraints=RosterConstraintsSchema(
-        timeout_seconds=180,
-        cost_ceiling_usd=3.0,
-        retry_budget=1,
-        parallelism="unsafe",
-    ),
-)
+PLANNING_AGENT_NAME = "horizontal.planning.agent"
+VERIFICATION_AGENT_NAME = "horizontal.verification.agent"
 
 
 def load_roster(roster_name: str = "default") -> Roster:
-    """Load and validate a roster from YAML. Auto-includes planning and verification agents."""
+    """Load and validate a roster from YAML.
+
+    Planning and verification agents must be defined in the roster YAML.
+    Raises ValueError if either is missing.
+    """
     roster_path = (
         find_project_root()
         / "config"
@@ -161,11 +112,17 @@ def load_roster(roster_name: str = "default") -> Roster:
 
     roster = Roster.model_validate(raw)
 
-    # Auto-include planning and verification agents if not already present
-    if not roster.get_agent_by_name(PLANNING_AGENT_ENTRY.agent_name):
-        roster.agents.append(PLANNING_AGENT_ENTRY)
-    if not roster.get_agent_by_name(VERIFICATION_AGENT_ENTRY.agent_name):
-        roster.agents.append(VERIFICATION_AGENT_ENTRY)
+    # Validate required infrastructure agents are present in YAML
+    missing = []
+    if not roster.get_agent_by_name(PLANNING_AGENT_NAME):
+        missing.append(PLANNING_AGENT_NAME)
+    if not roster.get_agent_by_name(VERIFICATION_AGENT_NAME):
+        missing.append(VERIFICATION_AGENT_NAME)
+    if missing:
+        raise ValueError(
+            f"Roster '{roster_name}' is missing required agents: "
+            f"{', '.join(missing)}. Add them to {roster_path}."
+        )
 
     logger.info(
         "Roster loaded",

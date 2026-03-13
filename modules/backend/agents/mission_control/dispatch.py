@@ -17,6 +17,7 @@ from typing import Any
 
 from pydantic_ai import UsageLimits
 
+from modules.backend.agents.mission_control.middleware import _load_mission_control_config
 from modules.backend.agents.mission_control.models import (
     ContextAssemblerProtocol,
     ContextCuratorProtocol,
@@ -152,9 +153,10 @@ async def execute_task(
     )
     cost_ceiling = roster_entry.constraints.cost_ceiling_usd
 
+    mc_config = _load_mission_control_config()
     usage_limits = UsageLimits(
-        request_limit=50,
-        total_tokens_limit=int(cost_ceiling * 1_000_000 / 3),
+        request_limit=mc_config.dispatch.default_request_limit,
+        total_tokens_limit=int(cost_ceiling * mc_config.dispatch.token_cost_factor),
     )
 
     return await asyncio.wait_for(
@@ -196,10 +198,11 @@ async def dispatch(
         try:
             pcd = await context_curator.get_project_context(project_id)
             project_context = pcd or None
-        except Exception:
+        except (OSError, ValueError, RuntimeError):
             logger.warning(
                 "Failed to load PCD for dispatch (non-fatal)",
                 extra={"project_id": project_id},
+                exc_info=True,
             )
 
     completed_outputs: dict[str, dict] = {}
@@ -241,11 +244,18 @@ async def dispatch(
                         resolved_inputs=dict(resolved_inputs),
                         domain_tags=task.domain_tags or None,
                     )
-                    resolved_inputs["project_context"] = assembled
-                except Exception:
+                    resolved_inputs["project_context"] = assembled.get(
+                        "project_context", {}
+                    )
+                    # Inject Code Map separately so it's clearly labeled
+                    code_map_content = assembled.get("code_map")
+                    if code_map_content:
+                        resolved_inputs["code_map"] = code_map_content
+                except (OSError, ValueError, RuntimeError):
                     logger.warning(
                         "Context assembly failed, falling back to PCD",
                         extra={"task_id": task.task_id, "project_id": project_id},
+                        exc_info=True,
                     )
                     if project_context:
                         resolved_inputs["project_context"] = project_context
@@ -289,12 +299,11 @@ async def dispatch(
                             mission_id=plan.mission_id,
                             task_id=task_result.task_id,
                         )
-                    except Exception:
+                    except (OSError, ValueError, RuntimeError):
                         logger.warning(
                             "Context update failed (non-fatal)",
-                            extra={
-                                "task_id": task_result.task_id,
-                            },
+                            extra={"task_id": task_result.task_id},
+                            exc_info=True,
                         )
 
             total_cost += task_result.cost_usd

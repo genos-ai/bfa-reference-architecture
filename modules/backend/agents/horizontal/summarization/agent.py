@@ -17,11 +17,12 @@ from modules.backend.agents.mission_control.helpers import (
     _build_model,
     assemble_instructions,
 )
+from modules.backend.agents.mission_control.registry import get_registry
 from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-_DEFAULT_MODEL = "anthropic:claude-haiku-4-5-20251001"
+_AGENT_NAME = "horizontal.summarization.agent"
 
 
 class SummarizationOutput(BaseModel):
@@ -41,8 +42,9 @@ class SummarizationOutput(BaseModel):
 
 @lru_cache(maxsize=1)
 def _get_agent() -> Agent[None, SummarizationOutput]:
-    """Cached summarization agent instance."""
-    model = _build_model(_DEFAULT_MODEL)
+    """Cached summarization agent instance. Model loaded from agent.yaml."""
+    agent_config = get_registry().get(_AGENT_NAME)
+    model = _build_model(agent_config.model)
     instructions = assemble_instructions("horizontal", "summarization")
 
     return Agent(

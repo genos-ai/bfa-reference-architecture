@@ -10,10 +10,17 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from pydantic_ai import UserError
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    ThinkingPart,
+    ToolCallPart,
+    ToolReturnPart,
+)
 from sqlalchemy.exc import SQLAlchemyError
 
 from modules.backend.agents.mission_control.cost import compute_cost_usd, estimate_cost
-from modules.backend.core.exceptions import ApplicationError
+from modules.backend.core.exceptions import ApplicationError, BudgetExceededError
 from modules.backend.agents.mission_control.dispatch import dispatch
 from modules.backend.agents.mission_control.persistence_bridge import persist_mission_results
 from modules.backend.agents.mission_control.helpers import (
@@ -36,7 +43,8 @@ from modules.backend.agents.mission_control.history import (
     session_messages_to_model_history,
 )
 from modules.backend.agents.mission_control.middleware import check_guardrails
-from modules.backend.agents.mission_control.models import CollectResult, EventBusProtocol
+from modules.backend.agents.mission_control.models import CollectResult, EventBusProtocol, NoOpEventBus
+from modules.backend.core.protocols import SessionServiceProtocol
 from modules.backend.agents.mission_control.outcome import MissionOutcome, MissionStatus
 from modules.backend.agents.mission_control.plan_validator import validate_plan
 from modules.backend.agents.mission_control.registry import get_registry
@@ -54,7 +62,10 @@ from modules.backend.events.types import (
 )
 from modules.backend.schemas.session import SessionMessageCreate
 from modules.backend.schemas.task_plan import TaskPlan
-from modules.backend.services.session import SessionService
+from modules.backend.services.context_assembler import ContextAssembler
+from modules.backend.services.context_curator import ContextCurator
+from modules.backend.services.history_query import HistoryQueryService
+from modules.backend.services.project_context import ProjectContextManager
 
 logger = get_logger(__name__)
 
@@ -79,8 +90,8 @@ async def handle(
     session_id: str,
     message: str,
     *,
-    session_service: SessionService,
-    event_bus: EventBusProtocol | None = None,
+    session_service: SessionServiceProtocol,
+    event_bus: EventBusProtocol = NoOpEventBus(),
     channel: str = "api",
     sender_id: str | None = None,
     mission_brief: str | None = None,
@@ -140,7 +151,6 @@ async def handle(
             estimated = estimate_cost(len(message) * 4, model_str)
             await session_service.enforce_budget(session_id, estimated_cost=estimated)
         except Exception as budget_err:
-            from modules.backend.core.exceptions import BudgetExceededError
             if isinstance(budget_err, BudgetExceededError):
                 yield CostUpdateEvent(
                     session_id=sid,
@@ -235,7 +245,6 @@ async def handle(
             try:
                 new_msgs = stream.new_messages()
                 for msg in new_msgs:
-                    from pydantic_ai.messages import ModelResponse, ToolCallPart, ModelRequest, ToolReturnPart, ThinkingPart
                     if isinstance(msg, ModelResponse):
                         for part in msg.parts:
                             if isinstance(part, ThinkingPart) and part.has_content():
@@ -382,8 +391,8 @@ async def handle_mission(
     mission_id: str,
     mission_brief: str,
     *,
-    session_service: SessionService,
-    event_bus: EventBusProtocol | None = None,
+    session_service: SessionServiceProtocol,
+    event_bus: EventBusProtocol = NoOpEventBus(),
     roster_name: str = "default",
     mission_budget_usd: float = 10.0,
     upstream_context: dict | None = None,
@@ -467,18 +476,17 @@ async def handle_mission(
     # Construct context services if project is set and DB session is available
     context_curator = None
     context_assembler = None
-    _db = db_session or getattr(session_service, "_session", None)
-    if project_id and _db:
-        from modules.backend.services.context_assembler import ContextAssembler
-        from modules.backend.services.context_curator import ContextCurator
-        from modules.backend.services.history_query import HistoryQueryService
-        from modules.backend.services.project_context import ProjectContextManager
-
-        pcd_manager = ProjectContextManager(_db)
+    if project_id and db_session:
+        pcd_manager = ProjectContextManager(db_session)
         context_curator = ContextCurator(pcd_manager)
+        from modules.backend.core.config import find_project_root
+        from modules.backend.services.code_map.loader import CodeMapLoader
+
+        code_map_loader = CodeMapLoader(find_project_root())
         context_assembler = ContextAssembler(
             context_manager=pcd_manager,
-            history_service=HistoryQueryService(_db),
+            history_service=HistoryQueryService(db_session),
+            code_map_loader=code_map_loader,
         )
 
     # Execute dispatch loop
@@ -496,14 +504,14 @@ async def handle_mission(
     outcome.task_plan_reference = plan.model_dump_json()
 
     # Best-effort persistence — does not block or fail the mission
-    if hasattr(session_service, "_session") and session_service._session:
+    if db_session is not None:
         await persist_mission_results(
             outcome,
             session_id=session_id or mission_id,
             roster_name=roster_name,
             task_plan_json=plan.model_dump(),
             thinking_trace=thinking_trace,
-            db_session=session_service._session,
+            db_session=db_session,
         )
 
     return outcome

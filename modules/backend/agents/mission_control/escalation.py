@@ -111,7 +111,32 @@ class RiskThresholds:
     )
 
 
-_thresholds = RiskThresholds()
+_thresholds: RiskThresholds | None = None
+
+
+def _get_thresholds() -> RiskThresholds:
+    """Get risk thresholds, loading from mission_control.yaml on first access."""
+    global _thresholds  # noqa: PLW0603
+    if _thresholds is not None:
+        return _thresholds
+
+    try:
+        from modules.backend.agents.mission_control.middleware import (
+            _load_mission_control_config,
+        )
+
+        mc_config = _load_mission_control_config()
+        esc = mc_config.escalation
+        _thresholds = RiskThresholds(
+            max_auto_approve_cost_usd=esc.max_auto_approve_cost_usd,
+            max_medium_approve_cost_usd=esc.max_medium_approve_cost_usd,
+            max_auto_approve_retries=esc.max_auto_approve_retries,
+        )
+    except (FileNotFoundError, OSError):
+        logger.warning("Could not load escalation config, using defaults")
+        _thresholds = RiskThresholds()
+
+    return _thresholds
 
 
 async def evaluate_automated_rules(
@@ -130,22 +155,23 @@ async def evaluate_automated_rules(
             "reason": f"Auto-approved: '{action}' is a low-risk action",
         }
 
+    thresholds = _get_thresholds()
     cost = context.get("estimated_cost_usd", 0)
-    if cost < _thresholds.max_auto_approve_cost_usd:
+    if cost < thresholds.max_auto_approve_cost_usd:
         return {
             "decision": "approved",
             "responder_type": "automated_rule",
             "responder_id": "rule:low_cost",
             "reason": (
                 f"Auto-approved: estimated cost ${cost:.2f} "
-                f"< ${_thresholds.max_auto_approve_cost_usd:.2f}"
+                f"< ${thresholds.max_auto_approve_cost_usd:.2f}"
             ),
         }
 
     if (
         context.get("is_retry")
-        and action in _thresholds.allowed_retry_actions
-        and context.get("retry_count", 0) <= _thresholds.max_auto_approve_retries
+        and action in thresholds.allowed_retry_actions
+        and context.get("retry_count", 0) <= thresholds.max_auto_approve_retries
     ):
         return {
             "decision": "approved",
@@ -169,11 +195,12 @@ async def evaluate_risk_matrix(
     Deterministic classification based on action type, cost, agent
     permissions, and error category.
     """
+    thresholds = _get_thresholds()
     cost = context.get("estimated_cost_usd", 0)
 
     if (
         action in MEDIUM_RISK_ACTIONS
-        and cost < _thresholds.max_medium_approve_cost_usd
+        and cost < thresholds.max_medium_approve_cost_usd
     ):
         agent = context.get("agent_name", "")
         allowed = context.get("allowed_agents", set())

@@ -1,0 +1,164 @@
+# =============================================================================
+# Project Configuration
+# =============================================================================
+# Consolidates tool configuration per architecture doc 08-core-python-coding-standards.
+# Tools: black, isort, mypy, pytest, pytest-cov.
+# flake8 uses .flake8 (no pyproject.toml support).
+# =============================================================================
+
+[project]
+name = "bfa-reference-architecture"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    # Core Framework
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    # Database
+    "sqlalchemy>=2.0.25",
+    "asyncpg>=0.29.0",
+    "greenlet>=3.0.0",
+    "alembic>=1.13.0",
+    # Redis & Background Tasks
+    "redis>=5.0.0",
+    "taskiq>=0.11.0",
+    "taskiq-redis>=1.0.0",
+    "faststream[redis]>=0.5.0",
+    # HTTP Client
+    "httpx>=0.26.0",
+    # Telegram Bot
+    "aiogram>=3.4.0",
+    "aiobreaker>=1.2.0",
+    # Security
+    "python-jose[cryptography]>=3.3.0",
+    "bcrypt>=4.0.0",
+    "python-multipart>=0.0.6",
+    # Logging & Observability
+    "structlog>=24.1.0",
+    "langfuse>=2.40.0",
+    # AI Agents
+    "pydantic-ai>=1.63.0",
+    "jsonschema>=4.20.0",
+    # Durable Execution
+    "temporalio>=1.20.0",
+    # Configuration
+    "pyyaml>=6.0.1",
+    "python-dotenv>=1.0.0",
+    # CLI
+    "click>=8.1.0",
+    "rich>=13.7.0",
+    # TUI
+    "textual>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "aiosqlite>=0.19.0",
+    "black>=24.1.0",
+    "isort>=5.13.0",
+    "flake8>=7.0.0",
+    "mypy>=1.8.0",
+    "pre-commit>=3.6.0",
+]
+
+# =============================================================================
+# Black — Code Formatting
+# =============================================================================
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+# =============================================================================
+# isort — Import Sorting
+# =============================================================================
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["modules", "config"]
+
+# =============================================================================
+# mypy — Type Checking
+# =============================================================================
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+no_implicit_reexport = true
+strict_equality = true
+
+# Third-party libraries without type stubs
+[[tool.mypy.overrides]]
+module = [
+    "faststream.*",
+    "taskiq.*",
+    "taskiq_redis.*",
+    "temporalio.*",
+    "aiogram.*",
+    "aiobreaker.*",
+    "langfuse.*",
+    "slowapi.*",
+    "textual.*",
+    "rich.*",
+    "jose.*",
+    "redis.*",
+    "aiosqlite.*",
+    "pydantic_ai.*",
+]
+ignore_missing_imports = true
+
+# =============================================================================
+# pytest — Testing
+# =============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+addopts = "-v --strict-markers --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+markers = [
+    "unit: Unit tests (fast, isolated)",
+    "integration: Integration tests (require database)",
+    "e2e: End-to-end tests (full stack)",
+    "slow: Slow running tests",
+]
+
+# =============================================================================
+# pytest-cov — Coverage
+# =============================================================================
+[tool.coverage.run]
+source = ["modules"]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+    "pass",
+]

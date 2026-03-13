@@ -13,8 +13,10 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from modules.backend.core.config import get_app_config
-from modules.backend.core.exceptions import NotFoundError, ValidationError
+from modules.backend.core.exceptions import ApplicationError, NotFoundError, ValidationError
+from modules.backend.agents.mission_control.models import EventBusProtocol, NoOpEventBus
 from modules.backend.core.logging import get_logger
+from modules.backend.core.protocols import MissionDispatchProtocol
 from modules.backend.core.utils import utc_now
 from modules.backend.models.mission import (
     Mission,
@@ -33,9 +35,9 @@ class MissionService(BaseService):
     def __init__(
         self,
         session: AsyncSession,
-        mission_control_dispatch: Any | None = None,
+        mission_control_dispatch: MissionDispatchProtocol | None = None,
         session_service: Any | None = None,
-        event_bus: Any | None = None,
+        event_bus: EventBusProtocol = NoOpEventBus(),
     ) -> None:
         super().__init__(session)
         self._mission_repo = MissionRepository(session)
@@ -77,11 +79,9 @@ class MissionService(BaseService):
 
     async def _publish_event(self, event: Any) -> None:
         """Publish event to session event bus (best-effort)."""
-        if self._event_bus is None:
-            return
         try:
             await self._event_bus.publish(event)
-        except Exception:
+        except (OSError, RuntimeError):
             logger.warning(
                 "Failed to publish mission event",
                 extra={"event_type": getattr(event, "event_type", "unknown")},
@@ -286,7 +286,7 @@ class MissionService(BaseService):
             mission.completed_at = utc_now().isoformat()
             await self._session.flush()
 
-        except Exception as e:
+        except (ApplicationError, OSError, RuntimeError, ValueError) as e:
             mission.status = MissionState.FAILED
             mission.completed_at = utc_now().isoformat()
             mission.error_data = {

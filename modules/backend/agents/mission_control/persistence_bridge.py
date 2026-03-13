@@ -14,6 +14,7 @@ from modules.backend.agents.mission_control.outcome import (
     TaskStatus,
 )
 from modules.backend.core.logging import get_logger
+from modules.backend.services.mission_persistence import MissionPersistenceService
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,10 +33,6 @@ async def persist_mission_results(
 ) -> None:
     """Persist mission execution results. Best-effort — does not raise."""
     try:
-        from modules.backend.services.mission_persistence import (
-            MissionPersistenceService,
-        )
-
         service = MissionPersistenceService(db_session)
 
         status_map = {
@@ -125,7 +122,7 @@ async def persist_mission_results(
             },
         )
 
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         logger.error(
             "Failed to persist mission results",
             extra={"session_id": session_id, "error": str(e)},

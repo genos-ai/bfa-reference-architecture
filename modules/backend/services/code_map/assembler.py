@@ -218,7 +218,7 @@ def render_markdown_tree(code_map: dict) -> str:
     # --- Import graph with circular dependency detection ---
     import_graph = code_map.get("import_graph", {})
     if import_graph:
-        circular = _find_circular_deps(import_graph)
+        circular = find_circular_deps(import_graph)
         lines.append("## Dependencies")
         lines.append("")
         if circular:
@@ -347,7 +347,7 @@ def _get_layer(path: str) -> str:
     return "root"
 
 
-def _find_circular_deps(import_graph: dict[str, list[str]]) -> list[list[str]]:
+def find_circular_deps(import_graph: dict[str, list[str]]) -> list[list[str]]:
     """Detect circular dependencies in the import graph.
 
     Returns a list of cycles, each as a list of module names forming the loop.

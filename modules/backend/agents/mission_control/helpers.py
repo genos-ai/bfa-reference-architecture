@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 
 from pydantic_ai import UsageLimits
 from pydantic_ai.models import Model
+from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.providers.anthropic import AnthropicProvider
 
 from modules.backend.agents.config_schema import AgentConfigSchema, AgentModelSchema
 from modules.backend.agents.deps.base import (
@@ -30,14 +32,16 @@ from modules.backend.agents.mission_control.models import (
     ExecuteAgentFn,
     MissionControlRequest,
 )
+from modules.backend.core.protocols import SessionServiceProtocol
 from modules.backend.agents.mission_control.registry import get_registry
 from modules.backend.agents.mission_control.roster import Roster
 from modules.backend.agents.mission_control.router import RuleBasedRouter
 from modules.backend.core.config import find_project_root, get_app_config, get_settings
+from modules.backend.agents.mission_control.cost import compute_cost_usd
+from modules.backend.core.exceptions import ApplicationError, ValidationError
 from modules.backend.core.logging import get_logger
 from modules.backend.events.types import SessionEvent
 from modules.backend.schemas.session import SessionMessageCreate
-from modules.backend.services.session import SessionService
 
 logger = get_logger(__name__)
 
@@ -57,14 +61,10 @@ def _build_model(config_model: str | AgentModelSchema) -> Model:
     settings = get_settings()
 
     if model_name.startswith("anthropic:"):
-        from pydantic_ai.models.anthropic import AnthropicModel
-        from pydantic_ai.providers.anthropic import AnthropicProvider
-
         bare_name = model_name.split(":", 1)[1]
         provider = AnthropicProvider(api_key=settings.anthropic_api_key)
         return AnthropicModel(bare_name, provider=provider)
 
-    from modules.backend.core.exceptions import ValidationError
     raise ValidationError(f"Unsupported model provider in '{model_name}'. Expected 'anthropic:model_name'.")
 
 
@@ -198,7 +198,6 @@ def _resolve_agent(session: "SessionResponse", message: str) -> str:
     if fallback and registry.has(fallback):
         return fallback
 
-    from modules.backend.core.exceptions import ValidationError
     available = ", ".join(c["agent_name"] for c in registry.list_all()) or "none"
     raise ValidationError(f"No agent matched. Available agents: {available}.")
 
@@ -208,18 +207,16 @@ def _resolve_agent(session: "SessionResponse", message: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def _publish(event_bus: EventBusProtocol | None, event: SessionEvent) -> None:
-    """Publish event to bus if available. Non-critical."""
-    if event_bus is None:
-        return
+async def _publish(event_bus: EventBusProtocol, event: SessionEvent) -> None:
+    """Publish event to bus. Non-critical — NoOpEventBus silently drops."""
     try:
         await event_bus.publish(event)
-    except Exception:
+    except (OSError, RuntimeError):
         logger.debug("Event bus publish failed", exc_info=True)
 
 
 async def _persist_messages(
-    session_service: SessionService,
+    session_service: SessionServiceProtocol,
     session_id: str,
     creates: list[SessionMessageCreate],
 ) -> None:
@@ -227,8 +224,8 @@ async def _persist_messages(
     try:
         for create in creates:
             await session_service.add_message(session_id, create)
-    except Exception:
-        logger.warning("Failed to persist session messages", exc_info=True)
+    except (OSError, ApplicationError) as exc:
+        logger.warning("Failed to persist session messages: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +257,7 @@ def _build_planning_prompt(
     mission_id: str,
     roster_description: str,
     upstream_context: dict | None,
+    code_map: dict | None = None,
 ) -> str:
     """Assemble the full prompt for the Planning Agent."""
     parts = [
@@ -272,6 +270,20 @@ def _build_planning_prompt(
         parts.append(
             f"## Upstream Context\n\n```json\n"
             f"{json.dumps(upstream_context, indent=2)}\n```\n"
+        )
+
+    if code_map:
+        parts.append(
+            "## Code Map (Structural Overview)\n\n"
+            "The following JSON contains the complete structural map of the codebase.\n"
+            "Use it to:\n"
+            "- Identify which files exist and what they contain\n"
+            "- Trace dependencies via the import_graph\n"
+            "- Generate file_manifest entries for coding tasks\n"
+            "- Understand which modules are most important (highest PageRank rank)\n\n"
+            "```json\n"
+            f"{json.dumps(code_map, indent=None)}\n"
+            "```\n"
         )
 
     parts.append(
@@ -295,10 +307,9 @@ def _append_validation_feedback(prompt: str, errors: list[str]) -> str:
 
 
 def _make_agent_executor(
-    session_service: SessionService, event_bus: EventBusProtocol | None,
+    session_service: SessionServiceProtocol, event_bus: EventBusProtocol,
 ) -> ExecuteAgentFn:
     """Create the execute_agent_fn closure for the dispatch loop."""
-    from modules.backend.agents.mission_control.cost import compute_cost_usd
 
     async def execute_agent(
         agent_name: str,
@@ -314,7 +325,6 @@ def _make_agent_executor(
         registry = get_registry()
         agent_config = registry.get(agent_name)
         if agent_config is None:
-            from modules.backend.core.exceptions import ValidationError
             raise ValidationError(f"Agent '{agent_name}' not found in registry")
 
         module = _import_agent_module(agent_name)
@@ -369,23 +379,47 @@ async def _call_planning_agent(
     roster: Roster,
     upstream_context: dict | None,
 ) -> dict:
-    """Call the Planning Agent and return the raw result."""
+    """Call the Planning Agent and return the raw result.
+
+    Loads the Code Map (regenerating if stale) and injects it into both
+    the planning prompt and PlanningAgentDeps.
+    """
     from modules.backend.agents.horizontal.planning.agent import (
         PlanningAgentDeps,
         create_agent,
         run_agent,
     )
+    from modules.backend.services.code_map.loader import CodeMapLoader
 
+    project_root = find_project_root()
+
+    # Load Code Map, regenerating if stale or missing
+    loader = CodeMapLoader(project_root)
+    code_map = loader.ensure_fresh()
+
+    registry = get_registry()
+    planning_cfg = registry.get("horizontal.planning.agent")
     config = {
-        "model": "anthropic:claude-opus-4-20250514",
+        "model": _get_model_name(planning_cfg.model),
     }
     agent = create_agent(config)
-    deps = PlanningAgentDeps(
-        project_root=find_project_root(),
-        scope=FileScope(read_paths=[], write_paths=[]),
+
+    roster_desc = _build_roster_prompt(roster)
+    planning_prompt = _build_planning_prompt(
         mission_brief=prompt,
-        roster_description=_build_roster_prompt(roster),
+        mission_id="pending",
+        roster_description=roster_desc,
         upstream_context=upstream_context,
+        code_map=code_map,
     )
 
-    return await run_agent(agent, deps, prompt)
+    deps = PlanningAgentDeps(
+        project_root=project_root,
+        scope=FileScope(read_paths=[], write_paths=[]),
+        mission_brief=prompt,
+        roster_description=roster_desc,
+        upstream_context=upstream_context,
+        code_map=code_map,
+    )
+
+    return await run_agent(agent, deps, planning_prompt)

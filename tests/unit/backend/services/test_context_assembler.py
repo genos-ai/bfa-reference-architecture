@@ -11,6 +11,7 @@ from modules.backend.core.utils import estimate_tokens
 from modules.backend.services.context_assembler import (
     ContextAssembler,
     DEFAULT_TOKEN_BUDGET,
+    _CODING_TAGS,
 )
 
 
@@ -160,3 +161,127 @@ class TestBuild:
         )
         # History service should not be called when budget is negative
         assert "history" not in packet
+
+
+class TestIsCodingTask:
+    """Test the domain_tags → coding task classification."""
+
+    def test_none_tags_returns_true(self):
+        assert ContextAssembler._is_coding_task(None) is True
+
+    def test_empty_tags_returns_true(self):
+        assert ContextAssembler._is_coding_task([]) is True
+
+    def test_coding_tag_returns_true(self):
+        for tag in _CODING_TAGS:
+            assert ContextAssembler._is_coding_task([tag]) is True
+
+    def test_non_coding_tag_returns_false(self):
+        assert ContextAssembler._is_coding_task(["analysis"]) is False
+        assert ContextAssembler._is_coding_task(["health"]) is False
+
+    def test_mixed_tags_with_coding(self):
+        assert ContextAssembler._is_coding_task(["auth", "bugfix"]) is True
+
+    def test_mixed_tags_without_coding(self):
+        assert ContextAssembler._is_coding_task(["auth", "monitoring"]) is False
+
+
+class TestCodeMapLayer:
+    """Test Layer 3 (Code Map) integration in ContextAssembler."""
+
+    @pytest.mark.asyncio
+    async def test_no_code_map_without_loader(
+        self, mock_context_manager, mock_history_service,
+    ):
+        """No code_map in packet when no loader is injected."""
+        assembler = ContextAssembler(mock_context_manager, mock_history_service)
+        packet = await assembler.build(
+            project_id="proj-1",
+            task_definition={"task_id": "t1"},
+            resolved_inputs={},
+            domain_tags=["code"],
+        )
+        assert "code_map" not in packet
+
+    @pytest.mark.asyncio
+    async def test_code_map_included_for_coding_task(
+        self, mock_context_manager, mock_history_service,
+    ):
+        """Code Map markdown is included for coding tasks."""
+        mock_loader = MagicMock()
+        mock_loader.get_markdown.return_value = "# Code Map\n\n- module_a\n- module_b"
+
+        assembler = ContextAssembler(
+            mock_context_manager, mock_history_service,
+            code_map_loader=mock_loader,
+        )
+        packet = await assembler.build(
+            project_id="proj-1",
+            task_definition={"task_id": "t1"},
+            resolved_inputs={},
+            domain_tags=["code"],
+        )
+        assert "code_map" in packet
+        assert "# Code Map" in packet["code_map"]
+        mock_loader.get_markdown.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_code_map_skipped_for_non_coding_task(
+        self, mock_context_manager, mock_history_service,
+    ):
+        """Code Map is not loaded for non-coding domain tags."""
+        mock_loader = MagicMock()
+        mock_loader.get_markdown.return_value = "# Code Map"
+
+        assembler = ContextAssembler(
+            mock_context_manager, mock_history_service,
+            code_map_loader=mock_loader,
+        )
+        packet = await assembler.build(
+            project_id="proj-1",
+            task_definition={"task_id": "t1"},
+            resolved_inputs={},
+            domain_tags=["analysis"],
+        )
+        assert "code_map" not in packet
+        mock_loader.get_markdown.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_code_map_included_when_no_domain_tags(
+        self, mock_context_manager, mock_history_service,
+    ):
+        """Conservative: Code Map is included when domain_tags is None."""
+        mock_loader = MagicMock()
+        mock_loader.get_markdown.return_value = "# Code Map\n\nfull content"
+
+        assembler = ContextAssembler(
+            mock_context_manager, mock_history_service,
+            code_map_loader=mock_loader,
+        )
+        packet = await assembler.build(
+            project_id="proj-1",
+            task_definition={"task_id": "t1"},
+            resolved_inputs={},
+        )
+        assert "code_map" in packet
+
+    @pytest.mark.asyncio
+    async def test_code_map_none_when_loader_returns_none(
+        self, mock_context_manager, mock_history_service,
+    ):
+        """No code_map key when loader returns None (file missing)."""
+        mock_loader = MagicMock()
+        mock_loader.get_markdown.return_value = None
+
+        assembler = ContextAssembler(
+            mock_context_manager, mock_history_service,
+            code_map_loader=mock_loader,
+        )
+        packet = await assembler.build(
+            project_id="proj-1",
+            task_definition={"task_id": "t1"},
+            resolved_inputs={},
+            domain_tags=["code"],
+        )
+        assert "code_map" not in packet

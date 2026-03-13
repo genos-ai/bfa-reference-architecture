@@ -193,6 +193,21 @@ class ApprovalSchema(_StrictBase):
     timeout_seconds: int
 
 
+class DispatchSchema(_StrictBase):
+    """Dispatch loop execution defaults for Mission Control."""
+
+    default_request_limit: int = 50
+    token_cost_factor: int = 333_333  # tokens per dollar of cost ceiling
+
+
+class EscalationThresholdsSchema(_StrictBase):
+    """Deterministic risk thresholds for automated approval decisions."""
+
+    max_auto_approve_cost_usd: float = 1.00
+    max_medium_approve_cost_usd: float = 10.00
+    max_auto_approve_retries: int = 3
+
+
 class MissionControlConfigSchema(_StrictBase):
     """Schema for config/agents/mission_control.yaml."""
 
@@ -202,3 +217,7 @@ class MissionControlConfigSchema(_StrictBase):
     guardrails: GuardrailsSchema
     redis_ttl: RedisTtlSchema
     approval: ApprovalSchema
+    dispatch: DispatchSchema = Field(default_factory=DispatchSchema)
+    escalation: EscalationThresholdsSchema = Field(
+        default_factory=EscalationThresholdsSchema,
+    )

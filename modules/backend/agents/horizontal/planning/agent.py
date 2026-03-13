@@ -30,15 +30,18 @@ class PlanningAgentDeps(BaseAgentDeps):
     mission_brief: str = ""
     roster_description: str = ""
     upstream_context: dict[str, Any] | None = None
+    code_map: dict | None = None
 
 
 def create_agent(config: dict) -> Agent:
     """Create the Planning Agent instance.
 
-    Model: Opus 4.6 with extended thinking.
+    Model resolved from caller-provided config (sourced from agent.yaml).
     System prompt loaded from config/prompts/agents/horizontal/planning/system.md.
     """
-    model = _build_model(config.get("model", "anthropic:claude-opus-4-20250514"))
+    if "model" not in config:
+        raise ValueError("Planning agent requires 'model' in config (from agent.yaml)")
+    model = _build_model(config["model"])
     system_prompt = assemble_instructions("horizontal", "planning")
 
     return Agent(

@@ -139,7 +139,7 @@ class PlaybookRunService(BaseService):
                 f"${run.total_cost_usd:.4f}"
             )
 
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError) as e:
             run.status = PlaybookRunState.FAILED
             run.completed_at = utc_now().isoformat()
             run.error_data = {"message": str(e), "type": type(e).__name__}

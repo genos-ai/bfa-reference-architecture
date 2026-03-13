@@ -60,7 +60,7 @@ def _patch_build_model():
     )
 
 
-async def _collect_events(session_id, message, session_service, event_bus=None):
+async def _collect_events(session_id, message, session_service):
     """Helper: consume handle() and return list of events."""
     events = []
     with _patch_build_model():
@@ -68,7 +68,6 @@ async def _collect_events(session_id, message, session_service, event_bus=None):
             str(session_id),
             message,
             session_service=session_service,
-            event_bus=event_bus,
         ):
             events.append(event)
     return events
@@ -215,9 +214,9 @@ class TestHandleErrors:
         assert "Error" in complete[0].full_content
 
     @pytest.mark.asyncio
-    async def test_works_without_event_bus(self, session_service, health_session):
-        """handle() works when event_bus is None."""
+    async def test_works_with_default_event_bus(self, session_service, health_session):
+        """handle() works with default NoOpEventBus."""
         events = await _collect_events(
-            health_session.id, "check health", session_service, event_bus=None,
+            health_session.id, "check health", session_service,
         )
         assert any(isinstance(e, AgentResponseCompleteEvent) for e in events)
