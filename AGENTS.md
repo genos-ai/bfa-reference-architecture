@@ -1,5 +1,7 @@
 # AGENTS.md — AI Assistant Instructions
 
+Read `CODEMAP.md` for a structural overview of the codebase ranked by importance. Full detail in `.codemap/map.json` and `.codemap/map.md`.
+
 This file tells AI coding assistants how to work with this codebase.
 For full details, see `docs/99-reference-architecture/`.
 
@@ -109,6 +111,23 @@ broker = get_broker()
 - `tests/e2e/` — full stack
 - Framework: pytest with pytest-asyncio
 - Run: `pytest tests/unit -v`
+
+## Codebase Intelligence Tools
+
+Two scripts in `scripts/` provide structural and quality analysis:
+
+```bash
+# Code map — structural overview for LLM context
+python scripts/generate_code_map.py --scope modules/ --format markdown --stats
+
+# PQI score — composite 0-100 quality metric across 7 dimensions
+python scripts/score_quality.py --scope modules/ tests/
+
+# Full-fidelity PQI with external tools and code map
+python scripts/score_quality.py --scope modules/ tests/ --use-bandit --use-radon --with-code-map --recommendations
+```
+
+Use these as quick-reference tools when assessing code quality, planning refactors, or understanding module structure. The code map shows symbol importance (PageRank), cross-references, and import graphs. PQI breaks down into: Maintainability, Security, Modularity, Testability, Robustness, Elegance, Reusability.
 
 ## What NOT to Do
 

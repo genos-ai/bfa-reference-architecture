@@ -244,7 +244,68 @@ Mission and playbook `run`/`execute` actions automatically run preflight and abo
 
 ---
 
-## 7. Testing
+## 7. Codebase Intelligence
+
+### Code Map — structural skeleton ranked by PageRank
+
+```bash
+# Markdown tree to stdout (default, most token-efficient for LLMs)
+python scripts/generate_code_map.py --scope modules/
+
+# With token budget (fits context windows)
+python scripts/generate_code_map.py --scope modules/ --max-tokens 4096
+
+# JSON output (for programmatic access, Planning Agent, QA agent)
+python scripts/generate_code_map.py --scope modules/ --format json --pretty
+
+# Summary statistics only
+python scripts/generate_code_map.py --scope modules/ --stats
+
+# Save to .codemap/ (gitignored)
+python scripts/generate_code_map.py --scope modules/ --format json --pretty -o .codemap/map.json
+python scripts/generate_code_map.py --scope modules/ -o .codemap/map.md
+
+# Generate CODEMAP.md at project root (agent-friendly, config schemas excluded)
+python scripts/generate_code_map.py --scope modules/ --exclude "**/config_schema.py" --max-tokens 4096 -o CODEMAP.md
+```
+
+The `--exclude` flag supports directory prefixes (`tests/`), exact paths (`modules/backend/core/config.py`), and glob patterns (`**/config_schema.py`, `*.generated.py`).
+
+### PyQuality Index (PQI) — composite 0-100 code quality score
+
+```bash
+# Score modules/ with all 7 dimensions
+python scripts/score_quality.py
+
+# Include code map for accurate modularity scoring (recommended)
+python scripts/score_quality.py --with-code-map
+
+# Include tests in scope for accurate testability scoring
+python scripts/score_quality.py --scope modules/ tests/ --with-code-map
+
+# Show per-dimension sub-scores and actionable recommendations
+python scripts/score_quality.py --with-code-map --recommendations
+
+# JSON output (for agents, dashboards, trend tracking)
+python scripts/score_quality.py --with-code-map --json
+
+# Run with Bandit security linter (requires: pip install bandit)
+python scripts/score_quality.py --use-bandit --recommendations
+
+# Run with Radon complexity analyzer (requires: pip install radon)
+python scripts/score_quality.py --use-radon --recommendations
+
+# Run with all external tools
+python scripts/score_quality.py --use-bandit --use-radon --with-code-map --recommendations
+
+# Alternative weight profiles
+python scripts/score_quality.py --profile library
+python scripts/score_quality.py --profile safety_critical
+```
+
+---
+
+## 8. Testing
 
 ```bash
 # Run all unit tests
@@ -260,7 +321,7 @@ python cli.py test e2e
 
 ---
 
-## 8. Background Services
+## 9. Background Services
 
 ```bash
 # Task worker
