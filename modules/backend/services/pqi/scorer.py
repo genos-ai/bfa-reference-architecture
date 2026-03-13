@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from modules.backend.core.logging import get_logger
 from modules.backend.services.pqi.ast_analysis import analyze_project
 from modules.backend.services.pqi.composite import compute_pqi
 from modules.backend.services.pqi.dimensions import (
@@ -25,6 +26,8 @@ from modules.backend.services.pqi.dimensions import (
 )
 from modules.backend.services.pqi.tools import ToolResult
 from modules.backend.services.pqi.types import PQIResult
+
+logger = get_logger(__name__)
 
 
 def score_project(
@@ -110,7 +113,17 @@ def _run_tools(
                 tool=name, available=False, error=f"Unknown tool: {name}",
             )
             continue
+        logger.info("Running tool", extra={"tool": name})
         mod = importlib.import_module(module_path)
         results[name] = mod.run(repo_root, scope, exclude)
+        logger.info(
+            "Tool finished",
+            extra={
+                "tool": name,
+                "success": results[name].success,
+                "findings": len(results[name].findings),
+                "error": results[name].error or None,
+            },
+        )
 
     return results

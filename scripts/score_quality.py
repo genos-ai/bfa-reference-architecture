@@ -23,13 +23,26 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from modules.backend.core.logging import get_logger, setup_logging
 from modules.backend.services.pqi.scorer import score_project
 from modules.backend.services.pqi.types import PQIResult
+
+logger = get_logger(__name__)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Score codebase quality using the PyQuality Index (PQI).",
+    )
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Enable verbose output (INFO level logging).",
+    )
+    parser.add_argument(
+        "--debug", "-d",
+        action="store_true",
+        help="Enable debug output (DEBUG level logging).",
     )
     parser.add_argument(
         "--scope",
@@ -77,6 +90,13 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+
+    if args.debug:
+        setup_logging(level="DEBUG", format_type="console")
+    elif args.verbose:
+        setup_logging(level="INFO", format_type="console")
+    else:
+        setup_logging(level="WARNING", format_type="console")
 
     exclude = args.exclude or [
         ".venv/",

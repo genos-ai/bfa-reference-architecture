@@ -13,12 +13,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from modules.backend.core.logging import get_logger
 from modules.backend.services.pqi.tools import (
     Finding,
     ToolResult,
     check_installed,
     run_command,
 )
+
+logger = get_logger(__name__)
 
 TOOL_NAME = "bandit"
 
@@ -68,17 +71,28 @@ def run(
     if bandit_excludes:
         args.extend(["--exclude", ",".join(bandit_excludes)])
 
+    logger.debug("Running bandit", extra={"args": args})
     stdout, stderr, returncode = run_command(args, cwd=repo_root)
+    logger.debug(
+        "Bandit finished",
+        extra={"returncode": returncode, "stdout_len": len(stdout), "stderr_len": len(stderr)},
+    )
 
     # Bandit returns 1 when findings exist (not an error)
     if returncode not in (0, 1):
+        logger.warning("Bandit exited with unexpected code", extra={"returncode": returncode, "stderr": stderr[:500]})
         return ToolResult(
             tool=TOOL_NAME,
             available=True,
             error=stderr or f"bandit exited with code {returncode}",
         )
 
-    return _parse_output(_strip_progress(stdout))
+    result = _parse_output(_strip_progress(stdout))
+    logger.debug(
+        "Bandit parsed",
+        extra={"findings": len(result.findings), "success": result.success, "error": result.error or None},
+    )
+    return result
 
 
 def _strip_progress(raw: str) -> str:
@@ -89,6 +103,12 @@ def _strip_progress(raw: str) -> str:
     """
     idx = raw.find("{")
     return raw[idx:] if idx >= 0 else raw
+
+
+def _is_test_file(path: str) -> bool:
+    """Check if a path points to a test file."""
+    parts = Path(path).parts
+    return "tests" in parts or any(p.startswith("test_") for p in parts)
 
 
 def _parse_output(raw_json: str) -> ToolResult:
@@ -107,19 +127,30 @@ def _parse_output(raw_json: str) -> ToolResult:
     severity_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
     confidence_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
 
+    # Rules that are noise in test files (B101 = assert usage)
+    _TEST_NOISE_RULES = {"B101"}
+
     for result in data.get("results", []):
         severity = result.get("issue_severity", "LOW")
         confidence = result.get("issue_confidence", "LOW")
+        rule_id = result.get("test_id", "")
+        filename = result.get("filename", "")
+
+        # Skip assert-in-tests noise: B101 fires on every assert in
+        # test files, which is not a real security finding.
+        # Paths may be relative (tests/...) or absolute (.../tests/...).
+        if rule_id in _TEST_NOISE_RULES and _is_test_file(filename):
+            continue
 
         severity_counts[severity] = severity_counts.get(severity, 0) + 1
         confidence_counts[confidence] = confidence_counts.get(confidence, 0) + 1
 
         findings.append(Finding(
-            rule_id=result.get("test_id", ""),
+            rule_id=rule_id,
             severity=severity,
             confidence=confidence,
             message=result.get("issue_text", ""),
-            file=result.get("filename", ""),
+            file=filename,
             line=result.get("line_number", 0),
             tool=TOOL_NAME,
         ))

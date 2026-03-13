@@ -120,10 +120,20 @@ async def run_quality_score(
     loader = CodeMapLoader(project_root)
     code_map = loader.get_json()
 
+    # Auto-detect available tools for deeper analysis
+    tools = []
+    from modules.backend.services.pqi.tools.bandit import is_available as bandit_available
+    from modules.backend.services.pqi.tools.radon import is_available as radon_available
+    if bandit_available():
+        tools.append("bandit")
+    if radon_available():
+        tools.append("radon")
+
     result = score_project(
         repo_root=project_root,
         scope=["modules/"],
         code_map=code_map,
+        tools=tools,
     )
 
     # Serialize dataclass to dict for the agent
