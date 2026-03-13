@@ -1,6 +1,6 @@
 # AGENTS.md — AI Assistant Instructions
 
-Read `CODEMAP.md` for a structural overview of the codebase ranked by importance. Full detail in `.codemap/map.json` and `.codemap/map.md`.
+Read `.codemap/map.md` for a structural overview of the codebase ranked by importance. Machine-readable version in `.codemap/map.json`.
 
 This file tells AI coding assistants how to work with this codebase.
 For full details, see `docs/99-reference-architecture/`.

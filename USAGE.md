@@ -265,8 +265,8 @@ python scripts/generate_code_map.py --scope modules/ --stats
 python scripts/generate_code_map.py --scope modules/ --format json --pretty -o .codemap/map.json
 python scripts/generate_code_map.py --scope modules/ -o .codemap/map.md
 
-# Generate CODEMAP.md at project root (agent-friendly, config schemas excluded)
-python scripts/generate_code_map.py --scope modules/ --exclude "**/config_schema.py" --max-tokens 4096 -o CODEMAP.md
+# Generate a token-limited summary (agent-friendly, config schemas excluded)
+python scripts/generate_code_map.py --scope modules/ --exclude "**/config_schema.py" --max-tokens 4096 -o .codemap/summary.md
 ```
 
 The `--exclude` flag supports directory prefixes (`tests/`), exact paths (`modules/backend/core/config.py`), and glob patterns (`**/config_schema.py`, `*.generated.py`).
