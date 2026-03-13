@@ -85,7 +85,7 @@ def cli(ctx, verbose: bool, debug: bool, output_format: str):
 
     \b
     Infrastructure:  server, worker, scheduler, telegram, event-worker
-    Diagnostics:     health, config, info, credits
+    Diagnostics:     health, config, info, credits, context
     Development:     test, migrate, db
     Agents:          agent, mission, playbook
     Projects:        project
@@ -653,6 +653,88 @@ def project_summarize(ctx, project_id):
     from modules.backend.cli.project import run_project
     run_project(ctx.logger, "summarize", project_id=project_id,
                 output_format=ctx.output_format)
+
+
+# =============================================================================
+# Context group — inspect what agents see
+# =============================================================================
+
+
+@cli.group("context", cls=ShowHelpOnMissingArgs, invoke_without_command=True)
+@click.pass_context
+def context(ctx):
+    """Inspect agent context: Code Map, PQI scores, dependencies.
+
+    \b
+    Examples:
+        python cli.py context show
+        python cli.py context show --project <id>
+        python cli.py context assembled --project <id>
+        python cli.py context codemap
+        python cli.py context codemap --generate
+        python cli.py context pqi
+        python cli.py context deps
+    """
+    if ctx.invoked_subcommand is None:
+        # Default to "show" when no subcommand given
+        ctx.invoke(context_show)
+
+
+@context.command("show")
+@click.option("--project", "project_id", default=None, help="Project ID for full assembled context.")
+@click.pass_obj
+def context_show(ctx, project_id):
+    """Show all context layers and token costs.
+
+    Without --project: global view (disk-only, no DB).
+    With --project: full assembled context packet from DB + disk.
+    """
+    from modules.backend.cli.context import run_context
+    run_context(ctx.logger, "show", output_format=ctx.output_format, project_id=project_id)
+
+
+@context.command("assembled")
+@click.option("--project", "project_id", required=True, help="Project ID.")
+@click.option("--tags", "domain_tags", default=None, help="Comma-separated domain tags (e.g. code,implementation).")
+@click.pass_obj
+def context_assembled(ctx, project_id, domain_tags):
+    """Build the full assembled context packet for a project.
+
+    Shows exactly what an agent receives: PCD + task + Code Map + history.
+    Requires a running database.
+    """
+    from modules.backend.cli.context import run_context
+    tags = domain_tags.split(",") if domain_tags else None
+    run_context(ctx.logger, "assembled", output_format=ctx.output_format,
+                project_id=project_id, domain_tags=tags)
+
+
+@context.command("codemap")
+@click.option("--generate", is_flag=True, help="Regenerate before showing.")
+@click.option("--format", "format_type", type=click.Choice(["markdown", "json"]),
+              default="markdown", help="Output format.")
+@click.pass_obj
+def context_codemap(ctx, generate, format_type):
+    """Show or generate the Code Map."""
+    from modules.backend.cli.context import run_context
+    run_context(ctx.logger, "codemap", output_format=ctx.output_format,
+                generate=generate, format_type=format_type)
+
+
+@context.command("pqi")
+@click.pass_obj
+def context_pqi(ctx):
+    """Run the PyQuality Index scorer."""
+    from modules.backend.cli.context import run_context
+    run_context(ctx.logger, "pqi", output_format=ctx.output_format)
+
+
+@context.command("deps")
+@click.pass_obj
+def context_deps(ctx):
+    """Show dependency graph analysis."""
+    from modules.backend.cli.context import run_context
+    run_context(ctx.logger, "deps", output_format=ctx.output_format)
 
 
 # =============================================================================

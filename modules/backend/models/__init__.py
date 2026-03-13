@@ -8,15 +8,24 @@ from modules.backend.models.mission_record import (
     TaskExecution,
 )
 from modules.backend.models.note import Note
+from modules.backend.models.project import Project, ProjectMember
+from modules.backend.models.project_context import ContextChange, ProjectContext
+from modules.backend.models.project_history import MilestoneSummary, ProjectDecision
 from modules.backend.models.session import Session, SessionChannel, SessionMessage
 
 __all__ = [
     "Base",
+    "ContextChange",
+    "MilestoneSummary",
     "Mission",
     "MissionDecision",
     "MissionRecord",
     "Note",
     "PlaybookRun",
+    "Project",
+    "ProjectContext",
+    "ProjectDecision",
+    "ProjectMember",
     "Session",
     "SessionChannel",
     "SessionMessage",

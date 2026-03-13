@@ -1,6 +1,6 @@
-# Code Map — bfa_reference_architecture
+# Code Map — 
 
-**207 files** | **29,108 lines** | **305 classes** | **483 functions** | commit `e161f49f404a`
+**209 files** | **29,600 lines** | **308 classes** | **487 functions** | commit `786a4e975814`
 
 Symbols ranked by PageRank (most-connected first).
 
@@ -61,6 +61,7 @@ Symbols ranked by PageRank (most-connected first).
   backend.repositories.mission_record -> backend.core.logging, backend.models.mission_record, backend.repositories.base
   backend.repositories.playbook_run -> backend.core.logging, backend.models.mission, backend.repositories.base
   backend.repositories.session -> backend.core.utils, backend.models.session, backend.repositories.base
+  backend.services.code_map -> backend.services.code_map.generator, backend.services.code_map.assembler, backend.services.code_map.loader
   backend.services.history_query -> backend.core.logging, backend.models.mission_record, backend.services.base
   backend.services.playbook -> backend.core.config, backend.core.logging, backend.schemas.playbook
   telegram.handlers -> telegram.handlers.common, telegram.handlers.example, telegram.handlers.setup
@@ -86,7 +87,6 @@ Symbols ranked by PageRank (most-connected first).
   backend.repositories.project_context -> backend.models.project_context, backend.repositories.base
   backend.repositories.project_history -> backend.models.project_history, backend.repositories.base
   backend.services.base -> backend.core.exceptions, backend.core.logging
-  backend.services.code_map -> backend.services.code_map.generator, backend.services.code_map.assembler
   backend.services.context_curator -> backend.core.logging, backend.services.project_context
   backend.tasks.example -> backend.core.logging, backend.core.utils
   backend.tasks.scheduled -> backend.core.logging, backend.core.utils
@@ -103,6 +103,7 @@ Symbols ranked by PageRank (most-connected first).
   backend.agents.mission_control.check_registry -> backend.core.logging
   backend.agents.mission_control.checks -> backend.agents.mission_control.checks [circular]
   backend.agents.tools.code -> backend.agents.deps.base
+  backend.agents.tools.codemap -> backend.agents.deps.base
   backend.agents.tools.filesystem -> backend.agents.deps.base
   backend.agents.tools.system -> backend.agents.deps.base
   backend.api.v1 -> backend.api.v1.endpoints
@@ -137,6 +138,7 @@ Symbols ranked by PageRank (most-connected first).
   backend.schemas.base -> backend.core.utils
   backend.services.code_map.assembler -> backend.services.code_map.types
   backend.services.code_map.graph -> backend.services.code_map.types
+  backend.services.code_map.loader -> backend.core.logging
   backend.services.code_map.parser -> backend.services.code_map.types
   backend.services.code_map.ranker -> backend.services.code_map.types
   backend.services.compliance -> backend.core.logging
@@ -623,7 +625,7 @@ modules/backend/agents/deps/base.py (89 lines):
 │    max_delegation_depth: int
 │    mission_control: Any
 
-modules/backend/agents/mission_control/helpers.py (388 lines):
+modules/backend/agents/mission_control/helpers.py (425 lines):
 │def _build_model(config_model: str | AgentModelSchema) -> Model
 │def assemble_instructions(category: str, name: str) -> str
 │def _get_model_name(config_model: str | AgentModelSchema) -> str
@@ -640,7 +642,7 @@ modules/backend/agents/mission_control/helpers.py (388 lines):
 │def _make_agent_executor(session_service: SessionServiceProtocol, event_bus: EventBusProtocol) -> ExecuteAgentFn
 │def _call_planning_agent(prompt: str, roster: Roster, upstream_context: dict | None) -> dict
 
-modules/backend/agents/mission_control/models.py (148 lines):
+modules/backend/agents/mission_control/models.py (149 lines):
 │class ExecuteAgentFn(Protocol):
 │    def __call__(agent_name: str, instructions: str, inputs: dict, usage_limits: UsageLimits) -> Awaitable[dict]
 │class EventBusProtocol(Protocol):
@@ -670,7 +672,7 @@ modules/backend/agents/mission_control/models.py (148 lines):
 │class ContextAssemblerProtocol(Protocol):
 │    def build(project_id: str, task_definition: dict, resolved_inputs: dict) -> dict
 
-modules/backend/agents/mission_control/mission_control.py (512 lines):
+modules/backend/agents/mission_control/mission_control.py (517 lines):
 │def list_agents() -> list[dict[str, Any]]
 │def handle(session_id: str, message: str) -> AsyncIterator[SessionEvent]
 │def collect(session_id: str, message: str) -> CollectResult
@@ -874,7 +876,7 @@ modules/backend/agents/mission_control/verification.py (525 lines):
 │def build_retry_feedback(verification_result: VerificationResult, attempt: int) -> dict[str, Any]
 │def _elapsed_ms(start: float) -> float
 
-modules/backend/agents/mission_control/dispatch.py (541 lines):
+modules/backend/agents/mission_control/dispatch.py (547 lines):
 │def topological_sort(plan: TaskPlan) -> list[list[str]]
 │def resolve_upstream_inputs(task: TaskDefinition, completed_outputs: dict[str, dict]) -> dict[str, Any]
 │def verify_task(task: TaskDefinition, output: dict, roster_entry: RosterAgentEntry, ...) -> VerificationResult
@@ -917,11 +919,12 @@ modules/backend/agents/horizontal/__init__.py (1 lines):
 
 modules/backend/agents/horizontal/planning/__init__.py (1 lines):
 
-modules/backend/agents/horizontal/planning/agent.py (107 lines):
+modules/backend/agents/horizontal/planning/agent.py (108 lines):
 │class PlanningAgentDeps(BaseAgentDeps):
 │    mission_brief: str
 │    roster_description: str
 │    upstream_context: dict[str, Any] | None
+│    code_map: dict | None
 │def create_agent(config: dict) -> Agent
 │def run_agent(agent: Agent, deps: PlanningAgentDeps, user_prompt: str) -> dict
 │def extract_task_plan_json(text: str) -> dict
@@ -1022,6 +1025,12 @@ modules/backend/agents/tools/code.py (77 lines):
 │def apply_fix(project_root: Path, file_path: str, old_text: str, ...) -> dict
 │def run_tests(project_root: Path) -> dict
 
+modules/backend/agents/tools/codemap.py (145 lines):
+│def generate_code_map(project_root: Path, scope: FileScope) -> dict
+│def load_code_map(project_root: Path, scope: FileScope) -> dict
+│def get_dependency_analysis(project_root: Path, scope: FileScope) -> dict
+│def run_quality_score(project_root: Path, scope: FileScope) -> dict
+
 modules/backend/agents/tools/compliance.py (98 lines):
 │def _get_scanner(project_root: Path, config: AgentConfigSchema) -> ComplianceScannerService
 │def scan_imports(project_root: Path, scope: FileScope, config: AgentConfigSchema) -> list[dict]
@@ -1057,7 +1066,7 @@ modules/backend/agents/vertical/code/architecture/agent.py (154 lines):
 
 modules/backend/agents/vertical/code/quality/__init__.py (1 lines):
 
-modules/backend/agents/vertical/code/quality/agent.py (196 lines):
+modules/backend/agents/vertical/code/quality/agent.py (233 lines):
 │def create_agent(model: str | Model) -> Agent[QaAgentDeps, QaAuditResult]
 │def run_agent(user_message: str, deps: QaAgentDeps, agent: Agent[QaAgentDeps, QaAuditResult], ...) -> QaAuditResult
 │def run_agent_stream(user_message: str, deps: QaAgentDeps, agent: Agent[QaAgentDeps, QaAuditResult], ...) -> AsyncGenerator[dict, None]
@@ -1171,22 +1180,6 @@ modules/backend/services/pqi/scorer.py (116 lines):
 │def score_project(repo_root: Path, scope: list[str] | None, exclude: list[str] | None, ...) -> PQIResult
 │def _run_tools(repo_root: Path, scope: list[str] | None, exclude: list[str] | None, ...) -> dict[str, ToolResult]
 
-modules/backend/services/code_map/assembler.py (510 lines):
-│def assemble_code_map(modules: list[ModuleInfo], ranks: dict[str, float], repo_root_name: str, ...) -> dict
-│def trim_by_rank(code_map: dict, max_tokens: int) -> dict
-│def render_markdown_tree(code_map: dict) -> str
-│def _render_module(lines: list[str], path: str, mod: dict) -> None
-│def _get_layer(path: str) -> str
-│def _find_circular_deps(import_graph: dict[str, list[str]]) -> list[list[str]]
-│def _shorten_module(qname: str) -> str
-│def render_for_agent(code_map: dict, max_tokens: int) -> str
-│def _estimate_tokens(data: dict | str) -> int
-│def _collect_ranked_symbols(code_map: dict) -> list[tuple[str, float, str, str, str | None]]
-│def _remove_symbol(code_map: dict, path: str, kind: str, ...) -> None
-│def _method_name(sig: str) -> str
-│def _is_internal_import(imp: str, internal_modules: set[str]) -> bool
-│def _path_to_qname(rel_path: str) -> str
-
 modules/backend/services/pqi/ast_analysis.py (296 lines):
 │class FileAnalysis:
 │    path: str
@@ -1223,6 +1216,22 @@ modules/backend/services/pqi/ast_analysis.py (296 lines):
 │def _detect_unsafe_patterns(tree: ast.Module) -> list[str]
 │def _count_naming_violations(tree: ast.Module) -> int
 
+modules/backend/services/code_map/assembler.py (510 lines):
+│def assemble_code_map(modules: list[ModuleInfo], ranks: dict[str, float], repo_root_name: str, ...) -> dict
+│def trim_by_rank(code_map: dict, max_tokens: int) -> dict
+│def render_markdown_tree(code_map: dict) -> str
+│def _render_module(lines: list[str], path: str, mod: dict) -> None
+│def _get_layer(path: str) -> str
+│def find_circular_deps(import_graph: dict[str, list[str]]) -> list[list[str]]
+│def _shorten_module(qname: str) -> str
+│def render_for_agent(code_map: dict, max_tokens: int) -> str
+│def _estimate_tokens(data: dict | str) -> int
+│def _collect_ranked_symbols(code_map: dict) -> list[tuple[str, float, str, str, str | None]]
+│def _remove_symbol(code_map: dict, path: str, kind: str, ...) -> None
+│def _method_name(sig: str) -> str
+│def _is_internal_import(imp: str, internal_modules: set[str]) -> bool
+│def _path_to_qname(rel_path: str) -> str
+
 modules/backend/services/mission_persistence.py (380 lines):
 │class MissionPersistenceService(BaseService):
 │    def __init__(session: AsyncSession) -> None
@@ -1238,10 +1247,6 @@ modules/backend/services/mission_persistence.py (380 lines):
 │    def get_mission_status(mission_id: str) -> dict
 │    def get_missions_by_session(session_id: str) -> list[MissionRecord]
 │    def get_replan_chain(mission_id: str) -> list[MissionRecord]
-
-modules/backend/services/code_map/generator.py (83 lines):
-│def generate_code_map(repo_root: Path, scope: list[str] | None, exclude: list[str] | None, ...) -> dict
-│def _get_git_commit(repo_root: Path) -> str
 
 modules/backend/services/pqi/composite.py (85 lines):
 │def compute_pqi(dimensions: dict[str, DimensionScore], profile: str, file_count: int, ...) -> PQIResult
@@ -1265,6 +1270,45 @@ modules/backend/services/history_query.py (167 lines):
 │    def get_recent_task_executions(project_id: str) -> list[dict]
 │    def get_recent_failures(project_id: str) -> list[dict]
 │    def get_mission_summaries(project_id: str) -> list[dict]
+
+modules/backend/services/code_map/generator.py (83 lines):
+│def generate_code_map(repo_root: Path, scope: list[str] | None, exclude: list[str] | None, ...) -> dict
+│def _get_git_commit(repo_root: Path) -> str
+
+modules/backend/services/code_map/loader.py (167 lines):
+│class CodeMapLoader:
+│    def __init__(project_root: Path) -> None
+│    def get_json() -> dict | None
+│    def get_markdown() -> str | None
+│    def is_stale() -> bool
+│    def ensure_fresh() -> dict | None
+│    def regenerate() -> dict | None
+│    def invalidate_cache() -> None
+│    def _git_head() -> str
+
+modules/backend/services/compliance.py (333 lines):
+│class ComplianceScannerService:
+│    def __init__(project_root: Path, config: dict[str, Any]) -> None
+│    def _get_exclusion_paths() -> set[str]
+│    def _get_enabled_rule_ids() -> set[str]
+│    def get_rule_severity(rule_id: str) -> str
+│    def collect_python_files() -> list[str]
+│    def scan_file_lines(rel_path: str) -> list[str]
+│    def _is_excluded(file_path: str) -> bool
+│    def scan_import_violations() -> list[dict]
+│    def scan_datetime_violations() -> list[dict]
+│    def scan_hardcoded_values() -> list[dict]
+│    def scan_file_sizes() -> list[dict]
+│    def scan_cli_options() -> list[dict]
+│    def scan_config_files() -> list[dict]
+│    def scan_all() -> list[dict]
+
+modules/backend/services/pqi/normalizers.py (69 lines):
+│def sigmoid(x: float, midpoint: float, k: float) -> float
+│def exp_decay(count: float, rate: float) -> float
+│def linear(value: float, max_value: float) -> float
+│def inverse_linear(value: float, good: float, bad: float) -> float
+│def ratio_score(numerator: float, denominator: float) -> float
 
 modules/backend/services/code_map/graph.py (288 lines):
 │def build_reference_graph(modules: list[ModuleInfo]) -> ReferenceGraph
@@ -1297,30 +1341,6 @@ modules/backend/services/code_map/parser.py (316 lines):
 
 modules/backend/services/code_map/ranker.py (85 lines):
 │def rank_symbols(graph: ReferenceGraph, damping: float, max_iterations: int, ...) -> dict[str, float]
-
-modules/backend/services/compliance.py (333 lines):
-│class ComplianceScannerService:
-│    def __init__(project_root: Path, config: dict[str, Any]) -> None
-│    def _get_exclusion_paths() -> set[str]
-│    def _get_enabled_rule_ids() -> set[str]
-│    def get_rule_severity(rule_id: str) -> str
-│    def collect_python_files() -> list[str]
-│    def scan_file_lines(rel_path: str) -> list[str]
-│    def _is_excluded(file_path: str) -> bool
-│    def scan_import_violations() -> list[dict]
-│    def scan_datetime_violations() -> list[dict]
-│    def scan_hardcoded_values() -> list[dict]
-│    def scan_file_sizes() -> list[dict]
-│    def scan_cli_options() -> list[dict]
-│    def scan_config_files() -> list[dict]
-│    def scan_all() -> list[dict]
-
-modules/backend/services/pqi/normalizers.py (69 lines):
-│def sigmoid(x: float, midpoint: float, k: float) -> float
-│def exp_decay(count: float, rate: float) -> float
-│def linear(value: float, max_value: float) -> float
-│def inverse_linear(value: float, good: float, bad: float) -> float
-│def ratio_score(numerator: float, denominator: float) -> float
 
 modules/backend/services/mission.py (488 lines):
 │class MissionService(BaseService):
@@ -1388,10 +1408,12 @@ modules/backend/services/session.py (397 lines):
 │    def expire_inactive_sessions() -> int
 │    def _publish_session_event(event_type: str, session: Session) -> None
 
-modules/backend/services/context_assembler.py (142 lines):
+modules/backend/services/context_assembler.py (194 lines):
 │class ContextAssembler:
 │    def __init__(context_manager: ProjectContextManager, history_service: HistoryQueryService) -> None
 │    def build(project_id: str, task_definition: dict, resolved_inputs: dict) -> dict
+│    def _is_coding_task(domain_tags: list[str] | None) -> bool
+│    def _load_code_map_markdown(max_tokens: int | None) -> str | None
 │    def _assemble_history(project_id: str, domain_tags: list[str], remaining_budget: int) -> dict[str, Any]
 
 modules/backend/services/context_curator.py (68 lines):
@@ -1402,7 +1424,7 @@ modules/backend/services/context_curator.py (68 lines):
 
 modules/backend/services/__init__.py (1 lines):
 
-modules/backend/services/code_map/__init__.py (26 lines):
+modules/backend/services/code_map/__init__.py (31 lines):
 
 modules/backend/services/playbook_run.py (422 lines):
 │class PlaybookRunService(BaseService):
@@ -2166,7 +2188,7 @@ modules/backend/schemas/note.py (71 lines):
 │    is_archived: bool
 │    created_at: datetime
 
-modules/backend/schemas/task_plan.py (168 lines):
+modules/backend/schemas/task_plan.py (204 lines):
 │class TaskDefinition(BaseModel):
 │    task_id: str
 │    agent: str
@@ -2191,12 +2213,13 @@ modules/backend/schemas/task_plan.py (168 lines):
 │class ExecutionHints(BaseModel):
 │    min_success_threshold: float
 │    critical_path: list[str]
-│class FromUpstreamRef(BaseModel):
-│    source_task: str
-│    source_field: str
+│class FileManifestEntry(BaseModel):
+│    path: str
+│    reason: str
 │class TaskInputs(BaseModel):
 │    static: dict
 │    from_upstream: dict[str, FromUpstreamRef]
+│    file_manifest: FileManifest | None
 │class TaskVerification(BaseModel):
 │    tier_1: Tier1Verification
 │    tier_2: Tier2Verification
@@ -2207,6 +2230,13 @@ modules/backend/schemas/task_plan.py (168 lines):
 │class DeterministicCheck(BaseModel):
 │    check: str
 │    params: dict
+│class FromUpstreamRef(BaseModel):
+│    source_task: str
+│    source_field: str
+│class FileManifest(BaseModel):
+│    read_for_pattern: list[FileManifestEntry]
+│    read_first: list[FileManifestEntry]
+│    modify: list[FileManifestEntry]
 │class Tier1Verification(BaseModel):
 │    schema_validation: bool
 │    required_output_fields: list[str]
