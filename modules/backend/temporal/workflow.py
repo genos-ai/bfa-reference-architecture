@@ -105,6 +105,7 @@ class AgentMissionWorkflow:
                 input.session_id,
                 input.roster_name,
                 result.outcome_json,
+                input.project_id,
             ],
             start_to_close_timeout=timedelta(
                 seconds=temporal_config.persistence_timeout_seconds,
@@ -165,6 +166,7 @@ class AgentMissionWorkflow:
                         input.session_id,
                         input.roster_name,
                         retry_result.outcome_json,
+                        input.project_id,
                     ],
                     start_to_close_timeout=timedelta(
                         seconds=temporal_config.persistence_timeout_seconds,

@@ -54,6 +54,7 @@ async def execute_mission(input: MissionWorkflowInput) -> MissionExecutionResult
                 session_service=session_service,
                 roster_name=input.roster_name,
                 mission_budget_usd=input.mission_budget_usd,
+                project_id=input.project_id,
             )
 
             outcome_dict = outcome.model_dump()
@@ -94,6 +95,7 @@ async def persist_mission_outcome(
     session_id: str,
     roster_name: str,
     outcome_json: dict,
+    project_id: str | None = None,
 ) -> bool:
     """Persist mission results to PostgreSQL. Best-effort."""
     from modules.backend.agents.mission_control.outcome import MissionOutcome
@@ -111,6 +113,7 @@ async def persist_mission_outcome(
                 roster_name=roster_name,
                 task_plan_json=outcome_json.get("task_plan_reference"),
                 thinking_trace=outcome_json.get("planning_trace_reference"),
+                project_id=project_id,
                 db_session=db,
             )
             await db.commit()

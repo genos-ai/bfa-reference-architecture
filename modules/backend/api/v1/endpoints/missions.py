@@ -225,6 +225,7 @@ async def _execute_via_temporal(
             mission_brief=brief,
             roster_name=roster,
             mission_budget_usd=budget,
+            project_id=mission_record.project_id if mission_record else None,
             approval_timeout_seconds=config.temporal.approval_timeout_seconds,
             escalation_timeout_seconds=config.temporal.escalation_timeout_seconds,
             notification_timeout_seconds=config.temporal.notification_timeout_seconds,

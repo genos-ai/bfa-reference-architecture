@@ -62,6 +62,7 @@ class MissionPersistenceService(BaseService):
         parent_mission_id: str | None = None,
         objective_statement: str | None = None,
         objective_category: str | None = None,
+        project_id: str | None = None,
     ) -> MissionRecord:
         """Persist a complete mission record.
 
@@ -91,6 +92,7 @@ class MissionPersistenceService(BaseService):
             parent_mission_id=parent_mission_id,
             objective_statement=objective_statement,
             objective_category=objective_category,
+            project_id=project_id,
         )
 
         self._session.add(record)

@@ -29,6 +29,7 @@ async def persist_mission_results(
     roster_name: str | None = None,
     task_plan_json: dict | None = None,
     thinking_trace: str | None = None,
+    project_id: str | None = None,
     db_session: AsyncSession,
 ) -> None:
     """Persist mission execution results. Best-effort — does not raise."""
@@ -50,6 +51,7 @@ async def persist_mission_results(
             mission_outcome_json=outcome.model_dump(),
             planning_thinking_trace=thinking_trace,
             total_cost_usd=outcome.total_cost_usd,
+            project_id=project_id,
         )
 
         for task_result in outcome.task_results:

@@ -1,6 +1,6 @@
-# Code Map — 
+# Code Map — bfa_reference_architecture
 
-**209 files** | **29,600 lines** | **308 classes** | **487 functions** | commit `786a4e975814`
+**210 files** | **30,100 lines** | **308 classes** | **494 functions** | commit `92564f9668d0`
 
 Symbols ranked by PageRank (most-connected first).
 
@@ -14,6 +14,7 @@ Symbols ranked by PageRank (most-connected first).
   backend.services.mission -> backend.core.config, backend.core.exceptions, backend.agents.mission_control.models, backend.core.logging, backend.core.protocols, backend.core.utils, backend.models.mission, backend.repositories.mission, backend.services.base
   backend.services.playbook_run -> backend.core.config, backend.core.logging, backend.core.utils, backend.models.mission, backend.repositories.playbook_run, backend.schemas.playbook, backend.services.base, backend.services.mission, backend.services.playbook
   backend.migrations.env -> backend.models.base, backend.models.mission, backend.models.mission_record, backend.models.note, backend.models.project, backend.models.project_context, backend.models.project_history, backend.models.session
+  backend.models -> backend.models.base, backend.models.mission, backend.models.mission_record, backend.models.note, backend.models.project, backend.models.project_context, backend.models.project_history, backend.models.session
   backend.services.session -> backend.core.config, backend.core.exceptions, backend.core.logging, backend.core.utils, backend.models.session, backend.repositories.session, backend.schemas.session, backend.services.base
   backend.agents.mission_control.dispatch -> backend.agents.mission_control.middleware, backend.agents.mission_control.models, backend.agents.mission_control.outcome, backend.agents.mission_control.roster, backend.agents.mission_control.verification, backend.core.logging, backend.schemas.task_plan
   backend.api.v1.endpoints.playbooks -> backend.core.dependencies, backend.core.exceptions, backend.schemas.base, backend.schemas.mission, backend.schemas.playbook, backend.services.mission, backend.services.playbook
@@ -28,7 +29,6 @@ Symbols ranked by PageRank (most-connected first).
   backend.api.v1.endpoints.missions -> backend.core.dependencies, backend.core.exceptions, backend.schemas.base, backend.schemas.mission_record, backend.services.mission_persistence
   backend.api.v1.endpoints.notes -> backend.core.dependencies, backend.core.pagination, backend.schemas.base, backend.schemas.note, backend.services.note
   backend.api.v1.endpoints.sessions -> backend.core.dependencies, backend.core.pagination, backend.schemas.base, backend.schemas.session, backend.services.session
-  backend.models -> backend.models.base, backend.models.mission, backend.models.mission_record, backend.models.note, backend.models.session
   backend.services.pqi.scorer -> backend.services.pqi.ast_analysis, backend.services.pqi.composite, backend.services.pqi.dimensions, backend.services.pqi.tools, backend.services.pqi.types
   backend.services.project_context -> backend.core.logging, backend.core.utils, backend.models.project_context, backend.repositories.project_context, backend.services.base
   telegram.handlers.example -> backend.core.config, backend.core.logging, telegram.callbacks.common, telegram.keyboards.common, telegram.states.example
@@ -51,6 +51,7 @@ Symbols ranked by PageRank (most-connected first).
   backend.agents.preflight -> backend.agents.mission_control.helpers, backend.agents.mission_control.roster, backend.core.logging
   backend.agents.tools.compliance -> backend.agents.config_schema, backend.agents.deps.base, backend.services.compliance
   backend.api.v1.endpoints.agents -> backend.core.dependencies, backend.core.logging, backend.schemas.base
+  backend.cli.context -> backend.cli.report, backend.core.config, backend.core.utils
   backend.core.exception_handlers -> backend.core.exceptions, backend.core.logging, backend.schemas.base
   backend.events.bus -> backend.core.config, backend.core.logging, backend.events.types
   backend.gateway.adapters.telegram -> backend.core.config, backend.core.logging, backend.gateway.adapters
@@ -672,7 +673,7 @@ modules/backend/agents/mission_control/models.py (149 lines):
 │class ContextAssemblerProtocol(Protocol):
 │    def build(project_id: str, task_definition: dict, resolved_inputs: dict) -> dict
 
-modules/backend/agents/mission_control/mission_control.py (517 lines):
+modules/backend/agents/mission_control/mission_control.py (518 lines):
 │def list_agents() -> list[dict[str, Any]]
 │def handle(session_id: str, message: str) -> AsyncIterator[SessionEvent]
 │def collect(session_id: str, message: str) -> CollectResult
@@ -890,7 +891,7 @@ modules/backend/agents/mission_control/history.py (169 lines):
 │def session_messages_to_model_history(messages: list) -> list[ModelMessage]
 │def model_messages_to_session_creates(messages: list[ModelMessage], session_id: str, agent_id: str | None, ...) -> list[SessionMessageCreate]
 
-modules/backend/agents/mission_control/persistence_bridge.py (129 lines):
+modules/backend/agents/mission_control/persistence_bridge.py (131 lines):
 │def persist_mission_results(outcome: MissionOutcome) -> None
 
 modules/backend/agents/mission_control/plan_validator.py (286 lines):
@@ -1232,7 +1233,7 @@ modules/backend/services/code_map/assembler.py (510 lines):
 │def _is_internal_import(imp: str, internal_modules: set[str]) -> bool
 │def _path_to_qname(rel_path: str) -> str
 
-modules/backend/services/mission_persistence.py (380 lines):
+modules/backend/services/mission_persistence.py (382 lines):
 │class MissionPersistenceService(BaseService):
 │    def __init__(session: AsyncSession) -> None
 │    def save_mission(session_id: str, status: str) -> MissionRecord
@@ -1696,6 +1697,31 @@ modules/backend/models/mission_record.py (403 lines):
 │class DecisionType(str, enum.Enum):
 │class FailureTier(str, enum.Enum):
 
+modules/backend/models/project_context.py (124 lines):
+│class ContextChange(UUIDMixin, TimestampMixin, Base):
+│    context_id: Mapped[str]
+│    version: Mapped[int]
+│    change_type: Mapped[str]
+│    path: Mapped[str]
+│    old_value: Mapped[dict | None]
+│    new_value: Mapped[dict | None]
+│    agent_id: Mapped[str | None]
+│    mission_id: Mapped[str | None]
+│    task_id: Mapped[str | None]
+│    execution_id: Mapped[str | None]
+│    reason: Mapped[str]
+│    context: Mapped['ProjectContext']
+│    def __repr__() -> str
+│class ProjectContext(UUIDMixin, TimestampMixin, Base):
+│    project_id: Mapped[str]
+│    context_data: Mapped[dict]
+│    version: Mapped[int]
+│    size_characters: Mapped[int]
+│    size_tokens: Mapped[int]
+│    changes: Mapped[list['ContextChange']]
+│    def __repr__() -> str
+│class ChangeType(str, enum.Enum):
+
 modules/backend/models/mission.py (197 lines):
 │class Mission(UUIDMixin, TimestampMixin, Base):
 │    playbook_run_id: Mapped[str | None]
@@ -1743,31 +1769,6 @@ modules/backend/models/note.py (39 lines):
 │    content: Mapped[str | None]
 │    is_archived: Mapped[bool]
 │    def __repr__() -> str
-
-modules/backend/models/project_context.py (124 lines):
-│class ContextChange(UUIDMixin, TimestampMixin, Base):
-│    context_id: Mapped[str]
-│    version: Mapped[int]
-│    change_type: Mapped[str]
-│    path: Mapped[str]
-│    old_value: Mapped[dict | None]
-│    new_value: Mapped[dict | None]
-│    agent_id: Mapped[str | None]
-│    mission_id: Mapped[str | None]
-│    task_id: Mapped[str | None]
-│    execution_id: Mapped[str | None]
-│    reason: Mapped[str]
-│    context: Mapped['ProjectContext']
-│    def __repr__() -> str
-│class ProjectContext(UUIDMixin, TimestampMixin, Base):
-│    project_id: Mapped[str]
-│    context_data: Mapped[dict]
-│    version: Mapped[int]
-│    size_characters: Mapped[int]
-│    size_tokens: Mapped[int]
-│    changes: Mapped[list['ContextChange']]
-│    def __repr__() -> str
-│class ChangeType(str, enum.Enum):
 
 modules/backend/models/project.py (117 lines):
 │class Project(UUIDMixin, TimestampMixin, Base):
@@ -1856,7 +1857,7 @@ modules/backend/models/session.py (175 lines):
 │    def __repr__() -> str
 │class SessionStatus(str, enum.Enum):
 
-modules/backend/models/__init__.py (25 lines):
+modules/backend/models/__init__.py (34 lines):
 
 
 ## backend.cli
@@ -1911,6 +1912,15 @@ modules/backend/cli/agent.py (233 lines):
 
 modules/backend/cli/config_display.py (44 lines):
 │def show_config(logger, output_format: str) -> None
+
+modules/backend/cli/context.py (479 lines):
+│def run_context(cli_logger, action: str) -> None
+│def _action_show(cli_logger)
+│def _action_assembled(cli_logger)
+│def _assembled_async(console, project_id, domain_tags, ...)
+│def _action_codemap(cli_logger)
+│def _action_pqi(cli_logger)
+│def _action_deps(cli_logger)
 
 modules/backend/cli/credits.py (60 lines):
 │def check_credits(logger, roster: str, output_format: str) -> None
@@ -2563,7 +2573,7 @@ modules/backend/api/v1/endpoints/agents.py (152 lines):
 │@router.get
 │def agent_registry(request_id: RequestId) -> ApiResponse[list[AgentInfo]]
 
-modules/backend/api/v1/endpoints/missions.py (350 lines):
+modules/backend/api/v1/endpoints/missions.py (351 lines):
 │@router.get
 │def list_missions(db: DbSession, request_id: RequestId, status: str | None, ...) -> ApiResponse
 │@router.get
@@ -2902,13 +2912,14 @@ modules/backend/gateway/security/startup_checks.py (137 lines):
 
 ## backend.temporal
 
-modules/backend/temporal/models.py (82 lines):
+modules/backend/temporal/models.py (83 lines):
 │class MissionWorkflowInput:
 │    mission_id: str
 │    session_id: str
 │    mission_brief: str
 │    roster_name: str
 │    mission_budget_usd: float
+│    project_id: str | None
 │    approval_timeout_seconds: int
 │    escalation_timeout_seconds: int
 │    notification_timeout_seconds: int
@@ -2944,7 +2955,7 @@ modules/backend/temporal/models.py (82 lines):
 │    instruction: str
 │    reasoning: str
 
-modules/backend/temporal/activities.py (142 lines):
+modules/backend/temporal/activities.py (145 lines):
 │@activity.defn
 │def execute_mission(input: MissionWorkflowInput) -> MissionExecutionResult
 │@activity.defn
@@ -2956,7 +2967,7 @@ modules/backend/temporal/client.py (55 lines):
 │def get_temporal_config()
 │def get_temporal_client()
 
-modules/backend/temporal/workflow.py (247 lines):
+modules/backend/temporal/workflow.py (249 lines):
 │class AgentMissionWorkflow:
 │    def __init__() -> None
 │    def submit_approval(decision: ApprovalDecision) -> None
