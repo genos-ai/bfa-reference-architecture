@@ -1,9 +1,9 @@
 """
 Tests for project_id threading through the playbook → mission → dispatch chain.
 
-Verifies that project_id flows from PlaybookRunService.run_playbook() through
-MissionService.create_mission_from_step() and execute_mission() down to the
-DispatchAdapter and handle_mission().
+Verifies that project_id flows from PlaybookRunService.run_playbook() (resolved
+from --project name) through MissionService.create_mission_from_step() and
+execute_mission() down to the DispatchAdapter and handle_mission().
 
 Uses real db_session with transaction rollback (P12).
 Only mocks dispatch execution (external agent calls — not infra we operate).
@@ -237,18 +237,14 @@ class TestDispatchAdapterProjectId:
 
 
 # =============================================================================
-# PlaybookRunService: project_id on PlaybookRun and step forwarding
+# PlaybookRunService: name-based project resolution and threading
 # =============================================================================
 
 
-class TestPlaybookRunProjectId:
-    @pytest.mark.asyncio
-    async def test_run_playbook_cli_project_overrides_yaml(
-        self, db_session: AsyncSession,
-    ):
-        """CLI --project UUID takes priority over playbook YAML project_id."""
-        from modules.backend.services.playbook_run import PlaybookRunService
+class TestPlaybookRunProjectName:
+    """Tests for name-based project resolution in PlaybookRunService."""
 
+    def _mock_playbook_service(self):
         mock_playbook_service = MagicMock()
         mock_playbook = MagicMock()
         mock_playbook.playbook_name = "test-playbook"
@@ -258,14 +254,33 @@ class TestPlaybookRunProjectId:
         mock_playbook.context = {}
         mock_playbook.budget.max_cost_usd = 10.0
         mock_playbook.description = "Test playbook"
-        mock_playbook.project_id = "yaml-project-uuid"
         mock_playbook.steps = []
         mock_playbook_service.get_playbook.return_value = mock_playbook
         mock_playbook_service.validate_playbook_capabilities.return_value = []
+        return mock_playbook_service, mock_playbook
 
-        with patch(
-            "modules.backend.services.session.SessionService",
-        ) as mock_ss_cls:
+    @pytest.mark.asyncio
+    async def test_run_playbook_resolves_project_by_name(
+        self, db_session: AsyncSession,
+    ):
+        """--project my-app resolves to a project UUID via _resolve_project."""
+        from modules.backend.services.playbook_run import PlaybookRunService
+
+        mock_ps, _ = self._mock_playbook_service()
+
+        mock_project = MagicMock()
+        mock_project.id = "resolved-uuid-123"
+
+        with (
+            patch(
+                "modules.backend.services.session.SessionService",
+            ) as mock_ss_cls,
+            patch(
+                "modules.backend.services.project.ProjectService.get_project_by_name",
+                new_callable=AsyncMock,
+                return_value=mock_project,
+            ),
+        ):
             mock_ss = AsyncMock()
             mock_session = MagicMock()
             mock_session.id = "sess-playbook"
@@ -273,40 +288,42 @@ class TestPlaybookRunProjectId:
             mock_ss_cls.return_value = mock_ss
 
             service = PlaybookRunService(
-                session=db_session,
-                playbook_service=mock_playbook_service,
+                session=db_session, playbook_service=mock_ps,
             )
             run = await service.run_playbook(
                 playbook_name="test-playbook",
-                project_id="cli-override-uuid",
+                project_name="my-app",
             )
 
-        assert run.project_id == "cli-override-uuid"
+        assert run.project_id == "resolved-uuid-123"
 
     @pytest.mark.asyncio
-    async def test_run_playbook_uses_yaml_project_id(
+    async def test_run_playbook_creates_project_when_new(
         self, db_session: AsyncSession,
     ):
-        """Playbook YAML project_id is used when no CLI override provided."""
+        """A new project is auto-created when the name doesn't exist yet."""
         from modules.backend.services.playbook_run import PlaybookRunService
 
-        mock_playbook_service = MagicMock()
-        mock_playbook = MagicMock()
-        mock_playbook.playbook_name = "test-playbook"
-        mock_playbook.version = "1.0"
-        mock_playbook.enabled = True
-        mock_playbook.trigger.type = "manual"
-        mock_playbook.context = {}
-        mock_playbook.budget.max_cost_usd = 10.0
-        mock_playbook.description = "Test playbook"
-        mock_playbook.project_id = "yaml-project-uuid"
-        mock_playbook.steps = []
-        mock_playbook_service.get_playbook.return_value = mock_playbook
-        mock_playbook_service.validate_playbook_capabilities.return_value = []
+        mock_ps, _ = self._mock_playbook_service()
 
-        with patch(
-            "modules.backend.services.session.SessionService",
-        ) as mock_ss_cls:
+        created_project = MagicMock()
+        created_project.id = "new-uuid-456"
+
+        with (
+            patch(
+                "modules.backend.services.session.SessionService",
+            ) as mock_ss_cls,
+            patch(
+                "modules.backend.services.project.ProjectService.get_project_by_name",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "modules.backend.services.project.ProjectService.create_project",
+                new_callable=AsyncMock,
+                return_value=created_project,
+            ) as mock_create,
+        ):
             mock_ss = AsyncMock()
             mock_session = MagicMock()
             mock_session.id = "sess-playbook"
@@ -314,9 +331,30 @@ class TestPlaybookRunProjectId:
             mock_ss_cls.return_value = mock_ss
 
             service = PlaybookRunService(
-                session=db_session,
-                playbook_service=mock_playbook_service,
+                session=db_session, playbook_service=mock_ps,
             )
-            run = await service.run_playbook(playbook_name="test-playbook")
+            run = await service.run_playbook(
+                playbook_name="test-playbook",
+                project_name="brand-new-app",
+            )
 
-        assert run.project_id == "yaml-project-uuid"
+        assert run.project_id == "new-uuid-456"
+        mock_create.assert_called_once()
+        call_kwargs = mock_create.call_args.kwargs
+        assert call_kwargs["name"] == "brand-new-app"
+        assert call_kwargs["owner_id"] == "system:playbook"
+
+    @pytest.mark.asyncio
+    async def test_run_playbook_requires_project_name(
+        self, db_session: AsyncSession,
+    ):
+        """Omitting --project raises ValueError."""
+        from modules.backend.services.playbook_run import PlaybookRunService
+
+        mock_ps, _ = self._mock_playbook_service()
+
+        service = PlaybookRunService(
+            session=db_session, playbook_service=mock_ps,
+        )
+        with pytest.raises(ValueError, match="Project name is required"):
+            await service.run_playbook(playbook_name="test-playbook")

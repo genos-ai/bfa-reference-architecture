@@ -57,8 +57,7 @@ class ProjectService(BaseService):
     ) -> Project:
         """Create a new project with initial owner membership.
 
-        Creates: projects row, project_members row (owner).
-        PCD creation is added in Sub-Phase 2.
+        Creates: projects row, project_members row (owner), seed PCD.
         """
         # Check unique name
         existing = await self._project_repo.get_by_name(name)

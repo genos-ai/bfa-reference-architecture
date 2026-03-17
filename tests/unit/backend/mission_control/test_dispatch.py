@@ -762,7 +762,7 @@ class TestDispatch:
         assert outcome.status == MissionStatus.SUCCESS
         # Assembler output replaces simple PCD injection
         assert "project_context" in received_inputs[0]
-        assert "history" in received_inputs[0]["project_context"]
+        assert "project_history" in received_inputs[0]
         mock_assembler.build.assert_called_once()
 
     @pytest.mark.asyncio

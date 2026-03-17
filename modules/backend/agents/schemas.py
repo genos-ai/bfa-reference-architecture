@@ -20,6 +20,24 @@ class Violation(BaseModel):
     recommendation: str | None = None
 
 
+class PqiDimensionScore(BaseModel):
+    """Score for a single PQI dimension."""
+
+    score: float
+    confidence: float = 1.0
+    sub_scores: dict[str, float] = {}
+
+
+class PqiScore(BaseModel):
+    """PyQuality Index composite score and per-dimension breakdown."""
+
+    composite: float
+    quality_band: str
+    dimensions: dict[str, PqiDimensionScore] = {}
+    file_count: int = 0
+    line_count: int = 0
+
+
 class QaAuditResult(BaseModel):
     """Structured output from the QA compliance agent (read-only audit)."""
 
@@ -29,6 +47,7 @@ class QaAuditResult(BaseModel):
     warning_count: int
     violations: list[Violation]
     scanned_files_count: int
+    pqi: PqiScore | None = None
 
 
 class ArchitectureFinding(BaseModel):

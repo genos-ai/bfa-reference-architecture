@@ -198,6 +198,8 @@ class DispatchSchema(_StrictBase):
 
     default_request_limit: int = 50
     token_cost_factor: int = 333_333  # tokens per dollar of cost ceiling
+    context_token_budget: int = 50_000  # assembled context packet budget
+    history_reserve_tokens: int = 1_500  # reserved for Layer 2 history
 
 
 class EscalationThresholdsSchema(_StrictBase):

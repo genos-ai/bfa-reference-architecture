@@ -44,6 +44,7 @@ class MissionControlDispatchAdapter:
         cost_ceiling_usd: float | None = None,
         session_id: str | None = None,
         project_id: str | None = None,
+        gate: object | None = None,
     ) -> dict:
         """Execute a mission via handle_mission() and return result dict."""
         mission_id = f"mission-{session_id}" if session_id else "mission-adhoc"
@@ -78,6 +79,7 @@ class MissionControlDispatchAdapter:
             session_id=session_id,
             project_id=project_id,
             db_session=self._db_session,
+            gate=gate,
         )
 
         outcome_dict = outcome.model_dump()

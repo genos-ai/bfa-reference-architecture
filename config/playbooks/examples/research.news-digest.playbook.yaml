@@ -20,7 +20,6 @@ objective:
   regulatory_reference: null
 version: 1
 enabled: false
-project_id: "edba2c7c-932a-4bec-b5d9-68d7d0a219d9"
 project_name: "research-news-digest"
 
 trigger:

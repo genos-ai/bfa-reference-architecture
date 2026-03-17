@@ -60,4 +60,5 @@ class MissionDispatchProtocol(Protocol):
         cost_ceiling_usd: float | None = ...,
         session_id: str | None = ...,
         project_id: str | None = ...,
+        gate: object | None = ...,
     ) -> dict: ...

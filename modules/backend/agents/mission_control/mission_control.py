@@ -22,6 +22,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from modules.backend.agents.mission_control.cost import compute_cost_usd, estimate_cost
 from modules.backend.core.exceptions import ApplicationError, BudgetExceededError
 from modules.backend.agents.mission_control.dispatch import dispatch
+from modules.backend.agents.mission_control.gate import GateReviewer
 from modules.backend.agents.mission_control.persistence_bridge import persist_mission_results
 from modules.backend.agents.mission_control.helpers import (
     _build_agent_deps,
@@ -399,6 +400,7 @@ async def handle_mission(
     session_id: str | None = None,
     project_id: str | None = None,
     db_session: Any | None = None,
+    gate: GateReviewer | None = None,
 ) -> MissionOutcome:
     """Dispatch entry point for complex multi-agent missions.
 
@@ -413,13 +415,59 @@ async def handle_mission(
     route here.
     """
     roster = load_roster(roster_name)
-
     roster_description = _build_roster_prompt(roster)
+
+    # Create context services BEFORE planning so the planner gets PCD + history
+    context_curator = None
+    context_assembler = None
+    project_context = None
+    recent_failures = None
+
+    if project_id and db_session:
+        pcd_manager = ProjectContextManager(db_session)
+        context_curator = ContextCurator(pcd_manager)
+        history_service = HistoryQueryService(db_session)
+
+        from modules.backend.core.config import find_project_root
+        from modules.backend.services.code_map.loader import CodeMapLoader
+
+        code_map_loader = CodeMapLoader(find_project_root())
+        context_assembler = ContextAssembler(
+            context_manager=pcd_manager,
+            history_service=history_service,
+            code_map_loader=code_map_loader,
+        )
+
+        # Load project context for the planner (non-fatal)
+        try:
+            project_context = await context_curator.get_project_context(project_id)
+        except (OSError, ValueError, RuntimeError):
+            logger.warning(
+                "Failed to load PCD for planning (non-fatal)",
+                extra={"project_id": project_id},
+                exc_info=True,
+            )
+
+        # Load recent failures so the planner can avoid repeating them
+        try:
+            recent_failures = await history_service.get_recent_failures(
+                project_id, limit=5,
+            )
+        except (OSError, ValueError, RuntimeError):
+            logger.warning(
+                "Failed to load failure history for planning (non-fatal)",
+                extra={"project_id": project_id},
+                exc_info=True,
+            )
+
+    # Build planning prompt WITH project context
     planning_prompt = _build_planning_prompt(
         mission_brief=mission_brief,
         mission_id=mission_id,
         roster_description=roster_description,
         upstream_context=upstream_context,
+        project_context=project_context,
+        recent_failures=recent_failures,
     )
 
     # Call Planning Agent (with retry on validation failure)
@@ -473,28 +521,13 @@ async def handle_mission(
             planning_trace_reference=thinking_trace,
         )
 
-    # Construct context services if project is set and DB session is available
-    context_curator = None
-    context_assembler = None
-    if project_id and db_session:
-        pcd_manager = ProjectContextManager(db_session)
-        context_curator = ContextCurator(pcd_manager)
-        from modules.backend.core.config import find_project_root
-        from modules.backend.services.code_map.loader import CodeMapLoader
-
-        code_map_loader = CodeMapLoader(find_project_root())
-        context_assembler = ContextAssembler(
-            context_manager=pcd_manager,
-            history_service=HistoryQueryService(db_session),
-            code_map_loader=code_map_loader,
-        )
-
-    # Execute dispatch loop
+    # Execute dispatch loop (context services already created above)
     outcome = await dispatch(
         plan=plan,
         roster=roster,
         execute_agent_fn=_make_agent_executor(session_service, event_bus),
         mission_budget_usd=mission_budget_usd,
+        gate=gate,
         project_id=project_id,
         context_curator=context_curator,
         context_assembler=context_assembler,

@@ -342,6 +342,11 @@ def render_human(
     elif not summary_text:
         return [output_panel(format_json_body(raw), title=title, subtitle=subtitle)]
 
+    # PQI score breakdown (if present)
+    pqi = parsed.get("pqi")
+    if isinstance(pqi, dict) and "composite" in pqi:
+        renderables.append(_build_pqi_panel(pqi))
+
     # Scalar stats table below the list
     if show_scalars:
         scalars = _extract_scalars(parsed)
@@ -453,6 +458,60 @@ def _build_dynamic_table(items: list[dict], *, list_key: str) -> Table:
         table.add_row(*row)
 
     return table
+
+
+def _build_pqi_panel(pqi: dict) -> Panel:
+    """Build a Rich panel showing the PQI composite score and per-dimension breakdown."""
+    from rich.text import Text
+
+    composite = pqi.get("composite", 0)
+    band = pqi.get("quality_band", "?")
+    file_count = pqi.get("file_count", 0)
+    line_count = pqi.get("line_count", 0)
+
+    band_colors = {
+        "Excellent": "green", "Good": "cyan", "Adequate": "yellow",
+        "Acceptable": "yellow", "Poor": "red",
+    }
+    color = band_colors.get(band, "white")
+
+    # Build progress bar
+    bar_len = int(composite / 2.5)  # 40 chars for 100%
+    bar = "█" * bar_len + "░" * (40 - bar_len)
+
+    lines: list[str] = []
+    lines.append(f"  Composite Score:  [{color} bold]{composite:.1f} / 100[/{color} bold]  [{color}][{band}][/{color}]")
+    lines.append(f"    [{color}]{bar}[/{color}] {composite:.1f}%")
+    lines.append(f"")
+    lines.append(f"  Files: {file_count}    Lines: {line_count:,}")
+
+    dims = pqi.get("dimensions", {})
+    if dims:
+        lines.append("")
+        lines.append("  ─" * 30)
+        lines.append(f"  {'Dimension':<22s} {'Score':>5s}  Bar")
+        lines.append("  ─" * 30)
+
+        for name, dim in sorted(dims.items(), key=lambda x: -x[1].get("score", 0)):
+            score = dim.get("score", 0)
+            confidence = dim.get("confidence", 1.0)
+            dim_bar_len = int(score / 5)
+            dim_bar = "█" * dim_bar_len + "░" * (20 - dim_bar_len)
+            conf_note = f" [dim](confidence: {confidence:.0%})[/dim]" if confidence < 0.8 else ""
+            lines.append(f"  {name:<22s} {score:5.1f}  {dim_bar}{conf_note}")
+
+            # Sub-scores indented below each dimension
+            sub_scores = dim.get("sub_scores", {})
+            for sub_name, sub_val in sub_scores.items():
+                lines.append(f"    [dim]{sub_name:<20s} {sub_val:5.1f}[/dim]")
+
+    body = "\n".join(lines)
+    return Panel(
+        body,
+        title="[cyan bold]PyQuality Index (PQI)[/cyan bold]",
+        border_style="cyan",
+        padding=(1, 2),
+    )
 
 
 def _extract_scalars(parsed: dict) -> list[tuple[str, str]]:

@@ -1,0 +1,61 @@
+# =============================================================================
+# Gate Reviewer Configuration
+# =============================================================================
+#
+# Controls the step-through gate mechanism for agent dispatch pipelines.
+# The gate pauses execution at key decision points for human and/or AI review.
+#
+# Modes:
+#   off          - No gate reviews (default). Zero overhead.
+#   interactive  - Human reviews via Rich CLI at each enabled gate point.
+#   ai_assisted  - AI produces a recommendation, human makes final decision.
+#   autonomous   - AI makes all gate decisions. No human interaction.
+#
+# CLI override: --gate <mode>  (e.g., --gate ai_assisted)
+# Legacy alias: --step is equivalent to --gate interactive
+
+mode: "off"
+
+# ---------------------------------------------------------------------------
+# AI reviewer settings (used in ai_assisted and autonomous modes)
+# ---------------------------------------------------------------------------
+ai:
+  model: "anthropic:claude-haiku-4-5-20251001"     # Cost-effective for routine gates
+  temperature: 0.0                                  # Deterministic decisions
+  max_tokens: 1024                                  # Plenty for a structured decision
+  budget_per_review_usd: 0.01                       # Not yet enforced — reserved for future cost-gating
+
+# ---------------------------------------------------------------------------
+# Per-gate-point configuration
+# ---------------------------------------------------------------------------
+# Each gate point can be independently enabled/disabled and can override
+# the top-level mode. Set mode to null to inherit from the top-level mode.
+
+points:
+  pre_dispatch:
+    enabled: true
+    mode: null                # Inherit from top-level mode
+  pre_layer:
+    enabled: true
+    mode: null
+  post_task:
+    enabled: true
+    mode: null
+  verification_failed:
+    enabled: true
+    mode: null                # Consider: "ai_assisted" even in autonomous mode
+  post_layer:
+    enabled: true
+    mode: null
+
+# ---------------------------------------------------------------------------
+# Auto-continue rules (for autonomous mode)
+# ---------------------------------------------------------------------------
+# When the AI reviewer is in autonomous mode, these rules define conditions
+# under which the gate auto-continues without calling the LLM at all.
+# This saves cost on routine gate points that don't need AI judgment.
+
+auto_rules:
+  cost_threshold_pct: 80       # Auto-continue if cost < this % of budget
+  max_tasks_per_layer: 10      # Auto-continue pre_layer if <= N tasks
+  skip_post_task_on_pass: true # Skip post_task gate when verification passes

@@ -258,13 +258,38 @@ def _build_planning_prompt(
     roster_description: str,
     upstream_context: dict | None,
     code_map: dict | None = None,
+    project_context: dict | None = None,
+    recent_failures: list | None = None,
 ) -> str:
-    """Assemble the full prompt for the Planning Agent."""
+    """Assemble the full prompt for the Planning Agent.
+
+    Includes project context (PCD) and recent failure history when available,
+    so the planner can make informed decomposition decisions.
+    """
     parts = [
         f"## Mission Brief\n\n{mission_brief}\n",
         f"## Mission ID\n\n{mission_id}\n",
         roster_description,
     ]
+
+    if project_context:
+        parts.append(
+            "## Project Context\n\n"
+            "The following is the Project Context Document (PCD) for the target project. "
+            "Use it to understand the project's architecture, constraints, current state, "
+            "and key decisions when decomposing tasks.\n\n"
+            f"```json\n{json.dumps(project_context, indent=2)}\n```\n"
+        )
+
+    if recent_failures:
+        parts.append(
+            "## Recent Failures (Avoid Repeating)\n\n"
+            "The following tasks failed in recent runs against this project. "
+            "Account for these when planning — e.g., split large modules that "
+            "caused token limits, avoid approaches that timed out, adjust task "
+            "granularity based on past outcomes.\n\n"
+            f"```json\n{json.dumps(recent_failures, indent=2)}\n```\n"
+        )
 
     if upstream_context:
         parts.append(
@@ -341,6 +366,21 @@ def _make_agent_executor(
                 f"{json.dumps(inputs, indent=2, default=str)}\n```"
             )
 
+        # QA agent: pre-compute PQI deterministically and enrich message
+        pqi_data = None
+        if agent_name == "code.quality.agent" and hasattr(module, "_compute_pqi"):
+            pqi_data = await module._compute_pqi(deps)
+            if pqi_data and hasattr(module, "_format_pqi_for_llm"):
+                pqi_text = module._format_pqi_for_llm(pqi_data)
+                user_message = (
+                    f"{user_message}\n\n"
+                    f"## Pre-computed PQI (PyQuality Index)\n\n"
+                    f"The following PQI score has been computed deterministically. "
+                    f"Reference it in your summary and recommendations — you do NOT "
+                    f"need to call run_quality_score_tool yourself.\n\n"
+                    f"{pqi_text}"
+                )
+
         # Call agent.run() directly to retain usage metadata
         run_result = await agent.run(
             user_message, deps=deps, usage_limits=usage_limits,
@@ -348,6 +388,11 @@ def _make_agent_executor(
 
         # Extract output
         output = run_result.output
+
+        # QA agent: inject PQI deterministically before serialization
+        if pqi_data and hasattr(output, "pqi"):
+            output.pqi = pqi_data
+
         if hasattr(output, "model_dump"):
             output_dict = output.model_dump()
         elif isinstance(output, dict):

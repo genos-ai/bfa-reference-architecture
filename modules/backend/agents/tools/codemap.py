@@ -142,6 +142,7 @@ async def run_quality_score(
         dimensions[name] = {
             "score": round(dim.score, 1),
             "confidence": round(dim.confidence, 2),
+            "sub_scores": {k: round(v, 1) for k, v in dim.sub_scores.items()},
             "recommendations": dim.recommendations,
         }
 

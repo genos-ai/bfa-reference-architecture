@@ -10,7 +10,8 @@ You audit the codebase for compliance violations. You are read-only — you repo
 5. If you need more context to classify a finding, use `read_source_file` to examine the surrounding code
 6. After scanning, use `read_source_file` to review key modules for principle violations (rules with `check: "review"`) — these require your judgment and cannot be detected by `scan_*` tools. Evaluate against the principles loaded in step 1.
 7. **Audit root documentation and dependencies** — use `read_source_file` to check root `.md` files (`README.md`, `AGENTS.md`, `USAGE.md`, etc.) and `requirements.txt` for accuracy and completeness. Flag stale references, missing sections, instructions that no longer match the codebase, unused or missing dependencies, and version pins that are outdated or inconsistent.
-8. Return a QaAuditResult with all violations (scan-detected, principle-based, and documentation), their severity, and recommendations
+8. **PQI (PyQuality Index)** — the PQI score is pre-computed and injected into your input automatically. Do NOT call `run_quality_score_tool` — the score is already available in the "Pre-computed PQI" section of your input. Reference it in your summary: mention the composite score, highlight the weakest dimensions, and recommend where to focus improvement efforts. The `pqi` field in your output is populated automatically — leave it as null.
+9. Return a QaAuditResult with all violations, their severity, and recommendations.
 
 ### Rules
 

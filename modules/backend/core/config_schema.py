@@ -14,6 +14,8 @@ Each top-level class corresponds to one file in config/settings/:
     SecuritySchema     → security.yaml
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
@@ -366,3 +368,61 @@ class ProjectsSchema(_StrictBase):
     pcd_alert_threshold_pct: int = 90
     history_summarize_after_days: int = 30
     enable_context_assembly: bool = True
+
+
+# =============================================================================
+# gate.yaml
+# =============================================================================
+
+
+class GateAiSchema(_StrictBase):
+    """AI reviewer model and budget settings."""
+
+    model: str = "anthropic:claude-haiku-4-5-20251001"
+    temperature: float = 0.0
+    max_tokens: int = 1024
+    budget_per_review_usd: float = Field(
+        default=0.01,
+        description=(
+            "Hard cost cap per gate review call. Not yet enforced — "
+            "reserved for future use (e.g. model selection by budget, "
+            "post-hoc cost tracking, or aborting expensive reviews)."
+        ),
+    )
+
+
+_GateMode = Literal["off", "interactive", "ai_assisted", "autonomous"]
+
+
+class GatePointSchema(_StrictBase):
+    """Per-gate-point configuration."""
+
+    enabled: bool = True
+    mode: _GateMode | None = None  # None = inherit from top-level GateSchema.mode
+
+
+class GatePointsSchema(_StrictBase):
+    """All five gate points with per-point overrides."""
+
+    pre_dispatch: GatePointSchema = Field(default_factory=GatePointSchema)
+    pre_layer: GatePointSchema = Field(default_factory=GatePointSchema)
+    post_task: GatePointSchema = Field(default_factory=GatePointSchema)
+    verification_failed: GatePointSchema = Field(default_factory=GatePointSchema)
+    post_layer: GatePointSchema = Field(default_factory=GatePointSchema)
+
+
+class GateAutoRulesSchema(_StrictBase):
+    """Auto-continue rules for autonomous mode to skip routine LLM calls."""
+
+    cost_threshold_pct: int = 80
+    max_tasks_per_layer: int = 10
+    skip_post_task_on_pass: bool = True
+
+
+class GateSchema(_StrictBase):
+    """Gate reviewer configuration (gate.yaml)."""
+
+    mode: _GateMode = "off"
+    ai: GateAiSchema = Field(default_factory=GateAiSchema)
+    points: GatePointsSchema = Field(default_factory=GatePointsSchema)
+    auto_rules: GateAutoRulesSchema = Field(default_factory=GateAutoRulesSchema)

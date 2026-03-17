@@ -14,7 +14,7 @@ from pydantic_ai.models import Model
 
 from modules.backend.agents.mission_control.helpers import assemble_instructions
 from modules.backend.agents.deps.base import QaAgentDeps
-from modules.backend.agents.schemas import QaAuditResult
+from modules.backend.agents.schemas import PqiDimensionScore, PqiScore, QaAuditResult
 from modules.backend.agents.tools import codemap, compliance, filesystem
 from modules.backend.core.logging import get_logger
 
@@ -154,6 +154,46 @@ def create_agent(model: str | Model) -> Agent[QaAgentDeps, QaAuditResult]:
     return agent
 
 
+async def _compute_pqi(deps: QaAgentDeps) -> PqiScore | None:
+    """Compute PQI deterministically. Returns None on failure (non-fatal)."""
+    try:
+        raw = await codemap.run_quality_score(deps.project_root, deps.scope)
+        if "error" in raw:
+            logger.warning("PQI computation failed", extra={"error": raw["error"]})
+            return None
+        dimensions = {}
+        for name, dim in raw.get("dimensions", {}).items():
+            dimensions[name] = PqiDimensionScore(
+                score=dim["score"],
+                confidence=dim.get("confidence", 1.0),
+                sub_scores=dim.get("sub_scores", {}),
+            )
+        return PqiScore(
+            composite=raw["composite_score"],
+            quality_band=raw["quality_band"],
+            dimensions=dimensions,
+            file_count=raw.get("file_count", 0),
+            line_count=raw.get("line_count", 0),
+        )
+    except Exception:
+        logger.exception("PQI computation failed")
+        return None
+
+
+def _format_pqi_for_llm(pqi: PqiScore) -> str:
+    """Format PQI score as text the LLM can reference in its summary."""
+    lines = [
+        f"## PQI Score: {pqi.composite:.1f}/100 ({pqi.quality_band})",
+        f"Files: {pqi.file_count} | Lines: {pqi.line_count}",
+        "",
+    ]
+    for name, dim in sorted(pqi.dimensions.items(), key=lambda kv: -kv[1].score):
+        lines.append(f"- {name}: {dim.score:.1f}/100 (confidence: {dim.confidence:.0%})")
+        for sub, val in sorted(dim.sub_scores.items()):
+            lines.append(f"    {sub}: {val:.1f}")
+    return "\n".join(lines)
+
+
 async def run_agent(
     user_message: str,
     deps: QaAgentDeps,
@@ -166,13 +206,34 @@ async def run_agent(
     """
 
     logger.info("QA agent invoked", extra={"message": user_message})
+
+    # Compute PQI deterministically BEFORE the agent runs so the LLM
+    # can reference the scores in its summary and recommendations.
+    pqi = await _compute_pqi(deps)
+    if pqi:
+        pqi_text = _format_pqi_for_llm(pqi)
+        user_message = (
+            f"{user_message}\n\n"
+            f"## Pre-computed PQI (PyQuality Index)\n\n"
+            f"The following PQI score has been computed deterministically. "
+            f"Reference it in your summary and recommendations — you do NOT "
+            f"need to call run_quality_score_tool yourself.\n\n"
+            f"{pqi_text}"
+        )
+        deps.emit({"type": "tool_done", "tool": "pqi_precompute", "detail": f"PQI {pqi.composite:.1f}"})
+
     result = await agent.run(user_message, deps=deps, usage_limits=usage_limits)
+
+    # Inject PQI deterministically — overwrite whatever the LLM returned
+    if pqi:
+        result.output.pqi = pqi
 
     logger.info(
         "QA agent completed",
         extra={
             "summary": result.output.summary,
             "total_violations": result.output.total_violations,
+            "pqi_composite": pqi.composite if pqi else None,
             "usage": {
                 "requests": result.usage().requests,
                 "input_tokens": result.usage().input_tokens,
@@ -206,9 +267,24 @@ async def run_agent_stream(
     original_progress = deps.on_progress
     deps.on_progress = lambda event: queue.put_nowait(event)
 
+    # Compute PQI deterministically before agent runs
+    pqi = await _compute_pqi(deps)
+    enriched_message = user_message
+    if pqi:
+        pqi_text = _format_pqi_for_llm(pqi)
+        enriched_message = (
+            f"{user_message}\n\n"
+            f"## Pre-computed PQI (PyQuality Index)\n\n"
+            f"The following PQI score has been computed deterministically. "
+            f"Reference it in your summary and recommendations — you do NOT "
+            f"need to call run_quality_score_tool yourself.\n\n"
+            f"{pqi_text}"
+        )
+        queue.put_nowait({"type": "tool_done", "tool": "pqi_precompute", "detail": f"PQI {pqi.composite:.1f}"})
+
     async def _run():
         logger.info("QA agent invoked (stream)", extra={"message": user_message, "conversation_id": conversation_id})
-        result = await agent.run(user_message, deps=deps, usage_limits=usage_limits)
+        result = await agent.run(enriched_message, deps=deps, usage_limits=usage_limits)
         return result.output
 
     task = asyncio.create_task(_run())
@@ -225,9 +301,13 @@ async def run_agent_stream(
 
     deps.on_progress = original_progress
 
-    result = task.result()
+    output = task.result()
+    # Inject PQI deterministically
+    if pqi:
+        output.pqi = pqi
+
     logger.info(
         "QA agent completed (stream)",
-        extra={"summary": result.summary, "conversation_id": conversation_id},
+        extra={"summary": output.summary, "conversation_id": conversation_id},
     )
-    yield {"type": "complete", "result": result.model_dump(), "conversation_id": conversation_id}
+    yield {"type": "complete", "result": output.model_dump(), "conversation_id": conversation_id}

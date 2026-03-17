@@ -16,7 +16,6 @@ objective:
   regulatory_reference: null
 version: 2
 enabled: true
-project_id: "d4bb2073-d86a-465b-805f-9400d4c2449d"
 project_name: "system-audit-and-health-check"
 
 trigger:

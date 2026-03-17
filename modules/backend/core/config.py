@@ -29,6 +29,7 @@ from modules.backend.core.config_schema import (
     DatabaseSchema,
     EventsSchema,
     FeaturesSchema,
+    GateSchema,
     GatewaySchema,
     LoggingSchema,
     MissionsSchema,
@@ -136,6 +137,7 @@ class AppConfig:
         self._temporal = _load_validated_optional(TemporalSchema, "temporal.yaml")
         self._playbooks = _load_validated_optional(PlaybooksSchema, "playbooks.yaml")
         self._projects = _load_validated_optional(ProjectsSchema, "projects.yaml")
+        self._gate = _load_validated_optional(GateSchema, "gate.yaml")
 
     @property
     def application(self) -> ApplicationSchema:
@@ -196,6 +198,11 @@ class AppConfig:
     def projects(self) -> ProjectsSchema:
         """Project system settings."""
         return self._projects
+
+    @property
+    def gate(self) -> GateSchema:
+        """Gate reviewer settings."""
+        return self._gate
 
 
 @lru_cache

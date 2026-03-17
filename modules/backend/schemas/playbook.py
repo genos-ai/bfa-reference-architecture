@@ -148,11 +148,6 @@ class PlaybookSchema(BaseModel):
     objective: PlaybookObjectiveSchema
     version: int = Field(default=1, ge=1)
     enabled: bool = True
-    project_id: str = Field(
-        ...,
-        min_length=1,
-        description="Project UUID to associate with all runs spawned by this playbook.",
-    )
     project_name: str | None = Field(
         None,
         description="Human-readable project name (display only, not used for resolution).",

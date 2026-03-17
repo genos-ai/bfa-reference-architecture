@@ -39,7 +39,7 @@ agents:
         scanned_files_count: integer
     constraints:
       timeout_seconds: 120
-      cost_ceiling_usd: 0.50
+      cost_ceiling_usd: 1.00
       retry_budget: 2
       parallelism: safe
 

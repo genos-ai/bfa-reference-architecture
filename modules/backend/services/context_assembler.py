@@ -27,8 +27,20 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# Default token budget for context assembly
-DEFAULT_TOKEN_BUDGET = 12_000  # ~48KB of JSON
+def _get_dispatch_config() -> tuple[int, int]:
+    """Load context budget settings from mission_control config."""
+    try:
+        from modules.backend.agents.mission_control.middleware import (
+            _load_mission_control_config,
+        )
+        cfg = _load_mission_control_config()
+        return cfg.dispatch.context_token_budget, cfg.dispatch.history_reserve_tokens
+    except Exception:
+        return 50_000, 1_500
+
+
+# Fallback used only when config is unavailable (e.g. unit tests).
+DEFAULT_TOKEN_BUDGET = 50_000
 
 # Domain tags that indicate a task needs codebase structural context
 _CODING_TAGS = frozenset({
@@ -77,8 +89,9 @@ class ContextAssembler:
           - code_map: Code Map Markdown (Layer 3, for coding tasks)
           - history: relevant past work (Layer 2, if budget allows)
         """
+        config_budget, history_reserve = _get_dispatch_config()
         packet: dict[str, Any] = {}
-        remaining_budget = token_budget
+        remaining_budget = token_budget if token_budget != DEFAULT_TOKEN_BUDGET else config_budget
 
         # Layer 0: PCD (always, never trimmed)
         pcd = await self._context_manager.get_context(project_id)
@@ -110,7 +123,11 @@ class ContextAssembler:
 
         # Layer 3: Code Map (for coding tasks, loaded before history)
         if self._is_coding_task(domain_tags):
-            code_map_content = self._load_code_map_markdown(code_map_max_tokens)
+            # Reserve budget for history before loading Code Map
+            history_reserve = history_reserve if domain_tags else 0
+            effective_cm_budget = max(remaining_budget - history_reserve, 0)
+            cm_max = code_map_max_tokens or effective_cm_budget or None
+            code_map_content = self._load_code_map_markdown(cm_max)
             if code_map_content:
                 packet["code_map"] = code_map_content
                 remaining_budget -= estimate_tokens(code_map_content)

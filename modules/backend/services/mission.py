@@ -214,7 +214,7 @@ class MissionService(BaseService):
 
     # ---- Mission execution ----
 
-    async def execute_mission(self, mission_id: str) -> Mission:
+    async def execute_mission(self, mission_id: str, gate: object | None = None) -> Mission:
         """Execute a mission by dispatching to Mission Control."""
         mission = await self._get_mission(mission_id)
         self._validate_transition(mission, MissionState.RUNNING)
@@ -240,6 +240,7 @@ class MissionService(BaseService):
                 cost_ceiling_usd=mission.cost_ceiling_usd,
                 session_id=mission.session_id,
                 project_id=mission.project_id,
+                gate=gate,
             )
 
             mission.mission_outcome = (

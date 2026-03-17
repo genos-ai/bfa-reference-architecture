@@ -56,7 +56,8 @@ class PlaybookRunService(BaseService):
         triggered_by: str = "user:cli",
         context_overrides: dict[str, Any] | None = None,
         on_progress: Any | None = None,
-        project_id: str | None = None,
+        project_name: str | None = None,
+        gate: object | None = None,
     ) -> PlaybookRun:
         """Execute a playbook end-to-end.
 
@@ -81,9 +82,14 @@ class PlaybookRunService(BaseService):
                 f"Playbook capability errors: {'; '.join(errors)}"
             )
 
-        # Resolve project: CLI --project (UUID) > playbook YAML project_id
-        if not project_id:
-            project_id = playbook.project_id
+        # Resolve project by name (get-or-create)
+        if not project_name:
+            raise ValueError(
+                "Project name is required. Use --project <name> to specify "
+                "the target project."
+            )
+
+        project_id = await self._resolve_project(project_name, playbook)
 
         # Create session for the playbook run
         from modules.backend.services.session import SessionService
@@ -130,7 +136,7 @@ class PlaybookRunService(BaseService):
         )
 
         try:
-            await self._execute_steps(run, playbook, session.id, on_progress)
+            await self._execute_steps(run, playbook, session.id, on_progress, gate=gate)
 
             run.status = PlaybookRunState.COMPLETED
             run.completed_at = utc_now().isoformat()
@@ -162,6 +168,37 @@ class PlaybookRunService(BaseService):
 
         return run
 
+    async def _resolve_project(
+        self,
+        project_name: str,
+        playbook: PlaybookSchema,
+    ) -> str:
+        """Resolve a project name to a UUID, creating the project if needed.
+
+        Returns the project UUID.
+        """
+        from modules.backend.services.project import ProjectService
+
+        project_service = ProjectService(self._session)
+        project = await project_service.get_project_by_name(project_name)
+
+        if project:
+            return project.id
+
+        # Auto-create project from name
+        project = await project_service.create_project(
+            name=project_name,
+            description=f"Auto-created for playbook: {playbook.description[:200]}",
+            owner_id="system:playbook",
+        )
+        # Commit so parallel step sessions can see the project
+        await self._session.commit()
+        logger.info(
+            "Auto-created project",
+            extra={"project_name": project_name, "project_id": project.id},
+        )
+        return project.id
+
     async def list_runs(
         self,
         playbook_name: str | None = None,
@@ -185,6 +222,7 @@ class PlaybookRunService(BaseService):
         playbook: PlaybookSchema,
         session_id: str,
         on_progress: Any | None = None,
+        gate: object | None = None,
     ) -> None:
         """Execute steps in topological wave order.
 
@@ -234,7 +272,7 @@ class PlaybookRunService(BaseService):
             # Execute all steps in this wave concurrently
             wave_steps = [step_map[sid] for sid in wave_step_ids]
             results = await self._execute_wave(
-                run, wave_steps, session_id, completed_outcomes,
+                run, wave_steps, session_id, completed_outcomes, gate=gate,
             )
 
             # Collect results sequentially (cost, outcomes, events)
@@ -257,6 +295,7 @@ class PlaybookRunService(BaseService):
         steps: list[PlaybookStepSchema],
         session_id: str,
         completed_outcomes: dict[str, dict],
+        gate: object | None = None,
     ) -> list[tuple[Any, dict]]:
         """Execute all steps in a wave concurrently.
 
@@ -272,7 +311,7 @@ class PlaybookRunService(BaseService):
             async with self._mission_service_factory() as mission_service:
                 return await self._execute_step(
                     run, step, session_id, completed_outcomes,
-                    mission_service,
+                    mission_service, gate=gate,
                 )
 
         results = await asyncio.gather(
@@ -287,6 +326,7 @@ class PlaybookRunService(BaseService):
         session_id: str,
         completed_outcomes: dict[str, dict],
         mission_service: MissionService,
+        gate: object | None = None,
     ) -> tuple[Any, dict]:
         """Execute a single playbook step as a mission."""
         # Resolve upstream context from dependencies
@@ -328,7 +368,7 @@ class PlaybookRunService(BaseService):
         )
 
         # Execute the mission
-        mission = await mission_service.execute_mission(mission.id)
+        mission = await mission_service.execute_mission(mission.id, gate=gate)
 
         # Extract outputs for downstream steps
         output_mapping = (

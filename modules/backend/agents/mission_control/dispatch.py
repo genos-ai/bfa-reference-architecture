@@ -16,7 +16,14 @@ from collections import deque
 from typing import Any
 
 from pydantic_ai import UsageLimits
+from pydantic_ai.exceptions import UsageLimitExceeded
 
+from modules.backend.agents.mission_control.gate import (
+    GateAction,
+    GateContext,
+    GateReviewer,
+    NoOpGate,
+)
 from modules.backend.agents.mission_control.middleware import _load_mission_control_config
 from modules.backend.agents.mission_control.models import (
     ContextAssemblerProtocol,
@@ -176,6 +183,7 @@ async def dispatch(
     execute_agent_fn: ExecuteAgentFn,
     mission_budget_usd: float,
     *,
+    gate: GateReviewer | None = None,
     project_id: str | None = None,
     context_curator: ContextCuratorProtocol | None = None,
     context_assembler: ContextAssemblerProtocol | None = None,
@@ -188,9 +196,29 @@ async def dispatch(
     4. 3-tier verification after each task
     5. Retry with feedback on verification failure
     6. Aggregate results into MissionOutcome
+
+    When gate is provided, pauses at key decision points for review.
     """
     start_time = time.monotonic()
+    _gate = gate or NoOpGate()
     layers = topological_sort(plan)
+
+    # Gate 1: pre_dispatch — review full plan before execution
+    decision = await _gate.review(GateContext(
+        gate_type="pre_dispatch",
+        mission_id=plan.mission_id,
+        layer_index=0,
+        total_layers=len(layers),
+        pending_tasks=[
+            {"task_id": t.task_id, "agent": t.agent, "description": t.description}
+            for t in plan.tasks
+        ],
+        total_cost_usd=0.0,
+        budget_usd=mission_budget_usd,
+    ))
+    if decision.action == GateAction.ABORT:
+        logger.info("Mission aborted at pre_dispatch gate", extra={"reason": decision.reason})
+        return _aborted_outcome(plan, decision.reason, start_time)
 
     # Load PCD for agent context (if project is set)
     project_context: dict | None = None
@@ -212,9 +240,12 @@ async def dispatch(
     total_output_tokens = 0
     total_thinking_tokens = 0
 
-    for layer in layers:
+    aborted = False
+    abort_reason: str | None = None
+    for layer_idx, layer in enumerate(layers):
         coros = []
         layer_tasks: list[TaskDefinition] = []
+        resolved_inputs_map: dict[str, dict] = {}
 
         for task_id in layer:
             task = plan.get_task(task_id)
@@ -251,6 +282,10 @@ async def dispatch(
                     code_map_content = assembled.get("code_map")
                     if code_map_content:
                         resolved_inputs["code_map"] = code_map_content
+                    # Inject history so agents see past work in same domain
+                    history_content = assembled.get("history")
+                    if history_content:
+                        resolved_inputs["project_history"] = history_content
                 except (OSError, ValueError, RuntimeError):
                     logger.warning(
                         "Context assembly failed, falling back to PCD",
@@ -263,6 +298,7 @@ async def dispatch(
                 resolved_inputs["project_context"] = project_context
 
             layer_tasks.append(task)
+            resolved_inputs_map[task.task_id] = resolved_inputs
             coros.append(
                 _execute_with_retry(
                     task=task,
@@ -270,10 +306,43 @@ async def dispatch(
                     resolved_inputs=resolved_inputs,
                     execute_agent_fn=execute_agent_fn,
                     execution_id=str(uuid.uuid4()),
+                    gate=_gate,
+                    mission_id=plan.mission_id,
+                    budget_usd=mission_budget_usd,
                 )
             )
 
         if not coros:
+            continue
+
+        # Gate 2: pre_layer — review tasks about to execute
+        decision = await _gate.review(GateContext(
+            gate_type="pre_layer",
+            mission_id=plan.mission_id,
+            layer_index=layer_idx,
+            total_layers=len(layers),
+            pending_tasks=[
+                {
+                    "task_id": t.task_id,
+                    "agent": t.agent,
+                    "description": t.description,
+                    "instructions": (t.instructions or "")[:500],
+                    "input_keys": list(resolved_inputs_map.get(t.task_id, {}).keys()),
+                }
+                for t in layer_tasks
+            ],
+            completed_tasks=[r.model_dump() for r in task_results],
+            total_cost_usd=total_cost,
+            budget_usd=mission_budget_usd,
+        ))
+        if decision.action == GateAction.ABORT:
+            logger.info("Mission aborted at pre_layer gate", extra={"layer": layer_idx})
+            aborted = True
+            abort_reason = decision.reason
+            break
+        if decision.action == GateAction.SKIP:
+            for t in layer_tasks:
+                task_results.append(_skipped_result(t, decision.reason))
             continue
 
         results = await asyncio.gather(*coros, return_exceptions=True)
@@ -311,6 +380,22 @@ async def dispatch(
             total_output_tokens += task_result.token_usage.output
             total_thinking_tokens += task_result.token_usage.thinking
 
+        # Gate 5: post_layer — review layer results before proceeding
+        decision = await _gate.review(GateContext(
+            gate_type="post_layer",
+            mission_id=plan.mission_id,
+            layer_index=layer_idx,
+            total_layers=len(layers),
+            completed_tasks=[r.model_dump() for r in task_results],
+            total_cost_usd=total_cost,
+            budget_usd=mission_budget_usd,
+        ))
+        if decision.action == GateAction.ABORT:
+            logger.info("Mission aborted at post_layer gate", extra={"layer": layer_idx})
+            aborted = True
+            abort_reason = decision.reason
+            break
+
         # Check budget after each layer completes
         if mission_budget_usd and total_cost > mission_budget_usd:
             logger.warning(
@@ -339,7 +424,9 @@ async def dispatch(
         for cp_id in critical_path_ids
     ) if critical_path_ids else True
 
-    if budget_exceeded:
+    if aborted:
+        status = MissionStatus.FAILED
+    elif budget_exceeded:
         status = MissionStatus.FAILED
     elif successful_tasks == total_tasks:
         status = MissionStatus.SUCCESS
@@ -364,6 +451,7 @@ async def dispatch(
             output=total_output_tokens,
             thinking=total_thinking_tokens,
         ),
+        abort_reason=abort_reason,
     )
 
 
@@ -373,8 +461,15 @@ async def _execute_with_retry(
     resolved_inputs: dict[str, Any],
     execute_agent_fn: ExecuteAgentFn,
     execution_id: str = "",
+    gate: GateReviewer | None = None,
+    mission_id: str = "",
+    budget_usd: float = 0.0,
 ) -> TaskResult:
-    """Execute a task with 3-tier verification and retry-with-feedback."""
+    """Execute a task with 3-tier verification and retry-with-feedback.
+
+    gate is always provided by dispatch() — defaults to NoOpGate there.
+    """
+    _gate: GateReviewer = gate or NoOpGate()
     retry_budget = roster_entry.constraints.retry_budget
     retry_history: list[RetryHistoryEntry] = []
     instructions = task.instructions
@@ -419,11 +514,18 @@ async def _execute_with_retry(
             )
         except Exception as e:
             duration = time.monotonic() - task_start
+            is_token_limit = isinstance(e, UsageLimitExceeded)
             logger.error(
                 "Task execution failed",
-                extra={"task_id": task.task_id, "error": str(e), "attempt": attempt},
+                extra={
+                    "task_id": task.task_id,
+                    "error": str(e),
+                    "attempt": attempt,
+                    "token_limit_exceeded": is_token_limit,
+                },
             )
-            if attempt < retry_budget:
+            # Token limit errors won't resolve on retry — fail fast
+            if attempt < retry_budget and not is_token_limit:
                 retry_history.append(RetryHistoryEntry(
                     attempt=attempt + 1,
                     failure_tier=0,
@@ -463,6 +565,42 @@ async def _execute_with_retry(
             feedback = build_retry_feedback(verification, attempt=attempt + 1)
 
             if attempt < retry_budget:
+                # Gate 4: verification_failed — review before retry
+                gate_decision = await _gate.review(GateContext(
+                    gate_type="verification_failed",
+                    mission_id=mission_id,
+                    task_id=task.task_id,
+                    task_output=output,
+                    verification=build_verification_outcome(verification).model_dump(),
+                    current_instructions=instructions,
+                    current_inputs=resolved_inputs,
+                    budget_usd=budget_usd,
+                ))
+                if gate_decision.action == GateAction.ABORT:
+                    return _failed_result(
+                        task, "Aborted at verification gate",
+                        retry_count=attempt, retry_history=retry_history,
+                        execution_id=execution_id,
+                    )
+                if gate_decision.action == GateAction.SKIP:
+                    return _skipped_result(task, gate_decision.reason, execution_id=execution_id)
+                if gate_decision.action == GateAction.MODIFY:
+                    # Accept output despite verification failure
+                    return TaskResult(
+                        task_id=task.task_id,
+                        agent_name=task.agent,
+                        status=TaskStatus.SUCCESS,
+                        output_reference=output,
+                        token_usage=token_usage,
+                        cost_usd=cost_usd,
+                        duration_seconds=round(duration, 2),
+                        verification_outcome=build_verification_outcome(verification),
+                        retry_count=attempt,
+                        retry_history=retry_history,
+                        execution_id=execution_id,
+                    )
+
+                # Default (CONTINUE/RETRY): proceed with retry as normal
                 retry_history.append(RetryHistoryEntry(
                     attempt=feedback.get("attempt", attempt + 1),
                     failure_tier=feedback.get("failure_tier", 0),
@@ -475,6 +613,8 @@ async def _execute_with_retry(
                     f"{feedback.get('feedback_provided', '')}\n"
                     f"Please address the issues above and try again.",
                 )
+                if gate_decision.modified_instructions:
+                    instructions = gate_decision.modified_instructions
                 continue
 
             return TaskResult(
@@ -491,8 +631,58 @@ async def _execute_with_retry(
                 execution_id=execution_id,
             )
 
+        # Gate 3: post_task — review successful output before accepting
+        gate_decision = await _gate.review(GateContext(
+            gate_type="post_task",
+            mission_id=mission_id,
+            task_id=task.task_id,
+            task_output=output,
+            verification=build_verification_outcome(verification).model_dump(),
+            current_instructions=instructions,
+            current_inputs=resolved_inputs,
+            total_cost_usd=cost_usd,
+            budget_usd=budget_usd,
+        ))
+        if gate_decision.action == GateAction.ABORT:
+            return _failed_result(
+                task, "Aborted at post_task gate",
+                retry_count=attempt, retry_history=retry_history,
+                execution_id=execution_id,
+            )
+        if gate_decision.action == GateAction.SKIP:
+            return _skipped_result(task, gate_decision.reason, execution_id=execution_id)
+        if gate_decision.action == GateAction.RETRY and attempt < retry_budget:
+            retry_history.append(RetryHistoryEntry(
+                attempt=attempt + 1,
+                failure_tier=0,
+                failure_reason="Reviewer requested retry",
+                feedback_provided=gate_decision.reason or "",
+            ))
+            instructions = gate_decision.modified_instructions or _append_feedback(
+                task.instructions,
+                gate_decision.reason or "Reviewer requested retry.",
+            )
+            continue
+
         # Extract context_updates from agent output (if any)
         context_updates = output.pop("context_updates", [])
+
+        # Auto-generate PQI context_update for project tracking
+        pqi = output.get("pqi")
+        if isinstance(pqi, dict) and pqi.get("composite") is not None:
+            context_updates.append({
+                "key": "pqi_score",
+                "value": {
+                    "composite": pqi["composite"],
+                    "quality_band": pqi.get("quality_band"),
+                    "dimensions": {
+                        name: dim.get("score")
+                        for name, dim in pqi.get("dimensions", {}).items()
+                    },
+                    "file_count": pqi.get("file_count"),
+                    "line_count": pqi.get("line_count"),
+                },
+            })
 
         # Success
         return TaskResult(
@@ -520,6 +710,45 @@ def _append_feedback(original_instructions: str, feedback: str) -> str:
         f"{original_instructions}\n\n"
         f"--- FEEDBACK FROM PREVIOUS ATTEMPT ---\n"
         f"{feedback}"
+    )
+
+
+def _aborted_outcome(
+    plan: TaskPlan,
+    reason: str | None,
+    start_time: float,
+    task_results: list[TaskResult] | None = None,
+) -> MissionOutcome:
+    """Build a MissionOutcome for an aborted mission."""
+    return MissionOutcome(
+        mission_id=plan.mission_id,
+        status=MissionStatus.FAILED,
+        task_results=task_results or [],
+        total_cost_usd=0.0,
+        total_duration_seconds=round(time.monotonic() - start_time, 2),
+        total_tokens=TaskTokenUsage(),
+        abort_reason=reason,
+    )
+
+
+def _skipped_result(
+    task: TaskDefinition,
+    reason: str | None = None,
+    execution_id: str = "",
+) -> TaskResult:
+    """Build a TaskResult with SKIPPED status."""
+    return TaskResult(
+        task_id=task.task_id,
+        agent_name=task.agent,
+        status=TaskStatus.SKIPPED,
+        output_reference={},
+        token_usage=TaskTokenUsage(),
+        cost_usd=0.0,
+        duration_seconds=0.0,
+        retry_count=0,
+        retry_history=[],
+        execution_id=execution_id,
+        skip_reason=reason,
     )
 
 

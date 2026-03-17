@@ -129,6 +129,7 @@ class TaskResult(BaseModel):
         default_factory=list,
         description="Structured patches to the PCD proposed by this agent",
     )
+    skip_reason: str | None = None
 
 
 class MissionOutcome(BaseModel):
@@ -145,6 +146,7 @@ class MissionOutcome(BaseModel):
     total_cost_usd: float = 0.0
     total_duration_seconds: float = 0.0
     total_tokens: TaskTokenUsage = Field(default_factory=TaskTokenUsage)
+    abort_reason: str | None = None
     planning_trace_reference: str | None = None
     task_plan_reference: str | None = None
 

@@ -24,6 +24,8 @@
 #   dispatch              - Dispatch loop defaults (object)
 #     default_request_limit    - Safety-cap LLM requests per task (integer)
 #     token_cost_factor        - Tokens per dollar of cost ceiling (integer)
+#     context_token_budget     - Token budget for assembled context packet (integer)
+#     history_reserve_tokens   - Tokens reserved for Layer 2 history (integer)
 #   escalation            - Deterministic risk thresholds (object)
 #     max_auto_approve_cost_usd   - Max cost for auto-approval (decimal)
 #     max_medium_approve_cost_usd - Max cost for medium-risk approval (decimal)
@@ -88,6 +90,8 @@ redis_ttl:
 dispatch:
   default_request_limit: 50
   token_cost_factor: 333333  # tokens per dollar of cost ceiling (1M/3)
+  context_token_budget: 50000  # assembled context budget (PCD + Code Map + history)
+  history_reserve_tokens: 1500  # reserved for Layer 2 history within context budget
 
 escalation:
   max_auto_approve_cost_usd: 1.00

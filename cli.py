@@ -513,14 +513,31 @@ def playbook_detail(ctx, name):
 @playbook.command("run")
 @click.argument("name")
 @click.option("--triggered-by", default="user:cli", help="Trigger origin.")
-@click.option("--project", default=None, help="Project ID to associate with this run.")
+@click.option("--project", required=True, help="Project name to run against (created if new).")
+@click.option(
+    "--gate",
+    type=click.Choice(["off", "interactive", "ai_assisted", "autonomous"], case_sensitive=False),
+    default=None,
+    help="Gate review mode. Overrides config/settings/gate.yaml.",
+)
+@click.option("--step", is_flag=True, help="Alias for --gate interactive.")
 @click.pass_obj
-def playbook_run(ctx, name, triggered_by, project):
+def playbook_run(ctx, name, triggered_by, project, gate, step):
     """Execute a playbook."""
     from modules.backend.cli.playbook import run_playbook_cli
+
+    # --step is a convenience alias for --gate interactive
+    if step and gate is None:
+        gate = "interactive"
+
+    gate_obj = None
+    if gate and gate != "off":
+        from modules.backend.agents.mission_control.gate import create_gate
+        gate_obj = create_gate(mode_override=gate)
+
     run_playbook_cli(ctx.logger, action="run", playbook_name=name, run_id=None,
                      triggered_by=triggered_by, output_format=ctx.output_format,
-                     project_id=project)
+                     project_name=project, gate=gate_obj)
 
 
 @playbook.command("runs")
@@ -785,11 +802,14 @@ def db_query(ctx, table, limit):
 
 @db.command("clear")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+@click.option("--include-projects", is_flag=True, default=False,
+              help="Also clear projects and PCD (full nuclear reset).")
 @click.pass_obj
-def db_clear(ctx, yes):
-    """Clear ALL application data (full reset)."""
+def db_clear(ctx, yes, include_projects):
+    """Clear run data. Projects and PCD are preserved by default."""
     from modules.backend.cli.db import run_db
-    run_db(ctx.logger, action="clear", table=None, limit=10, confirm=yes)
+    run_db(ctx.logger, action="clear", table=None, limit=10, confirm=yes,
+           include_projects=include_projects)
 
 
 @db.command("clear-missions")

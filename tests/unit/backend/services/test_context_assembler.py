@@ -144,7 +144,7 @@ class TestBuild:
     @pytest.mark.asyncio
     async def test_default_token_budget(self):
         """Default token budget is set to expected value."""
-        assert DEFAULT_TOKEN_BUDGET == 12_000
+        assert DEFAULT_TOKEN_BUDGET == 50_000
 
     @pytest.mark.asyncio
     async def test_history_skipped_when_budget_exhausted(

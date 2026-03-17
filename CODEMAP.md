@@ -1,6 +1,6 @@
 # Code Map — bfa_reference_architecture
 
-**210 files** | **30,100 lines** | **308 classes** | **494 functions** | commit `92564f9668d0`
+**210 files** | **30,154 lines** | **308 classes** | **495 functions** | commit `efecad5cb95c`
 
 Symbols ranked by PageRank (most-connected first).
 
@@ -20,6 +20,7 @@ Symbols ranked by PageRank (most-connected first).
   backend.api.v1.endpoints.playbooks -> backend.core.dependencies, backend.core.exceptions, backend.schemas.base, backend.schemas.mission, backend.schemas.playbook, backend.services.mission, backend.services.playbook
   backend.services.mission_persistence -> backend.core.config, backend.core.logging, backend.core.utils, backend.models.mission_record, backend.repositories.mission_record, backend.schemas.mission_record, backend.services.base
   backend.main -> backend.api, backend.api.v1, backend.core.config, backend.core.exception_handlers, backend.core.logging, backend.core.middleware
+  backend.services.pqi.scorer -> backend.core.logging, backend.services.pqi.ast_analysis, backend.services.pqi.composite, backend.services.pqi.dimensions, backend.services.pqi.tools, backend.services.pqi.types
   backend.services.summarization -> backend.core.logging, backend.models.mission_record, backend.models.project_history, backend.repositories.project_history, backend.services.base, backend.services.project_context
   backend.agents.mission_control.dispatch_adapter -> backend.agents.mission_control.mission_control, backend.agents.mission_control.models, backend.core.config, backend.core.protocols, backend.core.logging
   backend.agents.mission_control.plan_validator -> backend.agents.mission_control.check_registry, backend.agents.mission_control.roster, backend.core.logging, backend.schemas.task_plan, backend.agents.mission_control.checks
@@ -29,7 +30,6 @@ Symbols ranked by PageRank (most-connected first).
   backend.api.v1.endpoints.missions -> backend.core.dependencies, backend.core.exceptions, backend.schemas.base, backend.schemas.mission_record, backend.services.mission_persistence
   backend.api.v1.endpoints.notes -> backend.core.dependencies, backend.core.pagination, backend.schemas.base, backend.schemas.note, backend.services.note
   backend.api.v1.endpoints.sessions -> backend.core.dependencies, backend.core.pagination, backend.schemas.base, backend.schemas.session, backend.services.session
-  backend.services.pqi.scorer -> backend.services.pqi.ast_analysis, backend.services.pqi.composite, backend.services.pqi.dimensions, backend.services.pqi.tools, backend.services.pqi.types
   backend.services.project_context -> backend.core.logging, backend.core.utils, backend.models.project_context, backend.repositories.project_context, backend.services.base
   telegram.handlers.example -> backend.core.config, backend.core.logging, telegram.callbacks.common, telegram.keyboards.common, telegram.states.example
   backend.core.security -> backend.core.config, backend.core.exceptions, backend.core.logging, backend.core.utils
@@ -89,6 +89,7 @@ Symbols ranked by PageRank (most-connected first).
   backend.repositories.project_history -> backend.models.project_history, backend.repositories.base
   backend.services.base -> backend.core.exceptions, backend.core.logging
   backend.services.context_curator -> backend.core.logging, backend.services.project_context
+  backend.services.pqi.tools.bandit -> backend.core.logging, backend.services.pqi.tools
   backend.tasks.example -> backend.core.logging, backend.core.utils
   backend.tasks.scheduled -> backend.core.logging, backend.core.utils
   backend.temporal.activities -> backend.core.logging, backend.temporal.models
@@ -145,7 +146,6 @@ Symbols ranked by PageRank (most-connected first).
   backend.services.compliance -> backend.core.logging
   backend.services.pqi -> backend.services.pqi.scorer
   backend.services.pqi.composite -> backend.services.pqi.types
-  backend.services.pqi.tools.bandit -> backend.services.pqi.tools
   backend.services.pqi.tools.radon -> backend.services.pqi.tools
   backend.tasks.broker -> backend.core.logging
   backend.tasks.scheduler -> backend.core.logging
@@ -1026,7 +1026,7 @@ modules/backend/agents/tools/code.py (77 lines):
 │def apply_fix(project_root: Path, file_path: str, old_text: str, ...) -> dict
 │def run_tests(project_root: Path) -> dict
 
-modules/backend/agents/tools/codemap.py (145 lines):
+modules/backend/agents/tools/codemap.py (155 lines):
 │def generate_code_map(project_root: Path, scope: FileScope) -> dict
 │def load_code_map(project_root: Path, scope: FileScope) -> dict
 │def get_dependency_analysis(project_root: Path, scope: FileScope) -> dict
@@ -1115,6 +1115,16 @@ modules/backend/services/code_map/types.py (78 lines):
 │    nodes: list[str]
 │    edges: list[ReferenceEdge]
 
+modules/backend/services/base.py (214 lines):
+│class BaseService:
+│    def __init__(session: AsyncSession) -> None
+│    def session() -> AsyncSession
+│    def _execute_db_operation(operation: str, coro: Any) -> T
+│    def _validate_required(fields: dict[str, Any], field_names: list[str]) -> None
+│    def _validate_string_length(value: str, field_name: str, min_length: int | None, max_length: int | None) -> None
+│    def _log_operation(operation: str) -> None
+│    def _log_debug(message: str) -> None
+
 modules/backend/services/pqi/tools/__init__.py (76 lines):
 │class Finding:
 │    rule_id: str
@@ -1134,16 +1144,6 @@ modules/backend/services/pqi/tools/__init__.py (76 lines):
 │    def success() -> bool
 │def check_installed(command: str) -> bool
 │def run_command(args: list[str], cwd: Path, timeout: int) -> tuple[str, str, int]
-
-modules/backend/services/base.py (214 lines):
-│class BaseService:
-│    def __init__(session: AsyncSession) -> None
-│    def session() -> AsyncSession
-│    def _execute_db_operation(operation: str, coro: Any) -> T
-│    def _validate_required(fields: dict[str, Any], field_names: list[str]) -> None
-│    def _validate_string_length(value: str, field_name: str, min_length: int | None, max_length: int | None) -> None
-│    def _log_operation(operation: str) -> None
-│    def _log_debug(message: str) -> None
 
 modules/backend/services/pqi/types.py (96 lines):
 │class DimensionScore:
@@ -1177,9 +1177,25 @@ modules/backend/services/project_context.py (365 lines):
 │def _set_nested(data: dict, path: str, value: Any) -> None
 │def _delete_nested(data: dict, path: str) -> Any
 
-modules/backend/services/pqi/scorer.py (116 lines):
+modules/backend/services/pqi/scorer.py (129 lines):
 │def score_project(repo_root: Path, scope: list[str] | None, exclude: list[str] | None, ...) -> PQIResult
 │def _run_tools(repo_root: Path, scope: list[str] | None, exclude: list[str] | None, ...) -> dict[str, ToolResult]
+
+modules/backend/services/code_map/assembler.py (510 lines):
+│def assemble_code_map(modules: list[ModuleInfo], ranks: dict[str, float], repo_root_name: str, ...) -> dict
+│def trim_by_rank(code_map: dict, max_tokens: int) -> dict
+│def render_markdown_tree(code_map: dict) -> str
+│def _render_module(lines: list[str], path: str, mod: dict) -> None
+│def _get_layer(path: str) -> str
+│def find_circular_deps(import_graph: dict[str, list[str]]) -> list[list[str]]
+│def _shorten_module(qname: str) -> str
+│def render_for_agent(code_map: dict, max_tokens: int) -> str
+│def _estimate_tokens(data: dict | str) -> int
+│def _collect_ranked_symbols(code_map: dict) -> list[tuple[str, float, str, str, str | None]]
+│def _remove_symbol(code_map: dict, path: str, kind: str, ...) -> None
+│def _method_name(sig: str) -> str
+│def _is_internal_import(imp: str, internal_modules: set[str]) -> bool
+│def _path_to_qname(rel_path: str) -> str
 
 modules/backend/services/pqi/ast_analysis.py (296 lines):
 │class FileAnalysis:
@@ -1217,22 +1233,6 @@ modules/backend/services/pqi/ast_analysis.py (296 lines):
 │def _detect_unsafe_patterns(tree: ast.Module) -> list[str]
 │def _count_naming_violations(tree: ast.Module) -> int
 
-modules/backend/services/code_map/assembler.py (510 lines):
-│def assemble_code_map(modules: list[ModuleInfo], ranks: dict[str, float], repo_root_name: str, ...) -> dict
-│def trim_by_rank(code_map: dict, max_tokens: int) -> dict
-│def render_markdown_tree(code_map: dict) -> str
-│def _render_module(lines: list[str], path: str, mod: dict) -> None
-│def _get_layer(path: str) -> str
-│def find_circular_deps(import_graph: dict[str, list[str]]) -> list[list[str]]
-│def _shorten_module(qname: str) -> str
-│def render_for_agent(code_map: dict, max_tokens: int) -> str
-│def _estimate_tokens(data: dict | str) -> int
-│def _collect_ranked_symbols(code_map: dict) -> list[tuple[str, float, str, str, str | None]]
-│def _remove_symbol(code_map: dict, path: str, kind: str, ...) -> None
-│def _method_name(sig: str) -> str
-│def _is_internal_import(imp: str, internal_modules: set[str]) -> bool
-│def _path_to_qname(rel_path: str) -> str
-
 modules/backend/services/mission_persistence.py (382 lines):
 │class MissionPersistenceService(BaseService):
 │    def __init__(session: AsyncSession) -> None
@@ -1248,21 +1248,6 @@ modules/backend/services/mission_persistence.py (382 lines):
 │    def get_mission_status(mission_id: str) -> dict
 │    def get_missions_by_session(session_id: str) -> list[MissionRecord]
 │    def get_replan_chain(mission_id: str) -> list[MissionRecord]
-
-modules/backend/services/pqi/composite.py (85 lines):
-│def compute_pqi(dimensions: dict[str, DimensionScore], profile: str, file_count: int, ...) -> PQIResult
-│def floor_penalty(dimension_scores: dict[str, float]) -> float
-
-modules/backend/services/pqi/dimensions.py (710 lines):
-│def score_maintainability(project: ProjectAnalysis, tool_results: dict[str, ToolResult] | None) -> DimensionScore
-│def score_security(project: ProjectAnalysis, tool_results: dict[str, ToolResult] | None) -> DimensionScore
-│def score_modularity(project: ProjectAnalysis, code_map: dict | None) -> DimensionScore
-│def score_testability(project: ProjectAnalysis, tool_results: dict[str, ToolResult] | None) -> DimensionScore
-│def score_robustness(project: ProjectAnalysis) -> DimensionScore
-│def score_elegance(project: ProjectAnalysis, tool_results: dict[str, ToolResult] | None) -> DimensionScore
-│def score_reusability(project: ProjectAnalysis, code_map: dict | None) -> DimensionScore
-│def _count_cycles(graph: dict[str, list[str]]) -> int
-│def _gini_coefficient(values: list[int | float]) -> float
 
 modules/backend/services/history_query.py (167 lines):
 │class HistoryQueryService(BaseService):
@@ -1304,13 +1289,6 @@ modules/backend/services/compliance.py (333 lines):
 │    def scan_config_files() -> list[dict]
 │    def scan_all() -> list[dict]
 
-modules/backend/services/pqi/normalizers.py (69 lines):
-│def sigmoid(x: float, midpoint: float, k: float) -> float
-│def exp_decay(count: float, rate: float) -> float
-│def linear(value: float, max_value: float) -> float
-│def inverse_linear(value: float, good: float, bad: float) -> float
-│def ratio_score(numerator: float, denominator: float) -> float
-
 modules/backend/services/code_map/graph.py (288 lines):
 │def build_reference_graph(modules: list[ModuleInfo]) -> ReferenceGraph
 │def _add_symbol_references(symbol: SymbolInfo, module_qname: str, import_tables: dict[str, dict[str, str]], ...) -> None
@@ -1342,6 +1320,28 @@ modules/backend/services/code_map/parser.py (316 lines):
 
 modules/backend/services/code_map/ranker.py (85 lines):
 │def rank_symbols(graph: ReferenceGraph, damping: float, max_iterations: int, ...) -> dict[str, float]
+
+modules/backend/services/pqi/normalizers.py (69 lines):
+│def sigmoid(x: float, midpoint: float, k: float) -> float
+│def exp_decay(count: float, rate: float) -> float
+│def linear(value: float, max_value: float) -> float
+│def inverse_linear(value: float, good: float, bad: float) -> float
+│def ratio_score(numerator: float, denominator: float) -> float
+
+modules/backend/services/pqi/composite.py (85 lines):
+│def compute_pqi(dimensions: dict[str, DimensionScore], profile: str, file_count: int, ...) -> PQIResult
+│def floor_penalty(dimension_scores: dict[str, float]) -> float
+
+modules/backend/services/pqi/dimensions.py (710 lines):
+│def score_maintainability(project: ProjectAnalysis, tool_results: dict[str, ToolResult] | None) -> DimensionScore
+│def score_security(project: ProjectAnalysis, tool_results: dict[str, ToolResult] | None) -> DimensionScore
+│def score_modularity(project: ProjectAnalysis, code_map: dict | None) -> DimensionScore
+│def score_testability(project: ProjectAnalysis, tool_results: dict[str, ToolResult] | None) -> DimensionScore
+│def score_robustness(project: ProjectAnalysis) -> DimensionScore
+│def score_elegance(project: ProjectAnalysis, tool_results: dict[str, ToolResult] | None) -> DimensionScore
+│def score_reusability(project: ProjectAnalysis, code_map: dict | None) -> DimensionScore
+│def _count_cycles(graph: dict[str, list[str]]) -> int
+│def _gini_coefficient(values: list[int | float]) -> float
 
 modules/backend/services/mission.py (488 lines):
 │class MissionService(BaseService):
@@ -1441,10 +1441,11 @@ modules/backend/services/playbook_run.py (422 lines):
 
 modules/backend/services/pqi/__init__.py (9 lines):
 
-modules/backend/services/pqi/tools/bandit.py (157 lines):
+modules/backend/services/pqi/tools/bandit.py (188 lines):
 │def is_available() -> bool
 │def run(repo_root: Path, scope: list[str] | None, exclude: list[str] | None) -> ToolResult
 │def _strip_progress(raw: str) -> str
+│def _is_test_file(path: str) -> bool
 │def _parse_output(raw_json: str) -> ToolResult
 
 modules/backend/services/pqi/tools/radon.py (209 lines):

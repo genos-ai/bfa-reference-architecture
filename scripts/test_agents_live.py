@@ -301,6 +301,34 @@ def print_qa_results(result: dict) -> None:
                     f"{'':>14s}{click.style('→ ' + v['recommendation'], fg='green')}"
                 )
 
+    pqi = result.get("pqi")
+    if pqi:
+        band_colors = {
+            "Excellent": "green", "Good": "cyan", "Adequate": "yellow",
+            "Acceptable": "yellow", "Poor": "red",
+        }
+        band = pqi.get("quality_band", "?")
+        score = pqi.get("composite", 0)
+        color = band_colors.get(band, "white")
+
+        click.echo(click.style("\nPyQuality Index (PQI):", bold=True))
+        click.echo(
+            f"  Composite: {click.style(f'{score:.1f}/100', fg=color, bold=True)}"
+            f"  [{click.style(band, fg=color)}]"
+        )
+        click.echo(
+            f"  Files: {pqi.get('file_count', '?')}  "
+            f"Lines: {pqi.get('line_count', '?'):,}"
+        )
+
+        dims = pqi.get("dimensions", {})
+        if dims:
+            for name, dim in sorted(dims.items(), key=lambda x: -x[1]["score"]):
+                bar_len = int(dim["score"] / 5)
+                bar = "█" * bar_len + "░" * (20 - bar_len)
+                conf = f" (confidence: {dim['confidence']:.0%})" if dim.get("confidence", 1.0) < 0.8 else ""
+                click.echo(f"  {name:>20s}  {dim['score']:5.1f}  {bar}{conf}")
+
 
 def print_planning_results(result: dict) -> None:
     """Print Planning Agent results in a readable format."""

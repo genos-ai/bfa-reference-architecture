@@ -14,13 +14,18 @@ from modules.backend.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Tables in dependency order (children first for safe truncation)
-ALL_TABLES = [
+# Infrastructure tables — preserved by default (projects + PCD)
+PROJECT_TABLES = [
     "milestone_summaries",
     "project_decisions",
     "context_changes",
     "project_contexts",
     "project_members",
+    "projects",
+]
+
+# Run data tables — cleared by db clear
+RUN_TABLES = [
     "mission_decisions",
     "task_attempts",
     "task_executions",
@@ -31,8 +36,10 @@ ALL_TABLES = [
     "playbook_runs",
     "sessions",
     "notes",
-    "projects",
 ]
+
+# All tables in dependency order (children first for safe truncation)
+ALL_TABLES = RUN_TABLES + PROJECT_TABLES
 
 
 def run_db(
@@ -41,6 +48,7 @@ def run_db(
     table: str | None,
     limit: int,
     confirm: bool,
+    include_projects: bool = False,
 ) -> None:
     """Dispatch db CLI actions."""
     actions = {
@@ -70,6 +78,7 @@ def run_db(
             table=table,
             limit=limit,
             confirm=confirm,
+            include_projects=include_projects,
         ))
     except Exception as e:
         click.echo(click.style(f"Error: {e}", fg="red"), err=True)
@@ -82,7 +91,7 @@ def run_db(
 # =============================================================================
 
 
-async def _action_stats(cli_logger, *, table, limit, confirm):
+async def _action_stats(cli_logger, *, table, limit, confirm, **_):
     """Show row counts for all tables."""
     from sqlalchemy import text
 
@@ -110,7 +119,7 @@ async def _action_stats(cli_logger, *, table, limit, confirm):
     console.print(tbl_table)
 
 
-async def _action_tables(cli_logger, *, table, limit, confirm):
+async def _action_tables(cli_logger, *, table, limit, confirm, **_):
     """List all application tables with column info."""
     from sqlalchemy import text
 
@@ -143,7 +152,7 @@ async def _action_tables(cli_logger, *, table, limit, confirm):
             console.print(col_table)
 
 
-async def _action_query(cli_logger, *, table, limit, confirm):
+async def _action_query(cli_logger, *, table, limit, confirm, **_):
     """Query recent rows from a table."""
     if not table:
         click.echo(click.style("Error: --table is required for query.", fg="red"), err=True)
@@ -196,11 +205,23 @@ async def _action_query(cli_logger, *, table, limit, confirm):
         console.print(row_table)
 
 
-async def _action_clear(cli_logger, *, table, limit, confirm):
-    """Clear ALL application data (full reset for testing)."""
+async def _action_clear(cli_logger, *, table, limit, confirm, include_projects=False, **_):
+    """Clear run data. Use --include-projects for full reset."""
+    tables = ALL_TABLES if include_projects else RUN_TABLES
+
     if not confirm:
-        click.echo(click.style("This will DELETE ALL DATA from all application tables.", fg="red", bold=True))
-        click.echo(f"Tables: {', '.join(ALL_TABLES)}")
+        if include_projects:
+            click.echo(click.style(
+                "This will DELETE ALL DATA including projects and context.",
+                fg="red", bold=True,
+            ))
+        else:
+            click.echo(click.style(
+                "This will DELETE run data (missions, sessions, playbook runs).",
+                fg="red", bold=True,
+            ))
+            click.echo("Projects and PCD are preserved. Use --include-projects for full reset.")
+        click.echo(f"Tables: {', '.join(tables)}")
         click.echo()
         if not click.confirm("Are you sure?"):
             click.echo("Aborted.")
@@ -211,14 +232,15 @@ async def _action_clear(cli_logger, *, table, limit, confirm):
     from modules.backend.core.database import get_async_session
 
     async with get_async_session() as db:
-        for tbl in ALL_TABLES:
+        for tbl in tables:
             await db.execute(text(f"TRUNCATE TABLE {tbl} CASCADE"))  # noqa: S608
         await db.commit()
 
-    click.echo(click.style("All application data cleared.", fg="green"))
+    scope = "All application data" if include_projects else "Run data"
+    click.echo(click.style(f"{scope} cleared.", fg="green"))
 
 
-async def _action_clear_missions(cli_logger, *, table, limit, confirm):
+async def _action_clear_missions(cli_logger, *, table, limit, confirm, **_):
     """Clear mission-related data only (missions, records, executions, decisions)."""
     mission_tables = [
         "mission_decisions",
@@ -249,7 +271,7 @@ async def _action_clear_missions(cli_logger, *, table, limit, confirm):
     click.echo(click.style("Mission data cleared.", fg="green"))
 
 
-async def _action_clear_sessions(cli_logger, *, table, limit, confirm):
+async def _action_clear_sessions(cli_logger, *, table, limit, confirm, **_):
     """Clear session-related data only (sessions, channels, messages)."""
     session_tables = [
         "session_messages",
