@@ -23,13 +23,16 @@ See [Architecture Standards](docs/99-reference-architecture/00-overview.md) for 
 ├── docs/                   # Documentation
 ├── modules/
 │   ├── backend/           # FastAPI backend
+│   │   ├── agents/        # AI agent system (mission control, planning, QA, health)
 │   │   ├── api/           # HTTP endpoints
-│   │   ├── core/          # Shared utilities
+│   │   ├── cli/           # CLI command implementations (playbook, gate, report)
+│   │   ├── core/          # Configuration, logging, protocols
 │   │   ├── models/        # Database models
 │   │   ├── repositories/  # Data access layer
 │   │   ├── schemas/       # Pydantic schemas
-│   │   ├── services/      # Business logic
+│   │   ├── services/      # Business logic (PQI, code map, context assembly)
 │   │   └── tasks/         # Background tasks
+│   ├── tui/               # Terminal UI (Textual-based, in progress)
 │   └── frontend/          # React frontend
 │       └── src/
 ├── tests/                  # Test suite

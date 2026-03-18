@@ -243,7 +243,7 @@ class ConfigurableGate:
     def _get_cli(self):
         """Get or create the CLI reviewer."""
         if self._cli is None:
-            from modules.backend.cli.gate import CliGateReviewer
+            from modules.clients.cli.gate import CliGateReviewer
             self._cli = CliGateReviewer(
                 console=self._console,
                 verbose=self._verbose,

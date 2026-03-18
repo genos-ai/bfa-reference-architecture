@@ -1088,8 +1088,9 @@ def main() -> None:
     args = parser.parse_args()
 
     sys.path.insert(0, str(PROJECT_ROOT))
-    from config.project_setup import setup_logging
-    setup_logging(debug=args.debug, verbose=args.verbose)
+    from modules.backend.core.logging import setup_logging
+    log_level = "DEBUG" if args.debug else ("INFO" if args.verbose else "WARNING")
+    setup_logging(level=log_level, format_type="console")
 
     exclude = args.exclude or [
         ".venv/",

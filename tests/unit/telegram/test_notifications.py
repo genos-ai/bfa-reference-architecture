@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 # Patch target for get_bot (imported inside the send method)
-GET_BOT_PATCH = "modules.telegram.bot.get_bot"
+GET_BOT_PATCH = "modules.clients.telegram.bot.get_bot"
 
 
 class TestNotificationService:
@@ -18,7 +18,7 @@ class TestNotificationService:
     @pytest.mark.asyncio
     async def test_send_message_success(self):
         """Test successful message sending."""
-        from modules.telegram.services.notifications import NotificationService
+        from modules.clients.telegram.services.notifications import NotificationService
 
         service = NotificationService()
 
@@ -39,7 +39,7 @@ class TestNotificationService:
     @pytest.mark.asyncio
     async def test_send_message_failure(self):
         """Test message sending failure."""
-        from modules.telegram.services.notifications import NotificationService
+        from modules.clients.telegram.services.notifications import NotificationService
 
         service = NotificationService()
 
@@ -56,7 +56,7 @@ class TestNotificationService:
     @pytest.mark.asyncio
     async def test_rate_limiting(self):
         """Test that rate limiting blocks excessive requests."""
-        from modules.telegram.services.notifications import NotificationService
+        from modules.clients.telegram.services.notifications import NotificationService
 
         service = NotificationService()
         rate_limit = service._rate_limit_per_user
@@ -81,7 +81,7 @@ class TestNotificationService:
     @pytest.mark.asyncio
     async def test_rate_limit_per_user(self):
         """Test that rate limits are tracked per user."""
-        from modules.telegram.services.notifications import NotificationService
+        from modules.clients.telegram.services.notifications import NotificationService
 
         service = NotificationService()
         rate_limit = service._rate_limit_per_user
@@ -108,7 +108,7 @@ class TestSendAlert:
     @pytest.mark.asyncio
     async def test_send_alert_formats_message(self):
         """Test that alerts are formatted with emoji."""
-        from modules.telegram.services.notifications import AlertType, send_alert
+        from modules.clients.telegram.services.notifications import AlertType, send_alert
 
         mock_message = MagicMock()
         mock_message.message_id = 12345
@@ -136,7 +136,7 @@ class TestSendNotification:
     @pytest.mark.asyncio
     async def test_send_notification_formats_with_data(self):
         """Test that notifications include formatted data."""
-        from modules.telegram.services.notifications import AlertType, send_notification
+        from modules.clients.telegram.services.notifications import AlertType, send_notification
 
         mock_message = MagicMock()
         mock_message.message_id = 12345
@@ -172,7 +172,7 @@ class TestNotificationServiceConvenienceMethods:
     @pytest.mark.asyncio
     async def test_send_success(self):
         """Test success notification."""
-        from modules.telegram.services.notifications import NotificationService
+        from modules.clients.telegram.services.notifications import NotificationService
 
         service = NotificationService()
 
@@ -199,7 +199,7 @@ class TestNotificationServiceConvenienceMethods:
     @pytest.mark.asyncio
     async def test_send_warning(self):
         """Test warning notification."""
-        from modules.telegram.services.notifications import NotificationService
+        from modules.clients.telegram.services.notifications import NotificationService
 
         service = NotificationService()
 
@@ -224,7 +224,7 @@ class TestNotificationServiceConvenienceMethods:
     @pytest.mark.asyncio
     async def test_send_error(self):
         """Test error notification."""
-        from modules.telegram.services.notifications import NotificationService
+        from modules.clients.telegram.services.notifications import NotificationService
 
         service = NotificationService()
 
@@ -250,7 +250,7 @@ class TestNotificationServiceConvenienceMethods:
     @pytest.mark.asyncio
     async def test_send_system(self):
         """Test system notification."""
-        from modules.telegram.services.notifications import NotificationService
+        from modules.clients.telegram.services.notifications import NotificationService
 
         service = NotificationService()
 
@@ -279,7 +279,7 @@ class TestBroadcast:
     @pytest.mark.asyncio
     async def test_broadcast_to_multiple_users(self):
         """Test broadcasting to multiple users."""
-        from modules.telegram.services.notifications import NotificationService
+        from modules.clients.telegram.services.notifications import NotificationService
 
         service = NotificationService()
 
@@ -306,7 +306,7 @@ class TestAlertType:
 
     def test_alert_types_have_emojis(self):
         """Test that all alert types have emoji mappings."""
-        from modules.telegram.services.notifications import ALERT_EMOJI, AlertType
+        from modules.clients.telegram.services.notifications import ALERT_EMOJI, AlertType
 
         for alert_type in AlertType:
             assert alert_type in ALERT_EMOJI
@@ -314,7 +314,7 @@ class TestAlertType:
 
     def test_alert_type_values(self):
         """Test alert type string values."""
-        from modules.telegram.services.notifications import AlertType
+        from modules.clients.telegram.services.notifications import AlertType
 
         assert AlertType.INFO.value == "info"
         assert AlertType.SUCCESS.value == "success"

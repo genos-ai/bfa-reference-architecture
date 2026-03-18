@@ -170,19 +170,50 @@ python cli.py playbook list
 ### Inspect a playbook
 
 ```bash
-python cli.py playbook detail ops.platform-audit
+python cli.py playbook detail system.platform-audit
 ```
 
 ### Execute a playbook
 
 ```bash
 # Default output (AI-generated summary)
-python cli.py --verbose playbook run ops.platform-audit
+python cli.py --verbose playbook run system.platform-audit --project my-project
 
 # With specific output format
-python cli.py playbook run ops.platform-audit --output detail
-python cli.py playbook run ops.platform-audit --output json
+python cli.py playbook run system.platform-audit --project my-project --output detail
+python cli.py playbook run system.platform-audit --project my-project --output json
 ```
+
+### Gate review mode (step-through)
+
+The gate system pauses execution at key decision points for human and/or AI review. Useful for validating agent behavior during development.
+
+```bash
+# Interactive — pause at each gate point, human decides
+python cli.py playbook run system.platform-audit --project my-project --gate interactive
+
+# Shorthand alias for interactive
+python cli.py playbook run system.platform-audit --project my-project --step
+
+# AI-assisted — LLM recommends, human makes final call
+python cli.py playbook run system.platform-audit --project my-project --gate ai_assisted
+
+# Autonomous — LLM decides, auto-continue rules skip routine checks
+python cli.py playbook run system.platform-audit --project my-project --gate autonomous
+```
+
+Gate modes:
+
+| Mode | Description |
+|------|-------------|
+| `off` | No gate reviews (default). Zero overhead. |
+| `interactive` | Human reviews via Rich CLI at each gate point. |
+| `ai_assisted` | AI produces a recommendation, human makes final decision. |
+| `autonomous` | AI makes all gate decisions. No human interaction. |
+
+Gate points fire at: **pre_dispatch** (plan overview), **pre_layer** (before each execution wave), **post_task** (after each task), **verification_failed** (when verification doesn't pass), and **post_layer** (after each wave completes).
+
+Configuration: `config/settings/gate.yaml` — per-point enable/disable, per-point mode overrides, AI model/temperature, and auto-continue rules for autonomous mode.
 
 ### List playbook runs
 
@@ -250,23 +281,23 @@ Mission and playbook `run`/`execute` actions automatically run preflight and abo
 
 ```bash
 # Markdown tree to stdout (default, most token-efficient for LLMs)
-python scripts/generate_code_map.py --scope modules/
+python scripts/code_map.py --scope modules/
 
 # With token budget (fits context windows)
-python scripts/generate_code_map.py --scope modules/ --max-tokens 4096
+python scripts/code_map.py --scope modules/ --max-tokens 4096
 
 # JSON output (for programmatic access, Planning Agent, QA agent)
-python scripts/generate_code_map.py --scope modules/ --format json --pretty
+python scripts/code_map.py --scope modules/ --format json --pretty
 
 # Summary statistics only
-python scripts/generate_code_map.py --scope modules/ --stats
+python scripts/code_map.py --scope modules/ --stats
 
 # Save to .codemap/ (gitignored)
-python scripts/generate_code_map.py --scope modules/ --format json --pretty -o .codemap/map.json
-python scripts/generate_code_map.py --scope modules/ -o .codemap/map.md
+python scripts/code_map.py --scope modules/ --format json --pretty -o .codemap/map.json
+python scripts/code_map.py --scope modules/ -o .codemap/map.md
 
 # Generate a token-limited summary (agent-friendly, config schemas excluded)
-python scripts/generate_code_map.py --scope modules/ --exclude "**/config_schema.py" --max-tokens 4096 -o .codemap/summary.md
+python scripts/code_map.py --scope modules/ --exclude "**/config_schema.py" --max-tokens 4096 -o .codemap/summary.md
 ```
 
 The `--exclude` flag supports directory prefixes (`tests/`), exact paths (`modules/backend/core/config.py`), and glob patterns (`**/config_schema.py`, `*.generated.py`).
@@ -275,32 +306,32 @@ The `--exclude` flag supports directory prefixes (`tests/`), exact paths (`modul
 
 ```bash
 # Score modules/ with all 7 dimensions
-python scripts/score_quality.py
+python scripts/code_quality.py
 
 # Include code map for accurate modularity scoring (recommended)
-python scripts/score_quality.py --with-code-map
+python scripts/code_quality.py --with-code-map
 
 # Include tests in scope for accurate testability scoring
-python scripts/score_quality.py --scope modules/ tests/ --with-code-map
+python scripts/code_quality.py --scope modules/ tests/ --with-code-map
 
 # Show per-dimension sub-scores and actionable recommendations
-python scripts/score_quality.py --with-code-map --recommendations
+python scripts/code_quality.py --with-code-map --recommendations
 
 # JSON output (for agents, dashboards, trend tracking)
-python scripts/score_quality.py --with-code-map --json
+python scripts/code_quality.py --with-code-map --json
 
 # Run with Bandit security linter (requires: pip install bandit)
-python scripts/score_quality.py --use-bandit --recommendations
+python scripts/code_quality.py --use-bandit --recommendations
 
 # Run with Radon complexity analyzer (requires: pip install radon)
-python scripts/score_quality.py --use-radon --recommendations
+python scripts/code_quality.py --use-radon --recommendations
 
 # Run with all external tools
-python scripts/score_quality.py --use-bandit --use-radon --with-code-map --recommendations
+python scripts/code_quality.py --use-bandit --use-radon --with-code-map --recommendations
 
 # Alternative weight profiles
-python scripts/score_quality.py --profile library
-python scripts/score_quality.py --profile safety_critical
+python scripts/code_quality.py --profile library
+python scripts/code_quality.py --profile safety_critical
 ```
 
 ---
@@ -317,6 +348,23 @@ python cli.py test unit --coverage
 # Run integration or e2e tests
 python cli.py test integration
 python cli.py test e2e
+```
+
+### Live agent tests (real LLM calls)
+
+```bash
+# Run all agents end-to-end
+python scripts/test_agents_live.py --verbose
+
+# Run a specific agent
+python scripts/test_agents_live.py --agent qa
+python scripts/test_agents_live.py --agent health
+python scripts/test_agents_live.py --agent planning
+python scripts/test_agents_live.py --agent mission
+
+# Run gate system live tests (config, routing, dispatch, real Haiku call)
+python scripts/test_gate_live.py
+python scripts/test_gate_live.py --skip-llm    # Skip the real LLM call
 ```
 
 ---

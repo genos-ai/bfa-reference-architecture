@@ -86,8 +86,8 @@ def _mount_channel_adapters(app: FastAPI, app_config) -> None:
 
     if features.channel_telegram_enabled:
         try:
-            from modules.telegram.bot import get_bot, get_dispatcher
-            from modules.telegram.webhook import get_webhook_router
+            from modules.clients.telegram.bot import get_bot, get_dispatcher
+            from modules.clients.telegram.webhook import get_webhook_router
             from modules.backend.gateway.registry import get_adapter
 
             bot = get_bot()

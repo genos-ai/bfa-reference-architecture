@@ -105,7 +105,7 @@ def cli(ctx, verbose: bool, debug: bool, output_format: str):
 @click.pass_obj
 def health(ctx):
     """Run local health checks."""
-    from modules.backend.cli.health import check_health
+    from modules.clients.cli.health import check_health
     check_health(ctx.logger, output_format=ctx.output_format)
 
 
@@ -113,7 +113,7 @@ def health(ctx):
 @click.pass_obj
 def config(ctx):
     """Display loaded YAML configuration."""
-    from modules.backend.cli.config_display import show_config
+    from modules.clients.cli.config_display import show_config
     show_config(ctx.logger, output_format=ctx.output_format)
 
 
@@ -121,7 +121,7 @@ def config(ctx):
 @click.pass_obj
 def info(ctx):
     """Show application metadata and version."""
-    from modules.backend.cli.info import show_info
+    from modules.clients.cli.info import show_info
     show_info(ctx.logger, output_format=ctx.output_format)
 
 
@@ -130,7 +130,7 @@ def info(ctx):
 @click.pass_obj
 def credits(ctx, roster: str):
     """Preflight credit check — verify all roster models have available credits."""
-    from modules.backend.cli.credits import check_credits
+    from modules.clients.cli.credits import check_credits
     check_credits(ctx.logger, roster=roster, output_format=ctx.output_format)
 
 
@@ -155,13 +155,13 @@ def agent(ctx, message: str | None, name: str | None, list_agents: bool):
         python cli.py agent --list
     """
     if list_agents:
-        from modules.backend.cli.agent import show_agents
+        from modules.clients.cli.agent import show_agents
         show_agents(ctx.obj.logger)
         return
     if not message:
         click.echo(ctx.get_help())
         return
-    from modules.backend.cli.agent import run_agent
+    from modules.clients.cli.agent import run_agent
     run_agent(ctx.obj.logger, message, name, ctx.obj.output_format)
 
 
@@ -192,7 +192,7 @@ def server(ctx):
 @click.pass_obj
 def start(ctx, host, port, reload):
     """Start the API server."""
-    from modules.backend.cli.server import run_server
+    from modules.clients.cli.server import run_server
     run_server(ctx.logger, host, port, reload)
 
 
@@ -201,7 +201,7 @@ def start(ctx, host, port, reload):
 @click.pass_obj
 def stop(ctx, port):
     """Stop a running server."""
-    from modules.backend.cli.helpers import get_service_port, service_stop
+    from modules.clients.cli.helpers import get_service_port, service_stop
     service_stop(ctx.logger, "server", get_service_port(port))
 
 
@@ -210,7 +210,7 @@ def stop(ctx, port):
 @click.pass_obj
 def status(ctx, port):
     """Check if the server is running."""
-    from modules.backend.cli.helpers import get_service_port, service_status
+    from modules.clients.cli.helpers import get_service_port, service_status
     service_status(ctx.logger, "server", get_service_port(port))
 
 
@@ -222,8 +222,8 @@ def status(ctx, port):
 def restart(ctx, host, port, reload):
     """Restart the server (stop then start)."""
     import time
-    from modules.backend.cli.helpers import get_service_port, service_stop
-    from modules.backend.cli.server import run_server
+    from modules.clients.cli.helpers import get_service_port, service_stop
+    from modules.clients.cli.server import run_server
     service_stop(ctx.logger, "server", get_service_port(port))
     time.sleep(2)
     run_server(ctx.logger, host, port, reload)
@@ -239,7 +239,7 @@ def restart(ctx, host, port, reload):
 @click.pass_obj
 def worker(ctx, workers: int):
     """Start the background task worker."""
-    from modules.backend.cli.worker import run_worker
+    from modules.clients.cli.worker import run_worker
     run_worker(ctx.logger, workers)
 
 
@@ -252,7 +252,7 @@ def worker(ctx, workers: int):
 @click.pass_obj
 def scheduler(ctx):
     """Start the cron-based task scheduler."""
-    from modules.backend.cli.scheduler import run_scheduler
+    from modules.clients.cli.scheduler import run_scheduler
     run_scheduler(ctx.logger)
 
 
@@ -265,7 +265,7 @@ def scheduler(ctx):
 @click.pass_obj
 def telegram(ctx):
     """Start the Telegram bot in polling mode."""
-    from modules.backend.cli.telegram import run_telegram_poll
+    from modules.clients.cli.telegram import run_telegram_poll
     run_telegram_poll(ctx.logger)
 
 
@@ -278,7 +278,7 @@ def telegram(ctx):
 @click.pass_obj
 def event_worker(ctx):
     """Start the event bus consumer worker."""
-    from modules.backend.cli.event_worker import run_event_worker
+    from modules.clients.cli.event_worker import run_event_worker
     run_event_worker(ctx.logger)
 
 
@@ -300,7 +300,7 @@ def test(ctx, type: str, coverage: bool):
         python cli.py test unit --coverage
         python cli.py test integration
     """
-    from modules.backend.cli.testing import run_tests
+    from modules.clients.cli.testing import run_tests
     run_tests(ctx.logger, type, coverage)
 
 
@@ -329,7 +329,7 @@ def migrate(ctx):
 @click.pass_obj
 def upgrade(ctx, revision: str):
     """Upgrade database to a revision (default: head)."""
-    from modules.backend.cli.migrate import run_migrations
+    from modules.clients.cli.migrate import run_migrations
     run_migrations(ctx.logger, "upgrade", revision, None)
 
 
@@ -338,7 +338,7 @@ def upgrade(ctx, revision: str):
 @click.pass_obj
 def downgrade(ctx, revision: str):
     """Downgrade database to a revision."""
-    from modules.backend.cli.migrate import run_migrations
+    from modules.clients.cli.migrate import run_migrations
     run_migrations(ctx.logger, "downgrade", revision, None)
 
 
@@ -346,7 +346,7 @@ def downgrade(ctx, revision: str):
 @click.pass_obj
 def current(ctx):
     """Show current database revision."""
-    from modules.backend.cli.migrate import run_migrations
+    from modules.clients.cli.migrate import run_migrations
     run_migrations(ctx.logger, "current", "head", None)
 
 
@@ -354,7 +354,7 @@ def current(ctx):
 @click.pass_obj
 def history(ctx):
     """Show migration history."""
-    from modules.backend.cli.migrate import run_migrations
+    from modules.clients.cli.migrate import run_migrations
     run_migrations(ctx.logger, "history", "head", None)
 
 
@@ -363,7 +363,7 @@ def history(ctx):
 @click.pass_obj
 def autogenerate(ctx, message: str):
     """Auto-generate migration from model changes."""
-    from modules.backend.cli.migrate import run_migrations
+    from modules.clients.cli.migrate import run_migrations
     run_migrations(ctx.logger, "autogenerate", "head", message)
 
 
@@ -396,7 +396,7 @@ def mission(ctx):
 @click.pass_obj
 def mission_run(ctx, objective, roster, budget, triggered_by):
     """Create and execute a mission in one step."""
-    from modules.backend.cli.mission import run_mission
+    from modules.clients.cli.mission import run_mission
     run_mission(ctx.logger, action="run", objective=objective, mission_id=None,
                 roster=roster, budget=budget, triggered_by=triggered_by,
                 output_format=ctx.output_format)
@@ -410,7 +410,7 @@ def mission_run(ctx, objective, roster, budget, triggered_by):
 @click.pass_obj
 def mission_create(ctx, objective, roster, budget, triggered_by):
     """Create a mission (PENDING state, not yet executed)."""
-    from modules.backend.cli.mission import run_mission
+    from modules.clients.cli.mission import run_mission
     run_mission(ctx.logger, action="create", objective=objective, mission_id=None,
                 roster=roster, budget=budget, triggered_by=triggered_by,
                 output_format=ctx.output_format)
@@ -422,7 +422,7 @@ def mission_create(ctx, objective, roster, budget, triggered_by):
 @click.pass_obj
 def mission_execute(ctx, mission_id, roster):
     """Execute an existing PENDING mission."""
-    from modules.backend.cli.mission import run_mission
+    from modules.clients.cli.mission import run_mission
     run_mission(ctx.logger, action="execute", objective=None, mission_id=mission_id,
                 roster=roster, budget=None, triggered_by="user:cli",
                 output_format=ctx.output_format)
@@ -432,7 +432,7 @@ def mission_execute(ctx, mission_id, roster):
 @click.pass_obj
 def mission_list(ctx):
     """List recent missions."""
-    from modules.backend.cli.mission import run_mission
+    from modules.clients.cli.mission import run_mission
     run_mission(ctx.logger, action="list", objective=None, mission_id=None,
                 roster="default", budget=None, triggered_by="user:cli",
                 output_format=ctx.output_format)
@@ -443,7 +443,7 @@ def mission_list(ctx):
 @click.pass_obj
 def mission_detail(ctx, mission_id):
     """Show mission detail with task executions."""
-    from modules.backend.cli.mission import run_mission
+    from modules.clients.cli.mission import run_mission
     run_mission(ctx.logger, action="detail", objective=None, mission_id=mission_id,
                 roster="default", budget=None, triggered_by="user:cli",
                 output_format=ctx.output_format)
@@ -454,7 +454,7 @@ def mission_detail(ctx, mission_id):
 @click.pass_obj
 def mission_plan(ctx, mission_id):
     """Show the TaskPlan DAG for a mission."""
-    from modules.backend.cli.mission import run_mission
+    from modules.clients.cli.mission import run_mission
     run_mission(ctx.logger, action="plan", objective=None, mission_id=mission_id,
                 roster="default", budget=None, triggered_by="user:cli",
                 output_format=ctx.output_format)
@@ -465,7 +465,7 @@ def mission_plan(ctx, mission_id):
 @click.pass_obj
 def mission_cost(ctx, mission_id):
     """Show mission cost breakdown."""
-    from modules.backend.cli.mission import run_mission
+    from modules.clients.cli.mission import run_mission
     run_mission(ctx.logger, action="cost", objective=None, mission_id=mission_id,
                 roster="default", budget=None, triggered_by="user:cli",
                 output_format=ctx.output_format)
@@ -495,7 +495,7 @@ def playbook(ctx):
 @click.pass_obj
 def playbook_list(ctx):
     """List available playbooks."""
-    from modules.backend.cli.playbook import run_playbook_cli
+    from modules.clients.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="list", playbook_name=None, run_id=None,
                      triggered_by="user:cli", output_format=ctx.output_format)
 
@@ -505,7 +505,7 @@ def playbook_list(ctx):
 @click.pass_obj
 def playbook_detail(ctx, name):
     """Show playbook configuration and steps."""
-    from modules.backend.cli.playbook import run_playbook_cli
+    from modules.clients.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="detail", playbook_name=name, run_id=None,
                      triggered_by="user:cli", output_format=ctx.output_format)
 
@@ -524,7 +524,7 @@ def playbook_detail(ctx, name):
 @click.pass_obj
 def playbook_run(ctx, name, triggered_by, project, gate, step):
     """Execute a playbook."""
-    from modules.backend.cli.playbook import run_playbook_cli
+    from modules.clients.cli.playbook import run_playbook_cli
 
     # --step is a convenience alias for --gate interactive
     if step and gate is None:
@@ -545,7 +545,7 @@ def playbook_run(ctx, name, triggered_by, project, gate, step):
 @click.pass_obj
 def playbook_runs(ctx, name):
     """List playbook runs."""
-    from modules.backend.cli.playbook import run_playbook_cli
+    from modules.clients.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="runs", playbook_name=name, run_id=None,
                      triggered_by="user:cli", output_format=ctx.output_format)
 
@@ -555,7 +555,7 @@ def playbook_runs(ctx, name):
 @click.pass_obj
 def playbook_run_detail(ctx, run_id):
     """Show details for a specific playbook run."""
-    from modules.backend.cli.playbook import run_playbook_cli
+    from modules.clients.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="run-detail", playbook_name=None,
                      run_id=run_id, triggered_by="user:cli", output_format=ctx.output_format)
 
@@ -565,7 +565,7 @@ def playbook_run_detail(ctx, run_id):
 @click.pass_obj
 def playbook_report(ctx, run_id):
     """Render a report for a past playbook run."""
-    from modules.backend.cli.playbook import run_playbook_cli
+    from modules.clients.cli.playbook import run_playbook_cli
     run_playbook_cli(ctx.logger, action="report", playbook_name=None,
                      run_id=run_id, triggered_by="user:cli", output_format=ctx.output_format)
 
@@ -601,7 +601,7 @@ def project(ctx):
 @click.pass_obj
 def project_create(ctx, name, description, roster, budget, repo_url, repo_root):
     """Create a new project."""
-    from modules.backend.cli.project import run_project
+    from modules.clients.cli.project import run_project
     run_project(ctx.logger, "create", name=name, description=description,
                 roster=roster, budget=budget, repo_url=repo_url,
                 repo_root=repo_root, output_format=ctx.output_format)
@@ -611,7 +611,7 @@ def project_create(ctx, name, description, roster, budget, repo_url, repo_root):
 @click.pass_obj
 def project_list(ctx):
     """List all active projects."""
-    from modules.backend.cli.project import run_project
+    from modules.clients.cli.project import run_project
     run_project(ctx.logger, "list", output_format=ctx.output_format)
 
 
@@ -621,7 +621,7 @@ def project_list(ctx):
 @click.pass_obj
 def project_detail(ctx, project_id, name):
     """Show project details."""
-    from modules.backend.cli.project import run_project
+    from modules.clients.cli.project import run_project
     run_project(ctx.logger, "detail", project_id=project_id, name=name,
                 output_format=ctx.output_format)
 
@@ -631,7 +631,7 @@ def project_detail(ctx, project_id, name):
 @click.pass_obj
 def project_archive(ctx, project_id):
     """Archive a project."""
-    from modules.backend.cli.project import run_project
+    from modules.clients.cli.project import run_project
     run_project(ctx.logger, "archive", project_id=project_id,
                 output_format=ctx.output_format)
 
@@ -647,7 +647,7 @@ def project_context():
 @click.pass_obj
 def project_context_show(ctx, project_id):
     """Show the PCD for a project."""
-    from modules.backend.cli.project import run_project
+    from modules.clients.cli.project import run_project
     run_project(ctx.logger, "context-show", project_id=project_id,
                 output_format=ctx.output_format)
 
@@ -657,7 +657,7 @@ def project_context_show(ctx, project_id):
 @click.pass_obj
 def project_context_history(ctx, project_id):
     """Show PCD change audit trail."""
-    from modules.backend.cli.project import run_project
+    from modules.clients.cli.project import run_project
     run_project(ctx.logger, "context-history", project_id=project_id,
                 output_format=ctx.output_format)
 
@@ -667,7 +667,7 @@ def project_context_history(ctx, project_id):
 @click.pass_obj
 def project_summarize(ctx, project_id):
     """Run the summarization pipeline for a project."""
-    from modules.backend.cli.project import run_project
+    from modules.clients.cli.project import run_project
     run_project(ctx.logger, "summarize", project_id=project_id,
                 output_format=ctx.output_format)
 
@@ -706,7 +706,7 @@ def context_show(ctx, project_id):
     Without --project: global view (disk-only, no DB).
     With --project: full assembled context packet from DB + disk.
     """
-    from modules.backend.cli.context import run_context
+    from modules.clients.cli.context import run_context
     run_context(ctx.logger, "show", output_format=ctx.output_format, project_id=project_id)
 
 
@@ -720,7 +720,7 @@ def context_assembled(ctx, project_id, domain_tags):
     Shows exactly what an agent receives: PCD + task + Code Map + history.
     Requires a running database.
     """
-    from modules.backend.cli.context import run_context
+    from modules.clients.cli.context import run_context
     tags = domain_tags.split(",") if domain_tags else None
     run_context(ctx.logger, "assembled", output_format=ctx.output_format,
                 project_id=project_id, domain_tags=tags)
@@ -733,7 +733,7 @@ def context_assembled(ctx, project_id, domain_tags):
 @click.pass_obj
 def context_codemap(ctx, generate, format_type):
     """Show or generate the Code Map."""
-    from modules.backend.cli.context import run_context
+    from modules.clients.cli.context import run_context
     run_context(ctx.logger, "codemap", output_format=ctx.output_format,
                 generate=generate, format_type=format_type)
 
@@ -742,7 +742,7 @@ def context_codemap(ctx, generate, format_type):
 @click.pass_obj
 def context_pqi(ctx):
     """Run the PyQuality Index scorer."""
-    from modules.backend.cli.context import run_context
+    from modules.clients.cli.context import run_context
     run_context(ctx.logger, "pqi", output_format=ctx.output_format)
 
 
@@ -750,7 +750,7 @@ def context_pqi(ctx):
 @click.pass_obj
 def context_deps(ctx):
     """Show dependency graph analysis."""
-    from modules.backend.cli.context import run_context
+    from modules.clients.cli.context import run_context
     run_context(ctx.logger, "deps", output_format=ctx.output_format)
 
 
@@ -778,7 +778,7 @@ def db(ctx):
 @click.pass_obj
 def db_stats(ctx):
     """Show row counts for all tables."""
-    from modules.backend.cli.db import run_db
+    from modules.clients.cli.db import run_db
     run_db(ctx.logger, action="stats", table=None, limit=10, confirm=False)
 
 
@@ -786,7 +786,7 @@ def db_stats(ctx):
 @click.pass_obj
 def db_tables(ctx):
     """Show table schemas (columns, types, nullability)."""
-    from modules.backend.cli.db import run_db
+    from modules.clients.cli.db import run_db
     run_db(ctx.logger, action="tables", table=None, limit=10, confirm=False)
 
 
@@ -796,7 +796,7 @@ def db_tables(ctx):
 @click.pass_obj
 def db_query(ctx, table, limit):
     """Query recent rows from a table."""
-    from modules.backend.cli.db import run_db
+    from modules.clients.cli.db import run_db
     run_db(ctx.logger, action="query", table=table, limit=limit, confirm=False)
 
 
@@ -807,7 +807,7 @@ def db_query(ctx, table, limit):
 @click.pass_obj
 def db_clear(ctx, yes, include_projects):
     """Clear run data. Projects and PCD are preserved by default."""
-    from modules.backend.cli.db import run_db
+    from modules.clients.cli.db import run_db
     run_db(ctx.logger, action="clear", table=None, limit=10, confirm=yes,
            include_projects=include_projects)
 
@@ -817,7 +817,7 @@ def db_clear(ctx, yes, include_projects):
 @click.pass_obj
 def db_clear_missions(ctx, yes):
     """Clear mission data only."""
-    from modules.backend.cli.db import run_db
+    from modules.clients.cli.db import run_db
     run_db(ctx.logger, action="clear-missions", table=None, limit=10, confirm=yes)
 
 
@@ -826,7 +826,7 @@ def db_clear_missions(ctx, yes):
 @click.pass_obj
 def db_clear_sessions(ctx, yes):
     """Clear session data only."""
-    from modules.backend.cli.db import run_db
+    from modules.clients.cli.db import run_db
     run_db(ctx.logger, action="clear-sessions", table=None, limit=10, confirm=yes)
 
 

@@ -35,7 +35,7 @@ class TestAuthMiddleware:
     @pytest.mark.asyncio
     async def test_allows_authorized_user(self):
         """Test that authorized users are allowed through."""
-        from modules.telegram.middlewares.auth import AuthMiddleware
+        from modules.clients.telegram.middlewares.auth import AuthMiddleware
 
         middleware = AuthMiddleware()
         handler = AsyncMock(return_value="result")
@@ -46,7 +46,7 @@ class TestAuthMiddleware:
         mock_app_config.application.telegram.authorized_users = [123456789, 987654321]
 
         with patch(
-            "modules.telegram.middlewares.auth.get_app_config",
+            "modules.clients.telegram.middlewares.auth.get_app_config",
             return_value=mock_app_config,
         ):
             result = await middleware(handler, event, {})
@@ -57,7 +57,7 @@ class TestAuthMiddleware:
     @pytest.mark.asyncio
     async def test_blocks_unauthorized_user(self):
         """Test that unauthorized users are blocked."""
-        from modules.telegram.middlewares.auth import AuthMiddleware
+        from modules.clients.telegram.middlewares.auth import AuthMiddleware
 
         middleware = AuthMiddleware()
         handler = AsyncMock(return_value="result")
@@ -68,7 +68,7 @@ class TestAuthMiddleware:
         mock_app_config.application.telegram.authorized_users = [123456789]
 
         with patch(
-            "modules.telegram.middlewares.auth.get_app_config",
+            "modules.clients.telegram.middlewares.auth.get_app_config",
             return_value=mock_app_config,
         ):
             result = await middleware(handler, event, {})
@@ -79,7 +79,7 @@ class TestAuthMiddleware:
     @pytest.mark.asyncio
     async def test_allows_all_when_no_authorized_users(self):
         """Test that all users are allowed when no whitelist is configured."""
-        from modules.telegram.middlewares.auth import AuthMiddleware
+        from modules.clients.telegram.middlewares.auth import AuthMiddleware
 
         middleware = AuthMiddleware()
         handler = AsyncMock(return_value="result")
@@ -90,7 +90,7 @@ class TestAuthMiddleware:
         mock_app_config.application.telegram.authorized_users = []
 
         with patch(
-            "modules.telegram.middlewares.auth.get_app_config",
+            "modules.clients.telegram.middlewares.auth.get_app_config",
             return_value=mock_app_config,
         ):
             result = await middleware(handler, event, {})
@@ -101,7 +101,7 @@ class TestAuthMiddleware:
     @pytest.mark.asyncio
     async def test_explicit_role_mapping_from_config(self):
         """Test that user gets role from security.yaml user_roles mapping."""
-        from modules.telegram.middlewares.auth import AuthMiddleware
+        from modules.clients.telegram.middlewares.auth import AuthMiddleware
 
         middleware = AuthMiddleware()
         handler = AsyncMock(return_value="result")
@@ -119,7 +119,7 @@ class TestAuthMiddleware:
         mock_app_config.security.user_roles = {"123456789": "admin"}
 
         with patch(
-            "modules.telegram.middlewares.auth.get_app_config",
+            "modules.clients.telegram.middlewares.auth.get_app_config",
             return_value=mock_app_config,
         ):
             await middleware(handler, event, data)
@@ -129,7 +129,7 @@ class TestAuthMiddleware:
     @pytest.mark.asyncio
     async def test_unmapped_user_defaults_to_viewer(self):
         """Test that authorized users without explicit mapping get viewer role."""
-        from modules.telegram.middlewares.auth import AuthMiddleware
+        from modules.clients.telegram.middlewares.auth import AuthMiddleware
 
         middleware = AuthMiddleware()
         handler = AsyncMock(return_value="result")
@@ -147,7 +147,7 @@ class TestAuthMiddleware:
         mock_app_config.security.user_roles = {"123456789": "admin"}
 
         with patch(
-            "modules.telegram.middlewares.auth.get_app_config",
+            "modules.clients.telegram.middlewares.auth.get_app_config",
             return_value=mock_app_config,
         ):
             await middleware(handler, event, data)
@@ -170,7 +170,7 @@ class TestRateLimitMiddleware:
     @pytest.mark.asyncio
     async def test_allows_requests_under_limit(self):
         """Test that requests under the rate limit are allowed."""
-        from modules.telegram.middlewares.rate_limit import RateLimitMiddleware
+        from modules.clients.telegram.middlewares.rate_limit import RateLimitMiddleware
 
         middleware = RateLimitMiddleware(rate_limit=10, rate_window=60)
         handler = AsyncMock(return_value="result")
@@ -185,7 +185,7 @@ class TestRateLimitMiddleware:
     @pytest.mark.asyncio
     async def test_blocks_requests_over_limit(self):
         """Test that requests over the rate limit are blocked."""
-        from modules.telegram.middlewares.rate_limit import RateLimitMiddleware
+        from modules.clients.telegram.middlewares.rate_limit import RateLimitMiddleware
 
         middleware = RateLimitMiddleware(rate_limit=2, rate_window=60)
         handler = AsyncMock(return_value="result")
@@ -205,7 +205,7 @@ class TestRateLimitMiddleware:
     @pytest.mark.asyncio
     async def test_rate_limit_resets_after_window(self):
         """Test that rate limit resets after the time window."""
-        from modules.telegram.middlewares.rate_limit import RateLimitMiddleware
+        from modules.clients.telegram.middlewares.rate_limit import RateLimitMiddleware
 
         middleware = RateLimitMiddleware(rate_limit=1, rate_window=1)
         handler = AsyncMock(return_value="result")
@@ -229,7 +229,7 @@ class TestRateLimitMiddleware:
     @pytest.mark.asyncio
     async def test_separate_limits_per_user(self):
         """Test that rate limits are tracked per user."""
-        from modules.telegram.middlewares.rate_limit import RateLimitMiddleware
+        from modules.clients.telegram.middlewares.rate_limit import RateLimitMiddleware
 
         middleware = RateLimitMiddleware(rate_limit=1, rate_window=60)
         handler = AsyncMock(return_value="result")
@@ -274,7 +274,7 @@ class TestLoggingMiddleware:
     @pytest.mark.asyncio
     async def test_logs_update_context(self):
         """Test that logging middleware extracts and logs context."""
-        from modules.telegram.middlewares.logging import LoggingMiddleware
+        from modules.clients.telegram.middlewares.logging import LoggingMiddleware
 
         middleware = LoggingMiddleware()
         handler = AsyncMock(return_value="result")
@@ -289,7 +289,7 @@ class TestLoggingMiddleware:
     @pytest.mark.asyncio
     async def test_logs_errors(self):
         """Test that errors are logged."""
-        from modules.telegram.middlewares.logging import LoggingMiddleware
+        from modules.clients.telegram.middlewares.logging import LoggingMiddleware
 
         middleware = LoggingMiddleware()
         handler = AsyncMock(side_effect=ValueError("test error"))
@@ -322,7 +322,7 @@ class TestUserRoles:
 
     def test_get_role_hierarchy_helper(self):
         """Test the _get_role_hierarchy helper returns flat dict."""
-        from modules.telegram.middlewares.auth import _get_role_hierarchy
+        from modules.clients.telegram.middlewares.auth import _get_role_hierarchy
 
         hierarchy = _get_role_hierarchy()
         assert isinstance(hierarchy, dict)

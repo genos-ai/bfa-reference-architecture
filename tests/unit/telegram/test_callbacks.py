@@ -12,7 +12,7 @@ class TestActionCallback:
 
     def test_pack_and_unpack(self):
         """Test that callback data can be packed and unpacked."""
-        from modules.telegram.callbacks.common import ActionCallback
+        from modules.clients.telegram.callbacks.common import ActionCallback
 
         original = ActionCallback(action="confirm", action_id="order_123")
         packed = original.pack()
@@ -27,7 +27,7 @@ class TestActionCallback:
 
     def test_prefix(self):
         """Test that callback has correct prefix."""
-        from modules.telegram.callbacks.common import ActionCallback
+        from modules.clients.telegram.callbacks.common import ActionCallback
 
         callback = ActionCallback(action="test", action_id="123")
         packed = callback.pack()
@@ -40,7 +40,7 @@ class TestMenuCallback:
 
     def test_pack_and_unpack(self):
         """Test that menu callback can be packed and unpacked."""
-        from modules.telegram.callbacks.common import MenuCallback
+        from modules.clients.telegram.callbacks.common import MenuCallback
 
         original = MenuCallback(menu="settings", item_id="user_123")
         packed = original.pack()
@@ -51,7 +51,7 @@ class TestMenuCallback:
 
     def test_optional_item_id(self):
         """Test that item_id is optional."""
-        from modules.telegram.callbacks.common import MenuCallback
+        from modules.clients.telegram.callbacks.common import MenuCallback
 
         callback = MenuCallback(menu="main")
         packed = callback.pack()
@@ -66,7 +66,7 @@ class TestPaginationCallback:
 
     def test_pack_and_unpack(self):
         """Test that pagination callback can be packed and unpacked."""
-        from modules.telegram.callbacks.common import PaginationCallback
+        from modules.clients.telegram.callbacks.common import PaginationCallback
 
         original = PaginationCallback(list_type="orders", page=5, per_page=20)
         packed = original.pack()
@@ -78,7 +78,7 @@ class TestPaginationCallback:
 
     def test_default_values(self):
         """Test that default values are applied."""
-        from modules.telegram.callbacks.common import PaginationCallback
+        from modules.clients.telegram.callbacks.common import PaginationCallback
 
         callback = PaginationCallback(list_type="items")
 
@@ -91,7 +91,7 @@ class TestItemCallback:
 
     def test_pack_and_unpack(self):
         """Test that item callback can be packed and unpacked."""
-        from modules.telegram.callbacks.common import ItemCallback
+        from modules.clients.telegram.callbacks.common import ItemCallback
 
         original = ItemCallback(action="view", item_type="order", item_id="123")
         packed = original.pack()
@@ -103,7 +103,7 @@ class TestItemCallback:
 
     def test_different_actions(self):
         """Test different action types."""
-        from modules.telegram.callbacks.common import ItemCallback
+        from modules.clients.telegram.callbacks.common import ItemCallback
 
         for action in ["view", "edit", "delete"]:
             callback = ItemCallback(action=action, item_type="test", item_id="1")

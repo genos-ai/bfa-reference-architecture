@@ -25,7 +25,7 @@ def _register_enabled_adapters() -> None:
 
     if features.channel_telegram_enabled:
         try:
-            from modules.telegram.bot import get_bot
+            from modules.clients.telegram.bot import get_bot
             from modules.backend.gateway.adapters.telegram import TelegramAdapter
 
             bot = get_bot()
