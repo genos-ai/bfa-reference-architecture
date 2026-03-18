@@ -9,12 +9,20 @@ from __future__ import annotations
 
 import importlib
 import json
+import uuid
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from modules.backend.schemas.session import SessionResponse
 
-from pydantic_ai import UsageLimits
+from pydantic_ai import UsageLimits, UserError
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    ThinkingPart,
+    ToolCallPart,
+    ToolReturnPart,
+)
 from pydantic_ai.models import Model
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.providers.anthropic import AnthropicProvider
@@ -40,7 +48,15 @@ from modules.backend.core.config import find_project_root, get_app_config, get_s
 from modules.backend.agents.mission_control.cost import compute_cost_usd
 from modules.backend.core.exceptions import ApplicationError, ValidationError
 from modules.backend.core.logging import get_logger
-from modules.backend.events.types import SessionEvent
+from modules.backend.events.types import (
+    AgentResponseChunkEvent,
+    AgentResponseCompleteEvent,
+    AgentThinkingEvent,
+    AgentToolCallEvent,
+    AgentToolResultEvent,
+    CostUpdateEvent,
+    SessionEvent,
+)
 from modules.backend.schemas.session import SessionMessageCreate
 
 logger = get_logger(__name__)
@@ -156,7 +172,7 @@ def _get_usage_limits(agent_name: str | None = None) -> UsageLimits:
                 total_tokens_limit=agent_config.max_tokens or system_tokens,
             )
         except KeyError:
-            pass
+            logger.debug("Agent '%s' not in registry, using system limits", agent_name)
 
     return UsageLimits(
         request_limit=system_requests,
@@ -211,8 +227,90 @@ async def _publish(event_bus: EventBusProtocol, event: SessionEvent) -> None:
     """Publish event to bus. Non-critical — NoOpEventBus silently drops."""
     try:
         await event_bus.publish(event)
-    except (OSError, RuntimeError):
+    except Exception:
         logger.debug("Event bus publish failed", exc_info=True)
+
+
+async def _emit(event_bus: EventBusProtocol, event_cls: type[SessionEvent], **kwargs: Any) -> None:
+    """Construct and publish an event, catching construction and publish errors.
+
+    Events are best-effort — a malformed session_id or bus error must never
+    break agent execution or dispatch.
+    """
+    try:
+        event = event_cls(**kwargs)
+        await event_bus.publish(event)
+    except Exception:
+        logger.debug("Event emission failed for %s", event_cls.__name__, exc_info=True)
+
+
+async def _emit_tool_events(
+    event_bus: EventBusProtocol,
+    stream: Any,
+    *,
+    session_id: str | uuid.UUID,
+    source: str,
+    agent_id: str,
+) -> tuple[list[str], list[SessionEvent]]:
+    """Extract thinking parts and tool events from a completed stream.
+
+    Reads stream.new_messages() retrospectively (after streaming ends)
+    to find ThinkingPart, ToolCallPart, and ToolReturnPart entries.
+    Publishes tool events to the event bus.
+
+    Returns:
+        (thinking_parts, tool_events) — callers that need to yield or
+        inspect the events can use the second element; dispatch ignores it.
+
+    Best-effort — errors are logged and swallowed.
+    """
+    thinking_parts: list[str] = []
+    tool_events: list[SessionEvent] = []
+    try:
+        for msg in stream.new_messages():
+            if isinstance(msg, ModelResponse):
+                for part in msg.parts:
+                    if isinstance(part, ThinkingPart) and part.has_content():
+                        thinking_parts.append(part.content)
+                    elif isinstance(part, ToolCallPart):
+                        try:
+                            event = AgentToolCallEvent(
+                                session_id=session_id,
+                                source=source,
+                                agent_id=agent_id,
+                                tool_name=part.tool_name,
+                                tool_args={
+                                    "raw": part.args if isinstance(part.args, str) else str(part.args),
+                                },
+                                tool_call_id=part.tool_call_id or str(uuid.uuid4()),
+                            )
+                            await event_bus.publish(event)
+                            tool_events.append(event)
+                        except Exception:
+                            logger.debug("Event emission failed for AgentToolCallEvent", exc_info=True)
+            elif isinstance(msg, ModelRequest):
+                for part in msg.parts:
+                    if isinstance(part, ToolReturnPart):
+                        try:
+                            event = AgentToolResultEvent(
+                                session_id=session_id,
+                                source=source,
+                                agent_id=agent_id,
+                                tool_name=part.tool_name,
+                                tool_call_id=part.tool_call_id or "",
+                                result=(
+                                    part.content
+                                    if isinstance(part.content, str)
+                                    else str(part.content)
+                                ),
+                            )
+                            await event_bus.publish(event)
+                            tool_events.append(event)
+                        except Exception:
+                            logger.debug("Event emission failed for AgentToolResultEvent", exc_info=True)
+    except (AttributeError, TypeError, KeyError, ValueError):
+        logger.debug("Failed to extract tool events", exc_info=True)
+    return thinking_parts, tool_events
 
 
 async def _persist_messages(
@@ -332,9 +430,17 @@ def _append_validation_feedback(prompt: str, errors: list[str]) -> str:
 
 
 def _make_agent_executor(
-    session_service: SessionServiceProtocol, event_bus: EventBusProtocol,
+    event_bus: EventBusProtocol,
+    *,
+    session_id: str,
+    mission_id: str,
 ) -> ExecuteAgentFn:
-    """Create the execute_agent_fn closure for the dispatch loop."""
+    """Create the execute_agent_fn closure for the dispatch loop.
+
+    Emits SessionEvents via event_bus so that real-time consumers (TUI,
+    event stream, etc.) can observe agent lifecycle during dispatch.
+    """
+    cumulative_cost_usd = 0.0
 
     async def execute_agent(
         agent_name: str,
@@ -342,11 +448,14 @@ def _make_agent_executor(
         inputs: dict,
         usage_limits: UsageLimits,
     ) -> dict:
-        """Execute a single agent through the standard path.
+        """Execute a single agent with streaming event emission.
 
-        Calls agent.run() directly (not module.run_agent()) so we can
-        extract usage from the AgentRunResult before it's unwrapped.
+        Uses agent.run_stream() to emit real-time events (chunks, tool
+        calls, tool results) during execution. Returns a complete dict —
+        streaming is internal, solely for the event bus.
         """
+        nonlocal cumulative_cost_usd
+
         registry = get_registry()
         agent_config = registry.get(agent_name)
         if agent_config is None:
@@ -356,6 +465,13 @@ def _make_agent_executor(
         model = _build_model(agent_config.model)
         agent = module.create_agent(model)
         deps = _build_agent_deps(agent_name, agent_config)
+
+        # Signal that this agent is about to execute
+        await _emit(event_bus, AgentThinkingEvent,
+            session_id=session_id,
+            source=f"dispatch:{mission_id}",
+            agent_id=agent_name,
+        )
 
         # Merge inputs into the user message so the agent sees them
         user_message = instructions
@@ -381,13 +497,33 @@ def _make_agent_executor(
                     f"{pqi_text}"
                 )
 
-        # Call agent.run() directly to retain usage metadata
-        run_result = await agent.run(
-            user_message, deps=deps, usage_limits=usage_limits,
-        )
+        # Stream agent execution for real-time event emission.
+        # The executor still returns a complete dict — streaming is
+        # internal, solely for emitting chunk/tool events to the bus.
+        source = f"dispatch:{mission_id}"
 
-        # Extract output
-        output = run_result.output
+        async with agent.run_stream(
+            user_message, deps=deps, usage_limits=usage_limits,
+        ) as stream:
+            try:
+                async for text in stream.stream_text(delta=True):
+                    await _emit(event_bus, AgentResponseChunkEvent,
+                        session_id=session_id,
+                        source=source,
+                        agent_id=agent_name,
+                        content=text,
+                    )
+            except UserError:
+                pass  # Structured output agent — no text stream
+
+            output = await stream.get_output()
+            await _emit_tool_events(
+                event_bus, stream,
+                session_id=session_id,
+                source=source,
+                agent_id=agent_name,
+            )
+            usage = stream.usage()
 
         # QA agent: inject PQI deterministically before serialization
         if pqi_data and hasattr(output, "pqi"):
@@ -400,12 +536,11 @@ def _make_agent_executor(
         else:
             output_dict = {"result": str(output)}
 
-        # Extract usage from the AgentRunResult
-        usage = run_result.usage()
         input_tokens = usage.input_tokens or 0
         output_tokens = usage.output_tokens or 0
         model_name = _get_model_name(agent_config.model)
         cost_usd = compute_cost_usd(input_tokens, output_tokens, model_name)
+        cumulative_cost_usd += cost_usd
 
         output_dict["_meta"] = {
             "input_tokens": input_tokens,
@@ -413,6 +548,35 @@ def _make_agent_executor(
             "thinking_tokens": 0,
             "cost_usd": cost_usd,
         }
+
+        # Summarize output for the event (truncate to avoid oversized events)
+        full_content = json.dumps(output_dict, default=str)
+        if len(full_content) > 2000:
+            full_content = full_content[:2000] + "…"
+
+        # Signal agent completion with usage data
+        await _emit(event_bus, AgentResponseCompleteEvent,
+            session_id=session_id,
+            source=f"dispatch:{mission_id}",
+            agent_id=agent_name,
+            full_content=full_content,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost_usd,
+            model=model_name,
+        )
+
+        # Emit cumulative cost update
+        await _emit(event_bus, CostUpdateEvent,
+            session_id=session_id,
+            source=f"dispatch:{mission_id}",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost_usd,
+            cumulative_cost_usd=cumulative_cost_usd,
+            model=model_name,
+            source_event_type="agent.response.complete",
+        )
 
         return output_dict
 

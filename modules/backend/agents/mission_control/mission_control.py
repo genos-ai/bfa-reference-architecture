@@ -10,13 +10,6 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from pydantic_ai import UserError
-from pydantic_ai.messages import (
-    ModelRequest,
-    ModelResponse,
-    ThinkingPart,
-    ToolCallPart,
-    ToolReturnPart,
-)
 from sqlalchemy.exc import SQLAlchemyError
 
 from modules.backend.agents.mission_control.cost import compute_cost_usd, estimate_cost
@@ -31,6 +24,7 @@ from modules.backend.agents.mission_control.helpers import (
     _build_roster_prompt,
     _append_validation_feedback,
     _call_planning_agent,
+    _emit_tool_events,
     _get_model_name,
     _get_usage_limits,
     _make_agent_executor,
@@ -55,8 +49,6 @@ from modules.backend.events.types import (
     AgentResponseChunkEvent,
     AgentResponseCompleteEvent,
     AgentThinkingEvent,
-    AgentToolCallEvent,
-    AgentToolResultEvent,
     CostUpdateEvent,
     SessionEvent,
     UserMessageEvent,
@@ -242,40 +234,12 @@ async def handle(
             cost_usd = compute_cost_usd(input_tokens, output_tokens, model_str)
 
             # Extract tool events and thinking from new_messages (retrospective)
-            thinking_parts: list[str] = []
-            try:
-                new_msgs = stream.new_messages()
-                for msg in new_msgs:
-                    if isinstance(msg, ModelResponse):
-                        for part in msg.parts:
-                            if isinstance(part, ThinkingPart) and part.has_content():
-                                thinking_parts.append(part.content)
-                            elif isinstance(part, ToolCallPart):
-                                tool_event = AgentToolCallEvent(
-                                    session_id=sid,
-                                    source=source,
-                                    agent_id=agent_name,
-                                    tool_name=part.tool_name,
-                                    tool_args={"raw": part.args if isinstance(part.args, str) else str(part.args)},
-                                    tool_call_id=part.tool_call_id or str(uuid.uuid4()),
-                                )
-                                yield tool_event
-                                await _publish(event_bus, tool_event)
-                    elif isinstance(msg, ModelRequest):
-                        for part in msg.parts:
-                            if isinstance(part, ToolReturnPart):
-                                result_event = AgentToolResultEvent(
-                                    session_id=sid,
-                                    source=source,
-                                    agent_id=agent_name,
-                                    tool_name=part.tool_name,
-                                    tool_call_id=part.tool_call_id or "",
-                                    result=part.content if isinstance(part.content, str) else str(part.content),
-                                )
-                                yield result_event
-                                await _publish(event_bus, result_event)
-            except (AttributeError, TypeError, KeyError, ValueError):
-                logger.debug("Failed to extract tool events", exc_info=True)
+            thinking_parts, tool_events = await _emit_tool_events(
+                event_bus, stream,
+                session_id=sid, source=source, agent_id=agent_name,
+            )
+            for evt in tool_events:
+                yield evt
 
         # 8. Yield complete event
         metadata: dict[str, Any] = {}
@@ -525,12 +489,18 @@ async def handle_mission(
     outcome = await dispatch(
         plan=plan,
         roster=roster,
-        execute_agent_fn=_make_agent_executor(session_service, event_bus),
+        execute_agent_fn=_make_agent_executor(
+            event_bus,
+            session_id=session_id or mission_id,
+            mission_id=mission_id,
+        ),
         mission_budget_usd=mission_budget_usd,
         gate=gate,
         project_id=project_id,
         context_curator=context_curator,
         context_assembler=context_assembler,
+        event_bus=event_bus,
+        session_id=session_id or mission_id,
     )
 
     outcome.planning_trace_reference = thinking_trace

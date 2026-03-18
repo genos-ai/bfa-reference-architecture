@@ -25,10 +25,13 @@ from modules.backend.agents.mission_control.gate import (
     NoOpGate,
 )
 from modules.backend.agents.mission_control.middleware import _load_mission_control_config
+from modules.backend.agents.mission_control.helpers import _emit
 from modules.backend.agents.mission_control.models import (
     ContextAssemblerProtocol,
     ContextCuratorProtocol,
+    EventBusProtocol,
     ExecuteAgentFn,
+    NoOpEventBus,
 )
 from modules.backend.agents.mission_control.outcome import (
     MissionOutcome,
@@ -37,7 +40,6 @@ from modules.backend.agents.mission_control.outcome import (
     TaskResult,
     TaskStatus,
     TaskTokenUsage,
-    VerificationOutcome,
     build_verification_outcome,
 )
 from modules.backend.agents.mission_control.roster import Roster, RosterAgentEntry
@@ -47,6 +49,7 @@ from modules.backend.agents.mission_control.verification import (
     run_verification_pipeline,
 )
 from modules.backend.core.logging import get_logger
+from modules.backend.events.types import PlanStepCompletedEvent, PlanStepStartedEvent
 from modules.backend.schemas.task_plan import TaskDefinition, TaskPlan
 
 logger = get_logger(__name__)
@@ -187,6 +190,8 @@ async def dispatch(
     project_id: str | None = None,
     context_curator: ContextCuratorProtocol | None = None,
     context_assembler: ContextAssemblerProtocol | None = None,
+    event_bus: EventBusProtocol | None = None,
+    session_id: str | None = None,
 ) -> MissionOutcome:
     """Execute the dispatch loop for a validated TaskPlan.
 
@@ -201,6 +206,8 @@ async def dispatch(
     """
     start_time = time.monotonic()
     _gate = gate or NoOpGate()
+    _bus = event_bus or NoOpEventBus()
+    _sid = session_id or plan.mission_id
     layers = topological_sort(plan)
 
     # Gate 1: pre_dispatch — review full plan before execution
@@ -300,7 +307,7 @@ async def dispatch(
             layer_tasks.append(task)
             resolved_inputs_map[task.task_id] = resolved_inputs
             coros.append(
-                _execute_with_retry(
+                _execute_with_step_events(
                     task=task,
                     roster_entry=roster_entry,
                     resolved_inputs=resolved_inputs,
@@ -309,6 +316,8 @@ async def dispatch(
                     gate=_gate,
                     mission_id=plan.mission_id,
                     budget_usd=mission_budget_usd,
+                    event_bus=_bus,
+                    session_id=_sid,
                 )
             )
 
@@ -337,10 +346,14 @@ async def dispatch(
         ))
         if decision.action == GateAction.ABORT:
             logger.info("Mission aborted at pre_layer gate", extra={"layer": layer_idx})
+            for c in coros:
+                c.close()
             aborted = True
             abort_reason = decision.reason
             break
         if decision.action == GateAction.SKIP:
+            for c in coros:
+                c.close()
             for t in layer_tasks:
                 task_results.append(_skipped_result(t, decision.reason))
             continue
@@ -453,6 +466,51 @@ async def dispatch(
         ),
         abort_reason=abort_reason,
     )
+
+
+async def _execute_with_step_events(
+    task: TaskDefinition,
+    roster_entry: RosterAgentEntry,
+    resolved_inputs: dict[str, Any],
+    execute_agent_fn: ExecuteAgentFn,
+    execution_id: str,
+    gate: GateReviewer | None,
+    mission_id: str,
+    budget_usd: float,
+    event_bus: EventBusProtocol,
+    session_id: str,
+) -> TaskResult:
+    """Wrap _execute_with_retry with PlanStep lifecycle events."""
+    await _emit(event_bus, PlanStepStartedEvent,
+        session_id=session_id,
+        source=f"dispatch:{mission_id}",
+        plan_id=mission_id,
+        step_id=task.task_id,
+        step_name=task.description or task.task_id,
+        assigned_agent=task.agent,
+    )
+
+    result = await _execute_with_retry(
+        task=task,
+        roster_entry=roster_entry,
+        resolved_inputs=resolved_inputs,
+        execute_agent_fn=execute_agent_fn,
+        execution_id=execution_id,
+        gate=gate,
+        mission_id=mission_id,
+        budget_usd=budget_usd,
+    )
+
+    await _emit(event_bus, PlanStepCompletedEvent,
+        session_id=session_id,
+        source=f"dispatch:{mission_id}",
+        plan_id=mission_id,
+        step_id=task.task_id,
+        result_summary=f"{result.agent_name}: {result.status.value}",
+        status=result.status.value,
+    )
+
+    return result
 
 
 async def _execute_with_retry(
