@@ -8,6 +8,7 @@ auto-continue rules, and AI recommendation rendering.
 
 import json
 from dataclasses import asdict
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -262,6 +263,22 @@ class TestLlmGateReviewer:
         gate = LlmGateReviewer()
         assert gate.temperature == 0.0
         assert gate.max_tokens == 1024
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_aborts_for_safety(self):
+        """When the LLM call fails, the gate must ABORT — never auto-continue."""
+        gate = LlmGateReviewer(model="test")
+        # Force _get_agent to raise on review
+        gate._agent = MagicMock()
+        gate._agent.run = AsyncMock(side_effect=RuntimeError("LLM unavailable"))
+        ctx = GateContext(
+            gate_type="pre_dispatch",
+            mission_id="m-1",
+        )
+        decision = await gate.review(ctx)
+        assert decision.action == GateAction.ABORT
+        assert "safety" in decision.reason.lower()
+        assert "fallback" in decision.reviewer
 
 
 # ── GateSchema tests ─────────────────────────────────────────────

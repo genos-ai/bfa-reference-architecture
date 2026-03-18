@@ -1,1 +1,1 @@
-"""TUI widget library."""
+"""TUI widget components."""

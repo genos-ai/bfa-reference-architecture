@@ -190,13 +190,13 @@ class LlmGateReviewer:
                 reviewer=f"ai:{self.model_name}",
             )
         except Exception:
-            logger.warning(
-                "LLM gate review failed, falling back to CONTINUE",
+            logger.error(
+                "LLM gate review failed, aborting for safety",
                 exc_info=True,
             )
             return GateDecision(
-                action=GateAction.CONTINUE,
-                reason="LLM review failed — auto-continuing",
+                action=GateAction.ABORT,
+                reason="LLM review failed — aborting for safety",
                 reviewer=f"ai:{self.model_name}:fallback",
             )
 
