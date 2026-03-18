@@ -49,7 +49,11 @@ from modules.backend.agents.mission_control.verification import (
     run_verification_pipeline,
 )
 from modules.backend.core.logging import get_logger
-from modules.backend.events.types import PlanStepCompletedEvent, PlanStepStartedEvent
+from modules.backend.events.types import (
+    PlanCreatedEvent,
+    PlanStepCompletedEvent,
+    PlanStepStartedEvent,
+)
 from modules.backend.schemas.task_plan import TaskDefinition, TaskPlan
 
 logger = get_logger(__name__)
@@ -226,6 +230,16 @@ async def dispatch(
     if decision.action == GateAction.ABORT:
         logger.info("Mission aborted at pre_dispatch gate", extra={"reason": decision.reason})
         return _aborted_outcome(plan, decision.reason, start_time)
+
+    # Emit plan.created so TUI/listeners can render the DAG
+    await _emit(_bus, PlanCreatedEvent,
+        session_id=_sid,
+        source=f"dispatch:{plan.mission_id}",
+        plan_id=plan.mission_id,
+        goal=plan.summary,
+        step_count=len(plan.tasks),
+        metadata={"task_plan_json": plan.model_dump_json()},
+    )
 
     # Load PCD for agent context (if project is set)
     project_context: dict | None = None

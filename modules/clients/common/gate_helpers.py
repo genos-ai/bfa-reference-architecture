@@ -40,6 +40,26 @@ ACTION_COLORS: dict[str, str] = {
 }
 
 
+def safe_css_id(raw: str) -> str:
+    """Sanitise a string for use as a Textual CSS ID fragment."""
+    return raw.replace(".", "-").replace("_", "-")
+
+
+# ── Status icons (shared by mission panel, playbook, history) ─────
+
+STATUS_ICONS: dict[str, str] = {
+    "pending": "[dim]○[/dim]",
+    "running": "[bold cyan]●[/bold cyan]",
+    "success": "[green]✓[/green]",
+    "completed": "[green]✓[/green]",
+    "failed": "[red]✗[/red]",
+    "timeout": "[yellow]⏱[/yellow]",
+    "timed_out": "[yellow]⏱[/yellow]",
+    "skipped": "[dim]⊘[/dim]",
+    "cancelled": "[yellow]⊘[/yellow]",
+}
+
+
 def gate_header(ctx: GateContext, title: str) -> str:
     """Format a gate panel header with title, mission ID, and cost."""
     cc = cost_color(ctx.total_cost_usd, ctx.budget_usd)

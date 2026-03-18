@@ -16,6 +16,7 @@ from modules.backend.agents.mission_control.outcome import MissionOutcome
 from modules.backend.agents.mission_control.roster import load_roster, Roster
 from modules.backend.core.database import get_async_session
 from modules.backend.core.logging import get_logger
+from modules.backend.services.mission_persistence import MissionPersistenceService
 from modules.backend.services.project import ProjectService
 from modules.backend.services.session import SessionService
 
@@ -117,3 +118,69 @@ class ServiceBridge:
 
             await db.commit()
             return outcome
+
+    # ── Mission history ───────────────────────────────────────────────
+
+    async def list_missions(
+        self,
+        *,
+        status: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Return mission records as dicts for the history screen."""
+        async with get_async_session() as db:
+            svc = MissionPersistenceService(db)
+            records = await svc.list_missions(
+                status=status, limit=limit, offset=offset,
+            )
+            return [
+                {
+                    "id": str(r.id),
+                    "mission_id": r.mission_id if hasattr(r, "mission_id") else str(r.id),
+                    "objective": getattr(r, "objective", "") or "",
+                    "status": getattr(r, "status", "unknown"),
+                    "total_cost_usd": getattr(r, "total_cost_usd", 0.0) or 0.0,
+                    "roster_name": getattr(r, "roster_name", "") or "",
+                    "created_at": str(getattr(r, "created_at", "")),
+                }
+                for r in records
+            ]
+
+    async def get_mission_detail(self, mission_id: str) -> dict[str, Any] | None:
+        """Return a single mission record with execution details."""
+        async with get_async_session() as db:
+            svc = MissionPersistenceService(db)
+            record = await svc.get_mission(mission_id)
+            if not record:
+                return None
+            task_executions = await svc.get_task_executions(mission_id)
+            return {
+                "id": str(record.id),
+                "objective": getattr(record, "objective", ""),
+                "status": getattr(record, "status", "unknown"),
+                "total_cost_usd": getattr(record, "total_cost_usd", 0.0) or 0.0,
+                "roster_name": getattr(record, "roster_name", ""),
+                "created_at": str(getattr(record, "created_at", "")),
+                "task_plan_json": getattr(record, "task_plan_json", None),
+                "mission_outcome_json": getattr(record, "mission_outcome_json", None),
+                "task_executions": [
+                    {
+                        "task_id": getattr(t, "task_id", ""),
+                        "agent_name": getattr(t, "agent_name", ""),
+                        "status": getattr(t, "status", ""),
+                        "cost_usd": getattr(t, "cost_usd", 0.0) or 0.0,
+                        "input_tokens": getattr(t, "input_tokens", 0) or 0,
+                        "output_tokens": getattr(t, "output_tokens", 0) or 0,
+                    }
+                    for t in task_executions
+                ],
+            }
+
+    async def get_mission_cost_breakdown(
+        self, mission_id: str,
+    ) -> dict[str, Any] | None:
+        """Return cost breakdown for a mission."""
+        async with get_async_session() as db:
+            svc = MissionPersistenceService(db)
+            return await svc.get_cost_breakdown(mission_id)

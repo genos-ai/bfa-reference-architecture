@@ -48,11 +48,15 @@ class CostBar(Widget):
     total_layers: reactive[int] = reactive(0)
     pending_gates: reactive[int] = reactive(0)
     connected: reactive[bool] = reactive(True)
+    playbook_name: reactive[str] = reactive("")
+    playbook_step: reactive[int] = reactive(0)
+    playbook_total_steps: reactive[int] = reactive(0)
 
     def compose(self) -> ComposeResult:
         yield Label("$0.0000", id="cost-label")
         yield Label("0 in / 0 out", id="token-label")
         yield Label("Layer 0/0", id="layer-label")
+        yield Label("", id="playbook-label")
         yield Label("", id="gate-label")
         yield Label("ready", id="status-label")
 
@@ -92,6 +96,28 @@ class CostBar(Widget):
             label = self.query_one("#gate-label", Label)
             if count > 0:
                 label.update(f"[bold cyan]● {count} gate[/bold cyan]")
+            else:
+                label.update("")
+        except NoMatches:
+            pass
+
+    def watch_playbook_name(self, name: str) -> None:
+        self._update_playbook_label()
+
+    def watch_playbook_step(self, step: int) -> None:
+        self._update_playbook_label()
+
+    def watch_playbook_total_steps(self, total: int) -> None:
+        self._update_playbook_label()
+
+    def _update_playbook_label(self) -> None:
+        try:
+            label = self.query_one("#playbook-label", Label)
+            if self.playbook_name:
+                label.update(
+                    f"[blue]{self.playbook_name}[/blue] "
+                    f"{self.playbook_step}/{self.playbook_total_steps}"
+                )
             else:
                 label.update("")
         except NoMatches:

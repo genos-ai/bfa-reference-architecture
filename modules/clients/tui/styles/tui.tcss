@@ -37,7 +37,7 @@ Screen {
     padding: 0;
 }
 
-/* ── Placeholders (Phase 1 only) ───────────────────────────────── */
+/* ── Placeholders ─────────────────────────────────────────────── */
 
 .placeholder-panel {
     height: 1fr;
@@ -47,15 +47,15 @@ Screen {
     margin: 1;
 }
 
-/* ── Event stream placeholder ──────────────────────────────────── */
+/* ── Event stream ─────────────────────────────────────────────── */
 
-#event-stream-placeholder {
+#event-stream {
     height: 1fr;
-    padding: 1;
 }
 
-#event-stream-placeholder Label {
-    color: $text-muted;
+#event-scroll {
+    height: 1fr;
+    padding: 0;
 }
 
 /* ── Project header ────────────────────────────────────────────── */
@@ -121,4 +121,71 @@ ProjectPickerScreen {
 
 #new-project-section Input {
     margin: 0 0 1 0;
+}
+
+/* ── Focus indicators ─────────────────────────────────────────── */
+
+*:focus {
+    border: tall $accent;
+}
+
+Input:focus {
+    border: tall $accent;
+}
+
+Button:focus {
+    text-style: bold reverse;
+}
+
+/* ── Agent sidebar constraints ────────────────────────────────── */
+
+#left-sidebar {
+    width: 24;
+    min-width: 20;
+    max-width: 32;
+    dock: left;
+    border-right: solid $surface-lighten-2;
+}
+
+/* ── Notification stack ───────────────────────────────────────── */
+
+#notification-stack {
+    height: auto;
+    max-height: 8;
+    dock: top;
+}
+
+/* ── Mission history modal ────────────────────────────────────── */
+
+MissionHistoryScreen {
+    align: center middle;
+}
+
+#history-dialog {
+    width: 90%;
+    height: 85%;
+    border: thick $primary;
+    background: $surface;
+}
+
+/* ── Gate review modal ────────────────────────────────────────── */
+
+GateReviewModal {
+    align: center middle;
+}
+
+#gate-dialog {
+    width: 70%;
+    max-width: 100;
+    height: auto;
+    max-height: 85%;
+    border: thick $warning;
+    background: $surface;
+    padding: 1 2;
+}
+
+/* ── Loading state ────────────────────────────────────────────── */
+
+.loading {
+    opacity: 0.5;
 }
